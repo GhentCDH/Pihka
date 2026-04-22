@@ -1,0 +1,28 @@
+{
+  "imports": {
+    "@sqlite.org/sqlite-wasm": "./pihka/core/vendor/@sqlite.org/sqlite-wasm/dist/index.mjs",
+    "@sqlite.org/sqlite-wasm/package.json": "./pihka/core/vendor/@sqlite.org/sqlite-wasm/package.json",
+    "maplibre-gl": "./pihka/core/vendor/maplibre-gl/dist/maplibre-gl.js",
+    "preact": "./pihka/core/vendor/preact/dist/preact.module.js",
+    "preact/compat": "./pihka/core/vendor/preact/compat/dist/compat.module.js",
+    "preact/debug": "./pihka/core/vendor/preact/debug/dist/debug.module.js",
+    "preact/devtools": "./pihka/core/vendor/preact/devtools/dist/devtools.module.js",
+    "preact/hooks": "./pihka/core/vendor/preact/hooks/dist/hooks.module.js",
+    "preact/test-utils": "./pihka/core/vendor/preact/test-utils/dist/testUtils.module.js",
+    "preact/compat/test-utils": "./pihka/core/vendor/preact/test-utils/dist/testUtils.module.js",
+    "preact/jsx-runtime": "./pihka/core/vendor/preact/jsx-runtime/dist/jsxRuntime.module.js",
+    "preact/jsx-dev-runtime": "./pihka/core/vendor/preact/jsx-runtime/dist/jsxRuntime.module.js",
+    "preact/compat/client": "./pihka/core/vendor/preact/compat/client.mjs",
+    "preact/compat/server": "./pihka/core/vendor/preact/compat/server.browser.js",
+    "preact/compat/jsx-runtime": "./pihka/core/vendor/preact/compat/jsx-runtime.mjs",
+    "preact/compat/jsx-dev-runtime": "./pihka/core/vendor/preact/compat/jsx-dev-runtime.mjs",
+    "preact/compat/scheduler": "./pihka/core/vendor/preact/compat/scheduler.mjs",
+    "preact/package.json": "./pihka/core/vendor/preact/package.json",
+    "preact/compat/package.json": "./pihka/core/vendor/preact/compat/package.json",
+    "preact/debug/package.json": "./pihka/core/vendor/preact/debug/package.json",
+    "preact/devtools/package.json": "./pihka/core/vendor/preact/devtools/package.json",
+    "preact/hooks/package.json": "./pihka/core/vendor/preact/hooks/package.json",
+    "preact/test-utils/package.json": "./pihka/core/vendor/preact/test-utils/package.json",
+    "preact/jsx-runtime/package.json": "./pihka/core/vendor/preact/jsx-runtime/package.json"
+  }
+}

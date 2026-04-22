@@ -1,0 +1,6 @@
+{
+    "database": {
+        "path": "./app/data/sample.db",
+        "name": "Author database"
+    }
+}
