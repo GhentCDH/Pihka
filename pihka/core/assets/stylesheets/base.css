@@ -23,9 +23,12 @@ html {
 }
 
 body {
-  max-width: 80rem;
   margin: 2rem auto;
   padding: 0 1.5rem;
+}
+
+.container {
+  max-width: none;
 }
 
 h1,
@@ -236,6 +239,15 @@ tbody tr:last-child td {
   min-width: 0; /* prevent grid blowout */
 }
 
+.faceted-content table {
+  width: max-content;
+  min-width: 100%;
+}
+
+.faceted-content th {
+  white-space: nowrap;
+}
+
 /* Toolbar: view toggles + pagination + count + page size in one row */
 
 .faceted-toolbar {
@@ -435,6 +447,46 @@ article {
   border-radius: 6px;
   padding: 1.25rem;
   margin: 0;
+}
+
+/* Perspective grid */
+
+.perspective-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
+  gap: 0.75rem;
+  margin: 1rem 0;
+}
+
+.perspective-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  text-decoration: none;
+  color: var(--text);
+  transition: border-color 0.15s;
+}
+
+.perspective-card:hover {
+  border-color: var(--accent);
+  text-decoration: none;
+}
+
+.perspective-card-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--accent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.perspective-card-meta {
+  font-size: 0.8rem;
+  color: var(--text-muted);
 }
 
 /* Utility */

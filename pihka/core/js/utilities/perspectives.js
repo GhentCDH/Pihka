@@ -27,6 +27,8 @@ export async function loadPerspectives(ds) {
             .map(([name]) => normalizePerspective({ id: name, name, table: name, view: "table" }));
     }
 
+    perspectives.sort((a, b) => a.name.localeCompare(b.name));
+
     return { defaultLanguage, perspectives };
 }
 

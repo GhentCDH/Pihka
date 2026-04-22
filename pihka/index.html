@@ -81,12 +81,12 @@
                 // Home: /
                 return h("div", { class: "container" },
                     h("h1", null, "\u26C1 Pihka - Sustainable Data Publishing"),
-                    h(PerspectiveList, { perspectives, lang: DEFAULT_LANG }),
+                    h(PerspectiveList, { perspectives, store, lang: DEFAULT_LANG }),
                 );
             }
 
             async function main() {
-                const ds = new DataSource("./app/database/naso.db");
+                const ds = new DataSource("./app/database/sample.sqlite");
 
                 render(
                     h("div", { class: "container" },
