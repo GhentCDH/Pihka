@@ -22,6 +22,7 @@
   "dependencies": {
     "@sqlite.org/sqlite-wasm": "^3.51.2-build4",
     "maplibre-gl": "^5.19.0",
-    "preact": "^10.28.3"
+    "preact": "^10.28.3",
+    "sql.js": "^1.14.1"
   }
 }

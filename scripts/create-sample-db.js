@@ -41,8 +41,6 @@ async function createSampleDatabase() {
       cover TEXT
     );
 
-    # create a full-text search virtual table for works, simply to verify that FTS5 is available in the environment
-    CREATE VIRTUAL TABLE docs USING fts5(title, body);
   `);
 
   // Insert authors with birthplace coordinates
