@@ -1,0 +1,9 @@
+{
+	admin off
+	auto_https off
+}
+
+:3267 {
+	root * .
+	file_server
+}
