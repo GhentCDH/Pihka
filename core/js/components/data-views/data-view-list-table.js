@@ -1,5 +1,6 @@
 import { h } from "preact";
 import { isImagePath } from "./render-helpers.js";
+import { buildPath, assetUrl } from "../../utilities/router.js";
 
 function SortIndicator({ direction }) {
     if (!direction) return null;
@@ -45,7 +46,7 @@ function Cell({ col, value, fkResolved, lang, perspectiveId }) {
     // Primary key → link to detail page
     if (col.primaryKey && perspectiveId && lang) {
         return h("td", null,
-            h("a", { href: `/${lang}/${perspectiveId}/${raw}/table` }, raw),
+            h("a", { href: buildPath(`/${lang}/${perspectiveId}/${raw}/table`) }, raw),
         );
     }
 
@@ -53,7 +54,7 @@ function Cell({ col, value, fkResolved, lang, perspectiveId }) {
     if (col.references && fkResolved && fkResolved[col.name]) {
         const fk = fkResolved[col.name];
         const displayName = fk.displayMap[raw] ?? String(raw);
-        const detailHref = `/${fk.referencedTable}/${raw}`;
+        const detailHref = buildPath(`/${fk.referencedTable}/${raw}`);
 
         return h("td", null,
             displayName,
@@ -69,7 +70,7 @@ function Cell({ col, value, fkResolved, lang, perspectiveId }) {
     // Image file → render as <img>
     if (isImagePath(String(raw))) {
         return h("td", null,
-            h("img", { src: `./app/assets/${raw}`, alt: raw, style: "max-height:4rem;border-radius:3px" }),
+            h("img", { src: assetUrl(`app/assets/${raw}`), alt: raw, style: "max-height:4rem;border-radius:3px" }),
         );
     }
 

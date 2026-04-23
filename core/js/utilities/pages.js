@@ -1,3 +1,5 @@
+import { assetUrl } from "./router.js";
+
 export function normalizePage(page) {
     if (!page || typeof page !== "object") {
         return { title: "", contentHtml: "" };
@@ -16,7 +18,7 @@ export function normalizePage(page) {
 }
 
 export async function loadPage(slug) {
-    const res = await fetch(`./app/pages/${slug}.json`);
+    const res = await fetch(assetUrl(`app/pages/${slug}.json`));
     if (!res.ok) {
         throw new Error(`Failed to load page '${slug}': ${res.status}`);
     }
