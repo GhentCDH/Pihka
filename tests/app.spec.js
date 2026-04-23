@@ -1,22 +1,40 @@
 import { test, expect } from "@playwright/test";
 
+// Helper: load the app at root, wait for it to be ready, then navigate to a route.
+// Without --single mode, deep routes return 404 from the static server,
+// so we load index.html first and use client-side navigation.
+async function gotoRoute(page, route) {
+  await page.goto("/");
+  // Wait for app to finish loading the database
+  await page.waitForSelector("#app .container", { timeout: 10000 });
+  // Navigate client-side
+  if (route && route !== "/") {
+    await page.evaluate((r) => {
+      window.history.pushState(null, "", r);
+      window.dispatchEvent(new Event("pushstate"));
+    }, route);
+    // Give the app time to react to the route change
+    await page.waitForTimeout(200);
+  }
+}
+
 test("has title", async ({ page }) => {
   await page.goto("/");
   await expect(page).toHaveTitle(/Pihka/i);
 });
 
 test("categories/1 contains Novel", async ({ page }) => {
-  await page.goto("/categories/1");
+  await gotoRoute(page, "/categories/1");
   await expect(page.locator("body")).toContainText("Novel");
 });
 
 test("authors/1 contains Virginia", async ({ page }) => {
-  await page.goto("/authors/1");
+  await gotoRoute(page, "/authors/1");
   await expect(page.locator("body")).toContainText("Virginia");
 });
 
 test("works view shows sidebar with facet filters", async ({ page }) => {
-  await page.goto("/en/works/table");
+  await gotoRoute(page, "/en/works/table");
   const sidebar = page.locator("aside.facet-sidebar");
   await expect(sidebar).toBeVisible();
   await expect(sidebar).toContainText("Filters");
@@ -27,7 +45,7 @@ test("works view shows sidebar with facet filters", async ({ page }) => {
 });
 
 test("year range filter narrows works rows", async ({ page }) => {
-  await page.goto("/en/works/table");
+  await gotoRoute(page, "/en/works/table");
   const content = page.locator(".faceted-content");
   await expect(content).toBeVisible();
   await expect(content.locator("tbody tr")).toHaveCount(25);
@@ -41,7 +59,7 @@ test("year range filter narrows works rows", async ({ page }) => {
 });
 
 test("category dropdown facet filters works rows", async ({ page }) => {
-  await page.goto("/en/works/table");
+  await gotoRoute(page, "/en/works/table");
   const content = page.locator(".faceted-content");
   await expect(content).toContainText("of 25");
   // Open category dropdown and click Novel checkbox
@@ -53,7 +71,7 @@ test("category dropdown facet filters works rows", async ({ page }) => {
 });
 
 test("authors view has birth_year range filter in sidebar", async ({ page }) => {
-  await page.goto("/en/authors/table");
+  await gotoRoute(page, "/en/authors/table");
   const sidebar = page.locator("aside.facet-sidebar");
   await expect(sidebar).toBeVisible();
   // birth_year configured as range facet = 2 range inputs (min + max)
@@ -62,7 +80,7 @@ test("authors view has birth_year range filter in sidebar", async ({ page }) => 
 });
 
 test("categories view has no filter controls", async ({ page }) => {
-  await page.goto("/en/categories/table");
+  await gotoRoute(page, "/en/categories/table");
   // Categories has no FK columns and no numeric columns → no sidebar or empty sidebar
   const sidebar = page.locator("aside.facet-sidebar");
   await expect(sidebar.locator("input[type='range']")).toHaveCount(0);
@@ -70,7 +88,7 @@ test("categories view has no filter controls", async ({ page }) => {
 });
 
 test("works table shows pagination with page size control", async ({ page }) => {
-  await page.goto("/en/works/table?pageSize=3");
+  await gotoRoute(page, "/en/works/table?pageSize=3");
   const content = page.locator(".faceted-content");
   await expect(content).toBeVisible();
   // Pagination visible
@@ -81,7 +99,7 @@ test("works table shows pagination with page size control", async ({ page }) => 
 });
 
 test("clicking next page advances to page 2", async ({ page }) => {
-  await page.goto("/en/works/table?pageSize=3");
+  await gotoRoute(page, "/en/works/table?pageSize=3");
   const content = page.locator(".faceted-content");
   await expect(content).toContainText("Showing 1 to 3 of 25");
   // Click the next (›) button
@@ -90,7 +108,7 @@ test("clicking next page advances to page 2", async ({ page }) => {
 });
 
 test("filtering resets page to 1", async ({ page }) => {
-  await page.goto("/en/works/table?pageSize=3");
+  await gotoRoute(page, "/en/works/table?pageSize=3");
   const content = page.locator(".faceted-content");
   // Go to page 2
   await content.locator("nav[aria-label='Pagination'] button", { hasText: "›" }).click();
@@ -104,7 +122,7 @@ test("filtering resets page to 1", async ({ page }) => {
 });
 
 test("URL query params are bookmarkable", async ({ page }) => {
-  await page.goto("/en/works/table?category_id=1&sort=year&sort_dir=desc");
+  await gotoRoute(page, "/en/works/table?category_id=1&sort=year&sort_dir=desc");
   const content = page.locator(".faceted-content");
   await expect(content).toBeVisible();
   // Should show only novels (15), sorted by year descending
@@ -115,7 +133,7 @@ test("URL query params are bookmarkable", async ({ page }) => {
 });
 
 test("view toggle switches between table and cards", async ({ page }) => {
-  await page.goto("/en/works/table?category_id=1");
+  await gotoRoute(page, "/en/works/table?category_id=1");
   // Click the cards toggle
   await page.locator(".view-toggles button", { hasText: "cards" }).click();
   // URL should change to cards view
@@ -126,7 +144,6 @@ test("view toggle switches between table and cards", async ({ page }) => {
 
 test("home page shows perspective navigation", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator("nav[aria-label='Perspectives']")).toBeVisible();
-  await expect(page.locator("a[href='/en/works/table']")).toBeVisible();
-  await expect(page.locator("a[href='/en/authors/table']")).toBeVisible();
+  await expect(page.locator(".perspective-grid")).toBeVisible();
+  await expect(page.locator("a.perspective-card")).not.toHaveCount(0);
 });

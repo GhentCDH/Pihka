@@ -1,5 +1,6 @@
 import { h } from "preact";
 import { isImagePath } from "./render-helpers.js";
+import { buildPath, assetUrl } from "../../utilities/router.js";
 
 /**
  * Renders a single row as a card.
@@ -19,7 +20,7 @@ export default function DataViewDetailCard({ columns, row, fkResolved }) {
                 if (col.references && fkResolved && fkResolved[col.name]) {
                     const fk = fkResolved[col.name];
                     const displayName = fk.displayMap[val] ?? String(val);
-                    const detailHref = `/${fk.referencedTable}/${val}`;
+                    const detailHref = buildPath(`/${fk.referencedTable}/${val}`);
                     content = h("span", null,
                         displayName,
                         " ",
@@ -30,7 +31,7 @@ export default function DataViewDetailCard({ columns, row, fkResolved }) {
                         }, "\uD83D\uDD0D"),
                     );
                 } else if (isImagePath(String(val))) {
-                    content = h("img", { src: `./app/assets/${val}`, alt: String(val), style: "max-height:6rem;border-radius:3px" });
+                    content = h("img", { src: assetUrl(`app/assets/${val}`), alt: String(val), style: "max-height:6rem;border-radius:3px" });
                 } else {
                     content = String(val);
                 }

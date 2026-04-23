@@ -4,6 +4,38 @@ import { useState, useContext, useEffect } from "preact/hooks";
 const VALID_VIEWS = new Set(["table", "cards", "card", "map"]);
 
 /**
+ * Auto-detect the base path from the location of this module file.
+ * router.js lives at <base>/core/js/utilities/router.js, so we strip
+ * the known suffix to recover the base path.
+ * E.g. if served at /pihka/core/js/utilities/router.js → base is "/pihka".
+ * If served at /core/js/utilities/router.js → base is "".
+ */
+const _basePath = (() => {
+    const url = new URL(import.meta.url);
+    const path = url.pathname;
+    const suffix = "/core/js/utilities/router.js";
+    const idx = path.lastIndexOf(suffix);
+    if (idx === -1) return "";
+    return path.slice(0, idx); // e.g. "/pihka" or ""
+})();
+
+/**
+ * Build an app-internal path by prepending the auto-detected base path.
+ * Usage: buildPath(`/${lang}/${perspective}/${view}`)
+ */
+export function buildPath(path) {
+    return _basePath + path;
+}
+
+/**
+ * Resolve an asset path relative to the app root.
+ * Usage: assetUrl("app/config.json") → "/pihka/app/config.json" (or "/app/config.json" at root)
+ */
+export function assetUrl(relativePath) {
+    return _basePath + "/" + relativePath;
+}
+
+/**
  * Parse the current URL into a route descriptor.
  *
  * New patterns:
@@ -17,7 +49,12 @@ const VALID_VIEWS = new Set(["table", "cards", "card", "map"]);
  * Query params are parsed into a plain object.
  */
 function parseLocation() {
-    const parts = window.location.pathname.replace(/^\//, "").split("/").filter(Boolean);
+    // Strip the base path prefix so route parsing only sees the app-internal path
+    let pathname = window.location.pathname;
+    if (_basePath && pathname.startsWith(_basePath)) {
+        pathname = pathname.slice(_basePath.length);
+    }
+    const parts = pathname.replace(/^\//, "").split("/").filter(Boolean);
     const params = Object.fromEntries(new URLSearchParams(window.location.search));
 
     // Home: /
@@ -75,7 +112,7 @@ export const RouterContext = createContext(null);
  * Push a new path (creates history entry). Used for navigation between perspectives/views.
  */
 export function navigate(path, params) {
-    const url = buildUrl(path, params);
+    const url = buildUrl(buildPath(path), params);
     window.history.pushState(null, "", url);
     window.dispatchEvent(new Event("pushstate"));
 }
@@ -119,7 +156,11 @@ export function Router({ children }) {
             if (!href || !href.startsWith("/") || href.startsWith("//")) return;
             if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
             e.preventDefault();
-            navigate(href);
+            // href already contains the base path (set by buildPath in components),
+            // so push directly instead of going through navigate() which would double-prefix.
+            const url = buildUrl(href);
+            window.history.pushState(null, "", url);
+            window.dispatchEvent(new Event("pushstate"));
         };
         document.addEventListener("click", onClick);
 

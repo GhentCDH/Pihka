@@ -1,3 +1,5 @@
+import { assetUrl } from "./router.js";
+
 /**
  * Load and normalise the perspectives configuration from app/config.json.
  * Falls back to auto-generating one "table" perspective per non-virtual DB
@@ -9,7 +11,7 @@
 export async function loadPerspectives(ds) {
     let cfg = {};
     try {
-        const res = await fetch("./app/config.json");
+        const res = await fetch(assetUrl("app/config.json"));
         if (res.ok) cfg = await res.json();
     } catch (_) {
         // Network or parse error — fall through to auto-generate

@@ -3,10 +3,9 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <base href="/" />
         <title>⛁ Pihka - Sustainable Data Publishing Platform for Digital Humanities Research</title>
-        <link rel="stylesheet" href="core/stylesheets/pico.min.css" />
-        <link rel="stylesheet" href="core/assets/stylesheets/base.css" />
+        <link rel="stylesheet" href="./core/stylesheets/pico.min.css" />
+        <link rel="stylesheet" href="./core/assets/stylesheets/base.css" />
         <link rel="stylesheet" href="./core/vendor/maplibre-gl/dist/maplibre-gl.css">
         <script type="importmap">
             {
@@ -30,7 +29,7 @@
             import DetailView from './core/js/components/detail-view.js';
             import PerspectiveList from './core/js/components/perspective-list.js';
             import PerspectiveView from './core/js/components/perspective-view.js';
-            import { Router, useRouter, navigate } from './core/js/utilities/router.js';
+            import { Router, useRouter, navigate, buildPath, assetUrl } from './core/js/utilities/router.js';
 
             const DEFAULT_LANG = "en";
 
@@ -68,11 +67,11 @@
                 if (perspectiveId) {
                     const p = perspectives.find(p => p.id === perspectiveId);
                     if (!p) return h("div", { class: "container" },
-                        h("a", { href: "/" }, "\u2190 Perspectives"),
+                        h("a", { href: buildPath("/") }, "\u2190 Perspectives"),
                         h("p", null, `Perspective not found: ${perspectiveId}`),
                     );
                     return h("div", { class: "container" },
-                        h("a", { href: "/" }, "\u2190 Perspectives"),
+                        h("a", { href: buildPath("/") }, "\u2190 Perspectives"),
                         h("h2", null, p.name),
                         h(PerspectiveView, { perspective: p, store, view, lang: lang || DEFAULT_LANG }),
                     );
@@ -86,7 +85,7 @@
             }
 
             async function main() {
-                const ds = new DataSource("./app/database/sample.db");
+                const ds = new DataSource(assetUrl("app/database/narrativesources.db"));
 
                 render(
                     h("div", { class: "container" },

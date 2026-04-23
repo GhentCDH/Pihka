@@ -4,7 +4,7 @@
   "description": "Sustainable data publishing platform for digital humanities research",
   "type": "module",
   "scripts": {
-    "dev": "cd pihka && browser-sync start --server --single --files '**/*.js, **/*.css, **/*.html' --no-notify",
+    "dev": "browser-sync start --server pihka --files '**/*.js, **/*.css, **/*.html' --no-notify",
     "test": "playwright test",
     "test:ui": "playwright test --ui",
     "typecheck": "tsc --noEmit",

@@ -1,7 +1,7 @@
 import { h } from "preact";
 import DataViewDetailTable from "./data-views/data-view-detail-table.js";
 import DataViewDetailCard from "./data-views/data-view-detail-card.js";
-import { navigate } from "../utilities/router.js";
+import { navigate, buildPath } from "../utilities/router.js";
 
 const GEO_NAMES = ["lat", "latitude", "lng", "lon", "longitude"];
 
@@ -47,7 +47,7 @@ export default function DetailView({ tableName, columns, row, fkResolved, view, 
         navigate(`/${effectiveLang}/${perspectiveId}/${rowId}/${newView}`);
     };
 
-    const backPath = `/${effectiveLang}/${perspectiveId}/table`;
+    const backPath = buildPath(`/${effectiveLang}/${perspectiveId}/table`);
 
     return h("div", null,
         h("a", { href: backPath }, "\u2190 Back"),
