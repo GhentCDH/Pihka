@@ -1,11 +1,113 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pihka</title>
-</head>
-<body>
-    <h1>This is Pihka</h1>
-</body>
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <base href="/" />
+        <title>⛁ Pihka - Sustainable Data Publishing Platform for Digital Humanities Research</title>
+        <link rel="stylesheet" href="core/stylesheets/pico.min.css" />
+        <link rel="stylesheet" href="core/assets/stylesheets/base.css" />
+        <link rel="stylesheet" href="./core/vendor/maplibre-gl/dist/maplibre-gl.css">
+        <script type="importmap">
+            {
+                "imports": {
+                    "@sqlite.org/sqlite-wasm": "./core/vendor/@sqlite.org/sqlite-wasm/dist/index.mjs",
+                    "preact": "./core/vendor/preact/dist/preact.module.js",
+                    "preact/hooks": "./core/vendor/preact/hooks/dist/hooks.module.js",
+                    "maplibre-gl": "./core/vendor/maplibre-gl/dist/maplibre-gl.js"
+                }
+            }
+        </script>
+    </head>
+    <body>
+        <main id="app"></main>
+        <script type="module">
+            import { h, render } from "preact";
+
+            import { DataSource } from './core/js/utilities/datasource.js';
+            import { DataStore } from './core/js/utilities/data-store.js';
+            import { loadPerspectives } from './core/js/utilities/perspectives.js';
+            import DetailView from './core/js/components/detail-view.js';
+            import PerspectiveList from './core/js/components/perspective-list.js';
+            import PerspectiveView from './core/js/components/perspective-view.js';
+            import { Router, useRouter, navigate } from './core/js/utilities/router.js';
+
+            const DEFAULT_LANG = "en";
+
+            function App({ perspectives, store }) {
+                const route = useRouter();
+                const { lang, perspective: perspectiveId, id: rowId, view } = route;
+
+                // Legacy URL redirect: /{perspective} or /{perspective}/{id}
+                if (route.legacy && perspectiveId) {
+                    const p = perspectives.find(p => p.id === perspectiveId);
+                    const effectiveLang = lang || DEFAULT_LANG;
+                    const effectiveView = view || p?.default_view || p?.view || "table";
+                    const newPath = rowId
+                        ? `/${effectiveLang}/${perspectiveId}/${rowId}/${effectiveView}`
+                        : `/${effectiveLang}/${perspectiveId}/${effectiveView}`;
+                    setTimeout(() => navigate(newPath), 0);
+                    // Fall through to render with resolved values
+                }
+
+                // Detail view: /:lang/:perspective/:id/:view
+                if (perspectiveId && rowId) {
+                    const p = perspectives.find(p => p.id === perspectiveId);
+                    const tableName = p ? p.table : perspectiveId;
+                    const { columns, row, fkResolved } = store.queryRow(tableName, rowId);
+                    return h("div", { class: "container" },
+                        h(DetailView, {
+                            tableName, columns, row, fkResolved,
+                            view, lang: lang || DEFAULT_LANG,
+                            perspectiveId, rowId,
+                        }),
+                    );
+                }
+
+                // Perspective view: /:lang/:perspective/:view
+                if (perspectiveId) {
+                    const p = perspectives.find(p => p.id === perspectiveId);
+                    if (!p) return h("div", { class: "container" },
+                        h("a", { href: "/" }, "\u2190 Perspectives"),
+                        h("p", null, `Perspective not found: ${perspectiveId}`),
+                    );
+                    return h("div", { class: "container" },
+                        h("a", { href: "/" }, "\u2190 Perspectives"),
+                        h("h2", null, p.name),
+                        h(PerspectiveView, { perspective: p, store, view, lang: lang || DEFAULT_LANG }),
+                    );
+                }
+
+                // Home: /
+                return h("div", { class: "container" },
+                    h("h1", null, "\u26C1 Pihka - Sustainable Data Publishing"),
+                    h(PerspectiveList, { perspectives, store, lang: DEFAULT_LANG }),
+                );
+            }
+
+            async function main() {
+                const ds = new DataSource("./app/database/sample.db");
+
+                render(
+                    h("div", { class: "container" },
+                        h("div", { "aria-busy": "true" }, "Loading database\u2026"),
+                    ),
+                    document.getElementById("app"),
+                );
+
+                await ds.ready;
+
+                const meta = ds.metadata();
+                const store = new DataStore(ds, meta);
+                const { perspectives } = await loadPerspectives(ds);
+
+                render(
+                    h(Router, null, h(App, { perspectives, store })),
+                    document.getElementById("app"),
+                );
+            }
+
+            main();
+        </script>
+    </body>
 </html>
