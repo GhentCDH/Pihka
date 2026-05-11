@@ -70,7 +70,16 @@ export class DataStore {
     }
 
     /**
-     * Query a table with filters, sorting, and pagination.
+     * Returns FTS metadata for a table if the enrichment pipeline built an
+     * index for it, otherwise null. Used by the UI to decide whether the
+     * search input should be enabled.
+     */
+    getFtsInfo(table) {
+        return this.#meta.tables[table]?.fts || null;
+    }
+
+    /**
+     * Query a table with filters, sorting, pagination, and optional FTS.
      * All parameters and return values are plain JSON.
      *
      * @param {string} table
@@ -79,41 +88,77 @@ export class DataStore {
      * @param {{ column: string, direction: "ASC"|"DESC" }|null} options.sort
      * @param {number} options.page
      * @param {number} options.pageSize
-     * @returns {{ columns: Array, rows: Array, totalRows: number, page: number, totalPages: number }}
+     * @param {string} [options.search] - FTS5 MATCH expression; ignored when no FTS index exists
+     * @returns {{ columns, rows, totalRows, page, totalPages, fkResolved, searchError? }}
      */
-    queryTable(table, { filters = {}, sort = null, page = 0, pageSize = 3 } = {}) {
+    queryTable(table, { filters = {}, sort = null, page = 0, pageSize = 3, search = "" } = {}) {
         const tableMeta = this.#meta.tables[table];
         if (!tableMeta) return { columns: [], rows: [], totalRows: 0, page: 0, totalPages: 1 };
 
         const { columns } = tableMeta;
-        const { whereClause, bindParams } = buildWhereClause(filters);
+        const { whereClause: filterWhere, bindParams: filterBinds } = buildWhereClause(filters);
 
-        // Count total matching rows
-        const countResult = [];
-        this.#ds.exec(`SELECT COUNT(*) as n FROM ${quote(table)} ${whereClause}`, {
-            bind: bindParams, rowMode: "object", callback: r => countResult.push(r),
-        });
-        const totalRows = countResult[0]?.n ?? 0;
-        const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+        // Compose the FTS JOIN + predicate when a non-empty search is set on
+        // a table that actually has an FTS index. Anything else: no join.
+        const ftsInfo = search && tableMeta.fts ? tableMeta.fts : null;
+        const ftsBinds = ftsInfo ? [search] : [];
+        const joinClause = ftsInfo
+            ? `JOIN ${quote(ftsInfo.table)} ON ${quote(table)}.rowid = ${quote(ftsInfo.table)}.rowid`
+            : "";
+        const ftsPredicate = ftsInfo ? `${quote(ftsInfo.table)} MATCH ?` : "";
 
-        // Build ORDER BY clause
+        // Merge filter WHERE + FTS predicate.
+        const allConditions = [];
+        if (filterWhere) allConditions.push(filterWhere.replace(/^WHERE /, ""));
+        if (ftsPredicate) allConditions.push(ftsPredicate);
+        const whereClause = allConditions.length
+            ? "WHERE " + allConditions.join(" AND ")
+            : "";
+        // Bind order matches placeholder order: filters first, then FTS.
+        const whereBinds = [...filterBinds, ...ftsBinds];
+
+        // ORDER BY: explicit user sort wins; otherwise rank by FTS score when
+        // searching, otherwise no order.
         let orderClause = "";
         if (sort && sort.column) {
             orderClause = `ORDER BY ${quote(sort.column)} ${sort.direction === "DESC" ? "DESC" : "ASC"}`;
+        } else if (ftsInfo) {
+            orderClause = `ORDER BY ${quote(ftsInfo.table)}.rank`;
         }
 
-        // Fetch paginated rows
-        const offset = page * pageSize;
-        const sql = `SELECT * FROM ${quote(table)} ${whereClause} ${orderClause} LIMIT ? OFFSET ?`;
-        const rows = [];
-        this.#ds.exec(sql, {
-            bind: [...bindParams, pageSize, offset],
-            rowMode: "object",
-            callback: r => rows.push(r),
-        });
+        // FTS5 throws on malformed MATCH expressions (unclosed quote, lone
+        // wildcard, etc.). Catch and surface a friendly message instead of
+        // crashing the view.
+        try {
+            const countResult = [];
+            this.#ds.exec(
+                `SELECT COUNT(*) as n FROM ${quote(table)} ${joinClause} ${whereClause}`,
+                { bind: whereBinds, rowMode: "object", callback: r => countResult.push(r) },
+            );
+            const totalRows = countResult[0]?.n ?? 0;
+            const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
 
-        const fkResolved = this.resolveForeignKeys(table);
-        return { columns, rows, totalRows, page, totalPages, fkResolved };
+            const offset = page * pageSize;
+            const sql = `SELECT ${quote(table)}.* FROM ${quote(table)} ${joinClause} ${whereClause} ${orderClause} LIMIT ? OFFSET ?`;
+            const rows = [];
+            this.#ds.exec(sql, {
+                bind: [...whereBinds, pageSize, offset],
+                rowMode: "object",
+                callback: r => rows.push(r),
+            });
+
+            const fkResolved = this.resolveForeignKeys(table);
+            return { columns, rows, totalRows, page, totalPages, fkResolved };
+        } catch (err) {
+            if (ftsInfo) {
+                return {
+                    columns, rows: [], totalRows: 0, page: 0, totalPages: 1,
+                    fkResolved: this.resolveForeignKeys(table),
+                    searchError: "Invalid search query",
+                };
+            }
+            throw err;
+        }
     }
 
     /**

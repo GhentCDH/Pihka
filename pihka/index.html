@@ -28,6 +28,8 @@
             import { DataSource } from './core/js/utilities/datasource.js';
             import { DataStore } from './core/js/utilities/data-store.js';
             import { loadPerspectives } from './core/js/utilities/perspectives.js';
+            import { loadConfig } from './core/js/utilities/config.js';
+            import { runEnrichment } from './core/js/utilities/enrichment/index.js';
             import DetailView from './core/js/components/detail-view.js';
             import PerspectiveList from './core/js/components/perspective-list.js';
             import PerspectiveView from './core/js/components/perspective-view.js';
@@ -98,7 +100,9 @@
 
                 await ds.ready;
 
+                const config = await loadConfig();
                 const meta = ds.metadata();
+                await runEnrichment(ds, meta, config);
                 const store = new DataStore(ds, meta);
                 const { perspectives } = await loadPerspectives(ds);
 

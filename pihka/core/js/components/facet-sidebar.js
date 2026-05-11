@@ -1,6 +1,7 @@
 import { h } from "preact";
 import { useState } from "preact/hooks";
 import RangeSelector from "./range-selector.js";
+import FtsSearchInput from "./fts-search-input.js";
 
 /**
  * Sidebar with faceted search filters.
@@ -20,8 +21,9 @@ export default function FacetSidebar({
     facetMeta, autoFilterMeta, filters,
     totalRows, perspectiveName,
     onRangeChange, onMultiChange, onClearAll,
+    search, searchError, searchAvailable, onSearchChange,
 }) {
-    const hasActiveFilters = Object.keys(filters).length > 0;
+    const hasActiveFilters = Object.keys(filters).length > 0 || (search && search.length > 0);
 
     // Use configured facetMeta if available, otherwise fall back to auto-generated
     const hasFacetMeta = facetMeta && Object.keys(facetMeta).length > 0;
@@ -38,6 +40,13 @@ export default function FacetSidebar({
         h("p", { style: "font-size:.8em;color:var(--text-muted);margin:.25rem 0 .75rem" },
             `${totalRows} ${perspectiveName || "results"}`,
         ),
+
+        onSearchChange && h(FtsSearchInput, {
+            value: search || "",
+            onSubmit: onSearchChange,
+            error: searchError,
+            available: !!searchAvailable,
+        }),
 
         hasFacetMeta
             ? renderConfiguredFacets(facetMeta, filters, onRangeChange, onMultiChange)

@@ -24,8 +24,11 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
     const {
         columns, rows, totalRows, page, totalPages, pageSize,
         sort, filterMeta, filters, fkResolved,
-        onSort, onRangeChange, onMultiChange, onPageChange, onPageSizeChange,
+        search, searchError,
+        onSort, onRangeChange, onMultiChange, onPageChange, onPageSizeChange, onSearchChange,
     } = useUrlState(store, p.table, { defaultPageSize, defaultSort });
+
+    const searchAvailable = !!store.getFtsInfo(p.table);
 
     const facetMeta = useMemo(() => {
         if (!p.facets) return null;
@@ -57,6 +60,10 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
             onRangeChange,
             onMultiChange,
             onClearAll,
+            search,
+            searchError,
+            searchAvailable,
+            onSearchChange,
         }),
 
         h("div", { class: "faceted-content" },

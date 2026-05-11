@@ -21,7 +21,7 @@ function decodeParams(params, filterMeta) {
     const multiNames = new Set(multiColumns.map(c => c.name));
 
     for (const [key, value] of Object.entries(params)) {
-        if (key === "sort" || key === "sort_dir" || key === "page" || key === "pageSize") continue;
+        if (key === "sort" || key === "sort_dir" || key === "page" || key === "pageSize" || key === "q") continue;
 
         // Range filter: {col}_min or {col}_max
         const minMatch = key.match(/^(.+)_min$/);
@@ -55,8 +55,26 @@ function decodeParams(params, filterMeta) {
 
     const page = params.page ? Math.max(0, parseInt(params.page, 10) - 1) : 0;
     const pageSize = params.pageSize ? parseInt(params.pageSize, 10) : null;
+    const search = typeof params.q === "string" ? params.q : "";
 
-    return { filters, sort, page, pageSize };
+    return { filters, sort, page, pageSize, search };
+}
+
+// Params that are NOT filter encodings and must be preserved when a
+// filter toggles (sort, pagination, page size, full-text query).
+const PRESERVED_PARAMS = new Set(["sort", "sort_dir", "pageSize", "q"]);
+
+/**
+ * Build an updates object that clears every URL param except the
+ * preserved-meta ones (sort/pagination/search). Used before re-encoding
+ * filters so stale filter params don't linger.
+ */
+function clearFilterParams(currentParams) {
+    const updates = {};
+    for (const key of Object.keys(currentParams)) {
+        if (!PRESERVED_PARAMS.has(key)) updates[key] = null;
+    }
+    return updates;
 }
 
 /**
@@ -96,10 +114,12 @@ export function useUrlState(store, table, { defaultPageSize = 25, defaultSort = 
     const sort = decoded.sort || (defaultSort ? { column: defaultSort, direction: "ASC" } : null);
     const page = decoded.page;
     const pageSize = decoded.pageSize || defaultPageSize;
+    const search = decoded.search;
 
-    const { columns, rows, totalRows, totalPages, fkResolved } = store.queryTable(table, {
-        filters, sort, page, pageSize,
+    const queryResult = store.queryTable(table, {
+        filters, sort, page, pageSize, search,
     });
+    const { columns, rows, totalRows, totalPages, fkResolved, searchError } = queryResult;
 
     const onSort = (column) => {
         let newSort;
@@ -123,14 +143,7 @@ export function useUrlState(store, table, { defaultPageSize = 25, defaultSort = 
         } else {
             newFilters[colName] = updated;
         }
-        // Clear all existing filter params and re-encode
-        const clearParams = {};
-        for (const key of Object.keys(params)) {
-            if (key !== "sort" && key !== "sort_dir" && key !== "pageSize") {
-                clearParams[key] = null;
-            }
-        }
-        updateParams({ ...clearParams, ...encodeFilters(newFilters), page: null });
+        updateParams({ ...clearFilterParams(params), ...encodeFilters(newFilters), page: null });
     };
 
     const onMultiChange = (colName, newSelected) => {
@@ -140,13 +153,7 @@ export function useUrlState(store, table, { defaultPageSize = 25, defaultSort = 
         } else {
             newFilters[colName] = { type: "multi", selected: newSelected };
         }
-        const clearParams = {};
-        for (const key of Object.keys(params)) {
-            if (key !== "sort" && key !== "sort_dir" && key !== "pageSize") {
-                clearParams[key] = null;
-            }
-        }
-        updateParams({ ...clearParams, ...encodeFilters(newFilters), page: null });
+        updateParams({ ...clearFilterParams(params), ...encodeFilters(newFilters), page: null });
     };
 
     const onPageChange = (newPage) => {
@@ -155,6 +162,11 @@ export function useUrlState(store, table, { defaultPageSize = 25, defaultSort = 
 
     const onPageSizeChange = (newSize) => {
         updateParams({ pageSize: String(newSize), page: null });
+    };
+
+    const onSearchChange = (newSearch) => {
+        const trimmed = (newSearch || "").trim();
+        updateParams({ q: trimmed || null, page: null });
     };
 
     return {
@@ -168,10 +180,13 @@ export function useUrlState(store, table, { defaultPageSize = 25, defaultSort = 
         filterMeta,
         filters,
         fkResolved,
+        search,
+        searchError,
         onSort,
         onRangeChange,
         onMultiChange,
         onPageChange,
         onPageSizeChange,
+        onSearchChange,
     };
 }

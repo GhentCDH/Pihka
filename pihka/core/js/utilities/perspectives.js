@@ -1,4 +1,4 @@
-import { assetUrl } from "./router.js";
+import { loadConfig } from "./config.js";
 import { findGeoColumns } from "../components/map/map-utils.js";
 
 /**
@@ -10,14 +10,7 @@ import { findGeoColumns } from "../components/map/map-utils.js";
  * @returns {Promise<{ defaultLanguage: string, perspectives: Perspective[] }>}
  */
 export async function loadPerspectives(ds) {
-    let cfg = {};
-    try {
-        const res = await fetch(assetUrl("app/config.json"));
-        if (res.ok) cfg = await res.json();
-    } catch (_) {
-        // Network or parse error — fall through to auto-generate
-    }
-
+    const cfg = await loadConfig();
     const defaultLanguage = cfg.defaultLanguage || "en";
 
     const meta = ds.metadata();
