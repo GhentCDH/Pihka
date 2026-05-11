@@ -1,7 +1,7 @@
 # Pihka
 
 
-A sustainable data publishing platform for digital humanities research.
+A sustainable data publishing platform for digital humanities research. A proof-of-concept prototype.
 
 ## What it does
 
@@ -10,12 +10,9 @@ Pihka lets you publish SQLite databases as interactive, searchable websites. Dro
 - **Faceted search** auto-generated from your database schema
 - **Detail views** for individual records
 - **Zero backend** — runs entirely in the browser, no server components which need active maintenance
-
-Envisioned are some extensions:
-
-- **Full text search** - To search accross columns. Technically this means addin or using sqlite full text search indexes on the fly. 
+- **Relationship views** — shows names or labels for linked columns.
+- **Full text search** - To search accross columns. By default, a database is enriched with a full text search index. For small datasets creating such index goes instantly.
 - **Modern mapping solutions** - To show interactive, flexible maps without relying on external services. Technically a solution with protomaps and maplibre-gl is envisioned.
-
 
 ## Why
 
@@ -46,7 +43,6 @@ Open http://localhost:3000 and browse the included demo database.
 3. Customize facets and views as needed
 
 # credits
-
 
 https://picocss.com/docs
 
