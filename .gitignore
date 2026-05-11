@@ -8,6 +8,8 @@ node_modules/
 /playwright/.auth/
 .claude
 pihka/app/database/*.db
+!pihka/app/database/sample.db
+
 pihka/app/database/*.sqlite
 pihka/app/database/*.pmtiles
 pihka/app/assets/*

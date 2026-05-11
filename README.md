@@ -1,7 +1,6 @@
-# Pihka
+# ⛁ Pihka - Sustainable Data Publishing
 
-
-A sustainable data publishing platform for digital humanities research. A proof-of-concept prototype.
+A sustainable data publishing platform for digital humanities research or other data. A proof-of-concept prototype.
 
 ## What it does
 
