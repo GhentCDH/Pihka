@@ -12,7 +12,7 @@
 	# Range requests still work because the client receives the compressed
 	# bytes as-is (ranges apply to the compressed representation).
 	file_server {
-		precompressed br gz
+		precompressed
 	}
 
 	# On-the-fly compression as a fallback for assets you didn't pre-compress
@@ -21,7 +21,6 @@
 	# so it's safe alongside the precompressed DB file.
 	encode {
 		zstd
-		br
 		gzip 5
 		minimum_length 1024
 		match {
@@ -32,6 +31,13 @@
 			header Content-Type application/wasm
 			header Content-Type image/svg+xml
 		}
+	}
+
+	header {
+		Cross-Origin-Opener-Policy "same-origin"
+		Cross-Origin-Embedder-Policy "require-corp"
+		# Optional but often needed:
+		Cross-Origin-Resource-Policy "same-origin"
 	}
 
 	# Long cache for the immutable DB artifacts (assuming you version the filename
