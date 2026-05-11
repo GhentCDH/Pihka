@@ -5,5 +5,37 @@
 
 :3267 {
 	root * .
-	file_server
+
+	# Serve pre-compressed .br / .gz when the client supports it.
+	# Caddy will look for <file>.br then <file>.gz next to the original
+	# and serve them with the right Content-Encoding header.
+	# Range requests still work because the client receives the compressed
+	# bytes as-is (ranges apply to the compressed representation).
+	file_server {
+		precompressed br gz
+	}
+
+	# On-the-fly compression as a fallback for assets you didn't pre-compress
+	# (HTML, JSON, JS, etc.). Skipped automatically for already-compressed
+	# responses and — importantly — Caddy won't apply this to range requests,
+	# so it's safe alongside the precompressed DB file.
+	encode {
+		zstd
+		br
+		gzip 5
+		minimum_length 1024
+		match {
+			header Content-Type text/*
+			header Content-Type application/json*
+			header Content-Type application/javascript*
+			header Content-Type application/xml*
+			header Content-Type application/wasm
+			header Content-Type image/svg+xml
+		}
+	}
+
+	# Long cache for the immutable DB artifacts (assuming you version the filename
+	# or treat them as content-addressed). Adjust as needed.
+	@db path *.db *.db.br *.db.gz *.sqlite *.sqlite.br *.sqlite.gz
+	header @db Cache-Control "public, max-age=31536000, immutable"
 }
