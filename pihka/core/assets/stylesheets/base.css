@@ -489,6 +489,28 @@ article {
   color: var(--text-muted);
 }
 
+/* MapLibre controls — strip Pico's [role="button"] / button styling so the
+   library's own SVG markers and zoom controls render unobscured. */
+
+.maplibregl-marker,
+.maplibregl-ctrl button {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  color: inherit;
+}
+
+.maplibregl-ctrl-group {
+  background: var(--bg);
+  border-radius: 4px;
+}
+
+.maplibregl-ctrl-group button {
+  width: 29px;
+  height: 29px;
+}
+
 /* Utility */
 
 code {

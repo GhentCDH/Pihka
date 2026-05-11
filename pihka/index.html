@@ -13,7 +13,9 @@
                     "@sqlite.org/sqlite-wasm": "./core/vendor/@sqlite.org/sqlite-wasm/dist/index.mjs",
                     "preact": "./core/vendor/preact/dist/preact.module.js",
                     "preact/hooks": "./core/vendor/preact/hooks/dist/hooks.module.js",
-                    "maplibre-gl": "./core/vendor/maplibre-gl/dist/maplibre-gl.js"
+                    "maplibre-gl": "./core/vendor/maplibre-gl/dist/maplibre-gl.js",
+                    "pmtiles": "./core/vendor/pmtiles/dist/esm/index.js",
+                    "fflate": "./core/vendor/fflate/esm/browser.js"
                 }
             }
         </script>
@@ -85,7 +87,7 @@
             }
 
             async function main() {
-                const ds = new DataSource(assetUrl("app/database/narrativesources.db"));
+                const ds = new DataSource(assetUrl("app/database/sample.db"));
 
                 render(
                     h("div", { class: "container" },

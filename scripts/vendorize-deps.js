@@ -54,6 +54,28 @@ async function fetchBinaryOptional(url) {
 // Per-package logic
 // ---------------------------------------------------------------------------
 
+/**
+ * Resolve a conditional-exports value down to a single browser-friendly path string.
+ * Modern packages often nest like:
+ *   "import": { "types": "./x.d.ts", "default": "./x.js" }
+ * or:
+ *   { "browser": "./b.js", "import": "./i.js", "default": "./d.js" }
+ * We walk the conditions in browser-preference order until we find a string path.
+ */
+function resolveExportEntry(value) {
+  if (value == null) return null;
+  if (typeof value === "string") return value;
+  if (typeof value !== "object") return null;
+  // Order matters: prefer browser → import → default → module → require.
+  for (const key of ["browser", "import", "default", "module", "require"]) {
+    if (key in value) {
+      const resolved = resolveExportEntry(value[key]);
+      if (resolved) return resolved;
+    }
+  }
+  return null;
+}
+
 async function vendorPackage(name, range) {
   // 1. Resolve version via unpkg package.json redirect
   console.log(`  Resolving ${name}@${range} ...`);
@@ -61,16 +83,11 @@ async function vendorPackage(name, range) {
   const version = pkgJson.version;
   console.log(`  Resolved to ${name}@${version}`);
 
-  // 2. Determine browser entry point: exports["."].browser → .import → module → main
-  let entryPath;
-  if (pkgJson.exports?.["."]?.browser) {
-    entryPath = pkgJson.exports["."].browser;
-  } else if (pkgJson.exports?.["."]?.import) {
-    entryPath = pkgJson.exports["."].import;
-  } else if (pkgJson.module) {
-    entryPath = pkgJson.module;
-  } else if (pkgJson.main) {
-    entryPath = pkgJson.main;
+  // 2. Determine browser entry point: exports["."] (nested-aware) → module → main
+  let entryPath = resolveExportEntry(pkgJson.exports?.["."]);
+  if (!entryPath) {
+    if (pkgJson.module) entryPath = pkgJson.module;
+    else if (pkgJson.main) entryPath = pkgJson.main;
   }
 
   if (!entryPath) {
@@ -139,11 +156,11 @@ async function vendorPackage(name, range) {
   if (pkgJson.exports) {
     for (const [key, value] of Object.entries(pkgJson.exports)) {
       if (key === "." || !key.startsWith("./")) continue;
-      // Resolve browser entry for this sub-export
-      let subPath;
-      if (value?.browser) subPath = value.browser;
-      else if (value?.import) subPath = value.import;
-      else if (typeof value === "string") subPath = value;
+      // Skip wildcard subpath exports like "./dist/*" — we can't enumerate them
+      if (key.includes("*")) continue;
+      // Resolve browser entry for this sub-export (nested-condition aware)
+      let subPath = resolveExportEntry(value);
+      if (subPath?.includes("*")) continue;
       if (!subPath || subPath.endsWith(".css") || subPath.endsWith(".wasm")) continue;
       if (subPath.startsWith("./")) subPath = subPath.slice(1);
       else if (!subPath.startsWith("/")) subPath = "/" + subPath;

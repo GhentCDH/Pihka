@@ -2743,14 +2743,13 @@ async function sqlite3InitModule(moduleArg = {}) {
 	var getExecutableName = () => thisProgram || "./this.program";
 	var getEnvStrings = () => {
 		if (!getEnvStrings.strings) {
-			var lang = (globalThis.navigator?.language ?? "C").replace("-", "_") + ".UTF-8";
 			var env = {
 				"USER": "web_user",
 				"LOGNAME": "web_user",
 				"PATH": "/",
 				"PWD": "/",
 				"HOME": "/home/web_user",
-				"LANG": lang,
+				"LANG": (globalThis.navigator?.language ?? "C").replace("-", "_") + ".UTF-8",
 				"_": getExecutableName()
 			};
 			for (var x in ENV) if (ENV[x] === void 0) delete env[x];

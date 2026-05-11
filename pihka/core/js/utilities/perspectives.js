@@ -1,4 +1,5 @@
 import { assetUrl } from "./router.js";
+import { findGeoColumns } from "../components/map/map-utils.js";
 
 /**
  * Load and normalise the perspectives configuration from app/config.json.
@@ -19,14 +20,14 @@ export async function loadPerspectives(ds) {
 
     const defaultLanguage = cfg.defaultLanguage || "en";
 
+    const meta = ds.metadata();
     let perspectives;
     if (Array.isArray(cfg.perspectives) && cfg.perspectives.length > 0) {
-        perspectives = cfg.perspectives.map(normalizePerspective);
+        perspectives = cfg.perspectives.map(p => normalizePerspective(p, meta));
     } else {
-        const meta = ds.metadata();
         perspectives = Object.entries(meta.tables)
             .filter(([, t]) => t.type !== "virtual")
-            .map(([name]) => normalizePerspective({ id: name, name, table: name, view: "table" }));
+            .map(([name]) => normalizePerspective({ id: name, name, table: name, view: "table" }, meta));
     }
 
     perspectives.sort((a, b) => a.name.localeCompare(b.name));
@@ -36,11 +37,20 @@ export async function loadPerspectives(ds) {
 
 const VALID_VIEWS = ["table", "cards", "map"];
 
-function normalizePerspective(p) {
+function normalizePerspective(p, meta) {
     const view = VALID_VIEWS.includes(p.view) ? p.view : "table";
-    const allowedViews = Array.isArray(p.allowed_views)
-        ? p.allowed_views.filter(v => VALID_VIEWS.includes(v))
-        : [view];
+
+    let allowedViews;
+    if (Array.isArray(p.allowed_views)) {
+        allowedViews = p.allowed_views.filter(v => VALID_VIEWS.includes(v));
+    } else {
+        // Auto-expand to table + cards, plus map if the table has geo columns.
+        allowedViews = ["table", "cards"];
+        const tableMeta = meta?.tables?.[p.table];
+        if (tableMeta && findGeoColumns(tableMeta.columns)) {
+            allowedViews.push("map");
+        }
+    }
 
     return {
         id:            String(p.id),

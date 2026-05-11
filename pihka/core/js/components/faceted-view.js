@@ -3,6 +3,7 @@ import { useMemo } from "preact/hooks";
 import FacetSidebar from "./facet-sidebar.js";
 import DataViewListTable from "./data-views/data-view-list-table.js";
 import DataViewListCards from "./data-views/data-view-list-cards.js";
+import DataViewListMap from "./data-views/data-view-list-map.js";
 import { useUrlState } from "../utilities/use-url-state.js";
 import { navigate } from "../utilities/router.js";
 
@@ -130,9 +131,9 @@ function renderView(activeView, { p, columns, rows, sort, onSort, totalRows, fkR
         return h(DataViewListCards, { id: p.id, name: p.table, columns, rows, fkResolved, lang });
     }
     if (activeView === "map") {
-        return h("div", { style: "padding:2rem;text-align:center;color:var(--text-muted);background:var(--bg-subtle);border-radius:6px;margin:1rem 0" },
-            h("p", { style: "font-size:1.1em" }, `\uD83C\uDF0D Here be offline maps for ${totalRows} objects`),
-        );
+        return h(DataViewListMap, {
+            id: p.id, name: p.table, columns, rows, fkResolved, lang, perspectiveId: p.id,
+        });
     }
     return h("p", null, `Unknown view: ${activeView}`);
 }
