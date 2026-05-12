@@ -1,0 +1,22 @@
+[
+  {
+    "id": 1,
+    "name": "Novel"
+  },
+  {
+    "id": 2,
+    "name": "Essay"
+  },
+  {
+    "id": 3,
+    "name": "Poetry"
+  },
+  {
+    "id": 4,
+    "name": "Short Story"
+  },
+  {
+    "id": 5,
+    "name": "Drama"
+  }
+]
