@@ -16,7 +16,7 @@ const RESERVED_FTS5_COLS = new Set(["rowid", "rank"]);
  * The in-memory DB is rebuilt from the .db file on every page load, so
  * indexes never go stale within a session — no triggers needed.
  */
-export function fts5Plugin(ds, meta) {
+export function fts5Plugin(ds, meta, _config) {
     for (const [name, tableMeta] of Object.entries(meta.tables)) {
         if (tableMeta.type !== "table") continue; // skip views, virtuals
         try {

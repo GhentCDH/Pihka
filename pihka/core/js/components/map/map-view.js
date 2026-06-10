@@ -14,7 +14,7 @@ const TILES_URL = "pmtiles://" + assetUrl("core/assets/maps/world.pmtiles");
  * `boundaries`, and `places`. We render just enough of them for a usable
  * basemap; richer styling would mean shipping a much larger style JSON.
  */
-function buildStyle() {
+export function buildStyle() {
     return {
         version: 8,
         sources: {

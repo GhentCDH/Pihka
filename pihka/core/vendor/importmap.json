@@ -29,7 +29,6 @@
     "preact/devtools/package.json": "./pihka/core/vendor/preact/devtools/package.json",
     "preact/hooks/package.json": "./pihka/core/vendor/preact/hooks/package.json",
     "preact/test-utils/package.json": "./pihka/core/vendor/preact/test-utils/package.json",
-    "preact/jsx-runtime/package.json": "./pihka/core/vendor/preact/jsx-runtime/package.json",
-    "sql.js": "./pihka/core/vendor/sql.js/dist/sql-wasm-browser.js"
+    "preact/jsx-runtime/package.json": "./pihka/core/vendor/preact/jsx-runtime/package.json"
   }
 }

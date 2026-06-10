@@ -35,7 +35,7 @@ export default function FtsSearchInput({ value, onSubmit, error, available }) {
                 placeholder: available ? "Search…" : "Search not available",
                 disabled: !available,
                 value: draft,
-                onInput: (e) => setDraft(e.target.value),
+                onInput: (e) => setDraft(/** @type {HTMLInputElement} */ (e.target).value),
                 class: "facet-search fts-search-input",
                 "aria-label": "Full-text search",
             }),
@@ -54,7 +54,7 @@ export default function FtsSearchInput({ value, onSubmit, error, available }) {
             onClick: () => setHelpOpen(o => !o),
             "aria-expanded": helpOpen,
         }, helpOpen ? "Hide search syntax" : "Search syntax"),
-        helpOpen && h(FtsHelp),
+        helpOpen && h(FtsHelp, null),
     );
 }
 

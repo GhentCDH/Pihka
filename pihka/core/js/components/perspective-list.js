@@ -1,5 +1,6 @@
 import { h } from "preact";
 import { buildPath } from "../utilities/router.js";
+import { localize, visibleColumns } from "../utilities/table-config.js";
 
 /**
  * Navigation list of all configured perspectives.
@@ -14,11 +15,11 @@ export default function PerspectiveList({ perspectives, store, lang = "en" }) {
         perspectives.map(p => {
             const view = p.default_view || p.view || "table";
             const schema = store.getSchema(p.table);
-            const colCount = schema ? schema.columns.length : null;
+            const colCount = schema ? visibleColumns(schema.columns).length : null;
             const kind = p.query ? "query" : "table";
             const meta = colCount != null ? `${kind} (${colCount} columns)` : kind;
             return h("a", { key: p.id, class: "perspective-card", href: buildPath(`/${lang}/${p.id}/${view}`) },
-                h("span", { class: "perspective-card-name" }, p.label || p.name),
+                h("span", { class: "perspective-card-name" }, localize(p.label, lang, p.name)),
                 h("small", { class: "perspective-card-meta" }, meta),
             );
         }),

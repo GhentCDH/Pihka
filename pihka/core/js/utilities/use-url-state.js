@@ -12,16 +12,17 @@ import { useRouter, updateParams } from "./router.js";
  *   {col}_min=100         → range filter min
  *   {col}_max=200         → range filter max
  *   {col}=1,3,7           → multi-select filter (comma-separated)
+ *   bbox=w,s,e,n          → map viewport filter (minLon,minLat,maxLon,maxLat)
  */
 function decodeParams(params, filterMeta) {
     const filters = {};
-    const { rangeColumns, multiColumns } = filterMeta;
+    const { rangeColumns, multiColumns, geoMeta } = filterMeta;
 
     const rangeNames = new Set(rangeColumns.map(c => c.name));
     const multiNames = new Set(multiColumns.map(c => c.name));
 
     for (const [key, value] of Object.entries(params)) {
-        if (key === "sort" || key === "sort_dir" || key === "page" || key === "pageSize" || key === "q") continue;
+        if (key === "sort" || key === "sort_dir" || key === "page" || key === "pageSize" || key === "q" || key === "bbox") continue;
 
         // Range filter: {col}_min or {col}_max
         const minMatch = key.match(/^(.+)_min$/);
@@ -49,6 +50,18 @@ function decodeParams(params, filterMeta) {
         }
     }
 
+    // Map viewport filter: only meaningful when the table has geo columns.
+    if (params.bbox && geoMeta) {
+        const [minLon, minLat, maxLon, maxLat] = params.bbox.split(",").map(Number);
+        if ([minLon, minLat, maxLon, maxLat].every(Number.isFinite)) {
+            filters._viewport = {
+                type: "bounds",
+                latCol: geoMeta.latCol, lonCol: geoMeta.lonCol,
+                minLat, maxLat, minLon, maxLon,
+            };
+        }
+    }
+
     const sort = params.sort
         ? { column: params.sort, direction: (params.sort_dir || "asc").toUpperCase() === "DESC" ? "DESC" : "ASC" }
         : null;
@@ -68,11 +81,11 @@ function decodeParams(params, filterMeta) {
 export function serializeFilters(filters) {
     return Object.entries(filters)
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([col, f]) =>
-            f.type === "range"
-                ? `${col}:r:${f.min}:${f.max}`
-                : `${col}:m:${Array.from(f.selected).sort().join(",")}`,
-        )
+        .map(([col, f]) => {
+            if (f.type === "range") return `${col}:r:${f.min}:${f.max}`;
+            if (f.type === "bounds") return `${col}:b:${f.minLat}:${f.maxLat}:${f.minLon}:${f.maxLon}`;
+            return `${col}:m:${Array.from(f.selected).sort().join(",")}`;
+        })
         .join("|");
 }
 
@@ -104,6 +117,11 @@ function encodeFilters(filters) {
             params[`${col}_max`] = filter.max != null ? String(filter.max) : null;
         } else if (filter.type === "multi" && filter.selected.size > 0) {
             params[col] = Array.from(filter.selected).join(",");
+        } else if (filter.type === "bounds") {
+            // ~1m precision keeps URLs short and the filter key stable.
+            const round = (v) => String(Math.round(v * 1e5) / 1e5);
+            params.bbox = [filter.minLon, filter.minLat, filter.maxLon, filter.maxLat]
+                .map(round).join(",");
         }
     }
     return params;
@@ -174,6 +192,25 @@ export function useUrlState(store, table, { defaultPageSize = 25, defaultSort = 
         updateParams({ ...clearFilterParams(params), ...encodeFilters(newFilters), page: null });
     };
 
+    // bounds = { minLat, maxLat, minLon, maxLon } from the viewport facet,
+    // or null to clear. The facet knows nothing about columns or SQL; the
+    // geo column names are attached here from filterMeta.
+    const onBoundsChange = (bounds) => {
+        if (!filterMeta.geoMeta) return;
+        const newFilters = { ...filters };
+        if (!bounds) {
+            delete newFilters._viewport;
+        } else {
+            newFilters._viewport = {
+                type: "bounds",
+                latCol: filterMeta.geoMeta.latCol,
+                lonCol: filterMeta.geoMeta.lonCol,
+                ...bounds,
+            };
+        }
+        updateParams({ ...clearFilterParams(params), ...encodeFilters(newFilters), page: null });
+    };
+
     const onPageChange = (newPage) => {
         updateParams({ page: newPage > 0 ? String(newPage + 1) : null });
     };
@@ -204,6 +241,7 @@ export function useUrlState(store, table, { defaultPageSize = 25, defaultSort = 
         onSort,
         onRangeChange,
         onMultiChange,
+        onBoundsChange,
         onPageChange,
         onPageSizeChange,
         onSearchChange,

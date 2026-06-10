@@ -24,6 +24,9 @@ export class DataSource extends EventTarget {
 
     async #init(url) {
         try {
+            // Yield one microtask so the caller constructing this source can
+            // attach event listeners before the first event fires.
+            await Promise.resolve();
 
             this.dispatchEvent(new CustomEvent("downloading"));
 

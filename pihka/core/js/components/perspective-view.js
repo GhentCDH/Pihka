@@ -20,8 +20,9 @@ export default function PerspectiveView({ perspective: p, store, view, lang }) {
 
     // Custom query perspectives get static display, no facets
     if (p.query) {
-        const { columns, rows } = store.queryCustom(p.table, p.query);
-        return h(DataViewListTable, { name: p.table, columns, rows });
+        const { columns, rows, error } = store.queryPerspective(p);
+        if (error) return h("p", null, `Query failed: ${error}`);
+        return h(DataViewListTable, { columns, rows });
     }
 
     // All non-custom perspectives go through FacetedView (sidebar + content)

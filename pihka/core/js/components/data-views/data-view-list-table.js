@@ -1,24 +1,26 @@
 import { h } from "preact";
-import { isImagePath } from "./render-helpers.js";
-import { buildPath, assetUrl } from "../../utilities/router.js";
+import CellValue from "./cell-value.js";
+import { buildPath } from "../../utilities/router.js";
+import { localize, visibleColumns } from "../../utilities/table-config.js";
 
 function SortIndicator({ direction }) {
     if (!direction) return null;
     return h("span", { "aria-label": direction === "ASC" ? "sorted ascending" : "sorted descending",
         style: "margin-left:.3em" },
-        direction === "ASC" ? "\u25B2" : "\u25BC",
+        direction === "ASC" ? "▲" : "▼",
     );
 }
 
-function ColumnHeader({ col, sort, onSort }) {
+function ColumnHeader({ col, lang, sort, onSort }) {
     const isSorted = sort && sort.column === col.name;
+    const label = localize(col.label, lang, col.name);
 
     if (onSort) {
         return h("th", {
             style: "cursor:pointer;user-select:none",
             onClick: () => onSort(col.name),
         },
-            col.name,
+            label,
             col.primaryKey && h("sup", null, " PK"),
             col.type && h("span", {
                 style: "color:var(--text-muted);font-weight:normal;margin-left:.4em;font-size:.8em",
@@ -28,7 +30,7 @@ function ColumnHeader({ col, sort, onSort }) {
     }
 
     return h("th", null,
-        col.name,
+        label,
         col.primaryKey && h("sup", null, " PK"),
         col.type && h("span", {
             style: "color:var(--text-muted);font-weight:normal;margin-left:.4em;font-size:.8em",
@@ -37,8 +39,8 @@ function ColumnHeader({ col, sort, onSort }) {
 }
 
 /**
- * Render a table cell. FK columns show resolved display name + magnifying glass.
- * PK columns link to the detail page.
+ * Render a table cell. PK columns link to the detail page; everything else
+ * goes through the shared CellValue renderer.
  */
 function Cell({ col, value, fkResolved, lang, perspectiveId }) {
     const raw = value ?? "";
@@ -50,40 +52,14 @@ function Cell({ col, value, fkResolved, lang, perspectiveId }) {
         );
     }
 
-    // Foreign key → show resolved display name + 🔍 link to referenced entity
-    if (col.references && fkResolved && fkResolved[col.name]) {
-        const fk = fkResolved[col.name];
-        const displayName = fk.displayMap[raw] ?? String(raw);
-        const detailHref = buildPath(`/${fk.referencedTable}/${raw}`);
-
-        return h("td", null,
-            displayName,
-            " ",
-            h("a", {
-                href: detailHref,
-                title: `View ${displayName}`,
-                style: "opacity:.5;text-decoration:none",
-            }, "\uD83D\uDD0D"),
-        );
-    }
-
-    // Image file → render as <img>
-    if (isImagePath(String(raw))) {
-        return h("td", null,
-            h("img", { src: assetUrl(`app/assets/${raw}`), alt: raw, style: "max-height:4rem;border-radius:3px" }),
-        );
-    }
-
-    // Regular value
-    return h("td", null, raw);
+    return h("td", null, h(CellValue, { col, value, fkResolved, lang, imageHeight: "4rem" }));
 }
 
 /**
  * Renders a table of rows.
  *
  * Props:
- *   name          - table name (for section id)
- *   columns       - column schema array
+ *   columns       - column schema array (hidden columns are filtered out)
  *   rows          - array of row objects
  *   sort          - (optional) { column, direction } current sort state
  *   onSort        - (optional) callback(columnName) to request sort
@@ -91,22 +67,23 @@ function Cell({ col, value, fkResolved, lang, perspectiveId }) {
  *   lang          - (optional) current language code
  *   perspectiveId - (optional) perspective id for detail links
  */
-export default function DataViewListTable({ name, columns, rows, sort, onSort, fkResolved, lang, perspectiveId }) {
+export default function DataViewListTable({ columns, rows, sort = null, onSort = null, fkResolved = null, lang = null, perspectiveId = null }) {
+    const cols = visibleColumns(columns);
     return h("div", { style: "overflow-x:auto" },
         rows.length === 0
             ? h("p", null, "No rows.")
             : h("table", null,
                 h("thead", null,
                     h("tr", null,
-                        columns.map(col =>
-                            h(ColumnHeader, { key: col.name, col, sort, onSort }),
+                        cols.map(col =>
+                            h(ColumnHeader, { key: col.name, col, lang, sort, onSort }),
                         ),
                     ),
                 ),
                 h("tbody", null,
                     rows.map((row, i) =>
                         h("tr", { key: i },
-                            columns.map(col =>
+                            cols.map(col =>
                                 h(Cell, {
                                     key: col.name, col,
                                     value: row[col.name],

@@ -11,8 +11,14 @@ export async function loadConfig() {
     if (cached) return cached;
     try {
         const res = await fetch(assetUrl("app/config.json"));
-        cached = res.ok ? await res.json() : {};
-    } catch (_) {
+        if (!res.ok) {
+            console.warn(`[config] app/config.json returned ${res.status}; using defaults`);
+            cached = {};
+        } else {
+            cached = await res.json();
+        }
+    } catch (err) {
+        console.warn("[config] failed to load app/config.json; using defaults:", err);
         cached = {};
     }
     return cached;

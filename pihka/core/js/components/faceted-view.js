@@ -1,11 +1,11 @@
 import { h } from "preact";
 import { useMemo } from "preact/hooks";
 import FacetSidebar from "./facet-sidebar.js";
-import DataViewListTable from "./data-views/data-view-list-table.js";
-import DataViewListCards from "./data-views/data-view-list-cards.js";
-import DataViewListMap from "./data-views/data-view-list-map.js";
+import Pagination from "./pagination.js";
+import { getView } from "../utilities/view-registry.js";
+import { localize } from "../utilities/table-config.js";
 import { useUrlState } from "../utilities/use-url-state.js";
-import { navigate } from "../utilities/router.js";
+import { navigate, useRouter } from "../utilities/router.js";
 
 /**
  * Top-level faceted view layout: sidebar on the left, content on the right.
@@ -18,6 +18,7 @@ import { navigate } from "../utilities/router.js";
  */
 export default function FacetedView({ perspective: p, store, view, lang }) {
     const activeView = view || p.default_view || "table";
+    const viewDef = getView("list", activeView);
     const defaultPageSize = p.page_size ?? 25;
     const defaultSort = p.default_sort ?? null;
 
@@ -25,7 +26,8 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
         columns, rows, totalRows, page, totalPages, pageSize,
         sort, filterMeta, filters, filtersKey, fkResolved,
         search, searchError,
-        onSort, onRangeChange, onMultiChange, onPageChange, onPageSizeChange, onSearchChange,
+        onSort, onRangeChange, onMultiChange, onBoundsChange,
+        onPageChange, onPageSizeChange, onSearchChange,
     } = useUrlState(store, p.table, { defaultPageSize, defaultSort });
 
     const searchAvailable = !!store.getFtsInfo(p.table);
@@ -35,26 +37,28 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
         return store.getFacetMeta(p.table, p.facets, filters);
     }, [store, p.table, p.facets, filtersKey]);
 
-    // The map plots every row matching the current filters, not just the
-    // current page, so it needs its own unpaginated query.
-    const mapRows = useMemo(() => {
-        if (activeView !== "map") return null;
+    // Non-paginated views (e.g. the map) show every row matching the
+    // current filters, not just the current page, so they need their own
+    // unpaginated query.
+    const needsAllRows = !!viewDef && !viewDef.paginated;
+    const allRows = useMemo(() => {
+        if (!needsAllRows) return null;
         return store.queryTable(p.table, { filters, sort, search, pageSize: null }).rows;
-    }, [activeView, store, p.table, filtersKey, sort?.column, sort?.direction, search]);
+    }, [needsAllRows, store, p.table, filtersKey, sort?.column, sort?.direction, search]);
+
+    const { params } = useRouter();
 
     const onClearAll = () => {
         navigate(`/${lang || "en"}/${p.id}/${activeView}`);
     };
 
     const onViewChange = (newView) => {
-        const params = new URLSearchParams(window.location.search);
-        const qs = params.toString();
-        navigate(`/${lang || "en"}/${p.id}/${newView}${qs ? "?" + qs : ""}`);
+        navigate(`/${lang || "en"}/${p.id}/${newView}`, params);
     };
 
     const firstRow = totalRows > 0 ? page * pageSize + 1 : 0;
     const lastRow = Math.min((page + 1) * pageSize, totalRows);
-    const paginatedView = activeView === "table" || activeView === "cards";
+    const paginatedView = viewDef?.paginated ?? false;
     const showPagination = paginatedView && totalPages > 1;
 
     return h("div", { class: "faceted-view" },
@@ -63,9 +67,11 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
             autoFilterMeta: filterMeta,
             filters,
             totalRows,
-            perspectiveName: p.name,
+            perspectiveName: localize(p.label, lang, p.name),
+            lang,
             onRangeChange,
             onMultiChange,
+            onBoundsChange,
             onClearAll,
             search,
             searchError,
@@ -83,29 +89,12 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
                             key: v,
                             class: v === activeView ? "" : "outline",
                             onClick: () => onViewChange(v),
-                        }, viewIcon(v), " ", v),
+                        }, getView("list", v)?.icon ?? "", " ", v),
                     ),
                 ),
 
                 // Pagination (inline, compact)
-                showPagination && h("nav", {
-                    "aria-label": "Pagination",
-                    class: "faceted-pagination",
-                },
-                    h("button", { disabled: page === 0, onClick: () => onPageChange(0) }, "\u00AB"),
-                    h("button", { disabled: page === 0, onClick: () => onPageChange(page - 1) }, "\u2039"),
-                    ...pageButtons(page, totalPages).map(p =>
-                        p === "..."
-                            ? h("span", { key: `e-${Math.random()}`, class: "pagination-ellipsis" }, "\u2026")
-                            : h("button", {
-                                key: p,
-                                onClick: () => onPageChange(p),
-                                class: p === page ? "pagination-active" : "",
-                            }, String(p + 1)),
-                    ),
-                    h("button", { disabled: page >= totalPages - 1, onClick: () => onPageChange(page + 1) }, "\u203A"),
-                    h("button", { disabled: page >= totalPages - 1, onClick: () => onPageChange(totalPages - 1) }, "\u00BB"),
-                ),
+                showPagination && h(Pagination, { page, totalPages, onPageChange }),
 
                 // Result count + page size selector
                 h("div", { class: "faceted-info" },
@@ -118,7 +107,7 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
                     ),
                     paginatedView && h("select", {
                         value: pageSize,
-                        onChange: (e) => onPageSizeChange(parseInt(e.target.value, 10)),
+                        onChange: (e) => onPageSizeChange(parseInt(/** @type {HTMLSelectElement} */ (e.target).value, 10)),
                         class: "faceted-pagesize",
                     },
                         [3, 10, 25, 50, 100, 1000].map(n =>
@@ -130,42 +119,22 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
 
             // Active view
             h("section", { id: p.table },
-                renderView(activeView, { p, columns, rows, mapRows, sort, onSort, totalRows, fkResolved, lang }),
+                renderView(viewDef, activeView, {
+                    id: p.id,
+                    name: p.table,
+                    perspectiveId: p.id,
+                    columns,
+                    rows: paginatedView ? rows : (allRows ?? rows),
+                    sort, onSort, fkResolved, lang,
+                }, totalRows),
             ),
         ),
     );
 }
 
-function renderView(activeView, { p, columns, rows, mapRows, sort, onSort, totalRows, fkResolved, lang }) {
+function renderView(viewDef, activeView, viewProps, totalRows) {
     if (totalRows === 0) return h("p", null, "No results match your filters.");
-
-    if (activeView === "table") {
-        return h(DataViewListTable, { name: p.table, columns, rows, sort, onSort, fkResolved, lang, perspectiveId: p.id });
-    }
-    if (activeView === "cards") {
-        return h(DataViewListCards, { id: p.id, name: p.table, columns, rows, fkResolved, lang });
-    }
-    if (activeView === "map") {
-        return h(DataViewListMap, {
-            id: p.id, name: p.table, columns, rows: mapRows ?? rows, fkResolved, lang, perspectiveId: p.id,
-        });
-    }
-    return h("p", null, `Unknown view: ${activeView}`);
+    if (!viewDef) return h("p", null, `Unknown view: ${activeView}`);
+    return h(viewDef.component, viewProps);
 }
 
-function viewIcon(view) {
-    const icons = { table: "\u2630", cards: "\u2B1A", map: "\uD83C\uDF0D" };
-    return icons[view] || "";
-}
-
-function pageButtons(current, total) {
-    if (total <= 7) return Array.from({ length: total }, (_, i) => i);
-    const pages = new Set([0, 1, total - 2, total - 1, current - 1, current, current + 1]);
-    const sorted = [...pages].filter(p => p >= 0 && p < total).sort((a, b) => a - b);
-    const result = [];
-    for (let i = 0; i < sorted.length; i++) {
-        if (i > 0 && sorted[i] - sorted[i - 1] > 1) result.push("...");
-        result.push(sorted[i]);
-    }
-    return result;
-}

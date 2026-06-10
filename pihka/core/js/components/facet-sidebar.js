@@ -2,6 +2,8 @@ import { h } from "preact";
 import { useState } from "preact/hooks";
 import RangeSelector from "./range-selector.js";
 import FtsSearchInput from "./fts-search-input.js";
+import MapBoundsFilter from "./map/map-bounds-filter.js";
+import { localize } from "../utilities/table-config.js";
 
 /**
  * Sidebar with faceted search filters.
@@ -15,12 +17,13 @@ import FtsSearchInput from "./fts-search-input.js";
  *   perspectiveName - display name for the result count
  *   onRangeChange  - (colName, bound, value) => void
  *   onMultiChange  - (colName, newSelected) => void
+ *   onBoundsChange - (bounds|null) => void — map viewport filter
  *   onClearAll     - () => void
  */
 export default function FacetSidebar({
     facetMeta, autoFilterMeta, filters,
-    totalRows, perspectiveName,
-    onRangeChange, onMultiChange, onClearAll,
+    totalRows, perspectiveName, lang,
+    onRangeChange, onMultiChange, onBoundsChange, onClearAll,
     search, searchError, searchAvailable, onSearchChange,
 }) {
     const hasActiveFilters = Object.keys(filters).length > 0 || (search && search.length > 0);
@@ -49,18 +52,27 @@ export default function FacetSidebar({
         }),
 
         hasFacetMeta
-            ? renderConfiguredFacets(facetMeta, filters, onRangeChange, onMultiChange)
-            : renderAutoFacets(autoFilterMeta, filters, onRangeChange, onMultiChange),
+            ? renderConfiguredFacets(facetMeta, filters, onRangeChange, onMultiChange, lang)
+            : renderAutoFacets(autoFilterMeta, filters, onRangeChange, onMultiChange, lang),
+
+        // Location facet: rendered for any table with geo columns, on both
+        // the configured and auto paths.
+        autoFilterMeta?.geoMeta && onBoundsChange && h(MapBoundsFilter, {
+            key: "_viewport",
+            geoMeta: autoFilterMeta.geoMeta,
+            activeBounds: filters._viewport ?? null,
+            onBoundsChange,
+        }),
     );
 }
 
-function renderConfiguredFacets(facetMeta, filters, onRangeChange, onMultiChange) {
+function renderConfiguredFacets(facetMeta, filters, onRangeChange, onMultiChange, lang) {
     return Object.entries(facetMeta).map(([field, meta]) => {
         if (meta.type === "range") {
             const current = filters[field];
             return h(RangeSelector, {
                 key: field,
-                label: labelText(meta.label, field),
+                label: localize(meta.label, lang, field),
                 min: meta.min,
                 max: meta.max,
                 currentMin: current?.min ?? null,
@@ -74,8 +86,7 @@ function renderConfiguredFacets(facetMeta, filters, onRangeChange, onMultiChange
         if (meta.type === "dropdown" || meta.type === "checkbox") {
             return h(DropdownFacet, {
                 key: field,
-                field,
-                label: labelText(meta.label, field),
+                label: localize(meta.label, lang, field),
                 options: meta.options || [],
                 selected: filters[field]?.selected ?? new Set(),
                 onChange: (sel) => onMultiChange(field, sel),
@@ -86,7 +97,7 @@ function renderConfiguredFacets(facetMeta, filters, onRangeChange, onMultiChange
     });
 }
 
-function renderAutoFacets(autoFilterMeta, filters, onRangeChange, onMultiChange) {
+function renderAutoFacets(autoFilterMeta, filters, onRangeChange, onMultiChange, lang) {
     if (!autoFilterMeta) return null;
     const { rangeMeta, multiMeta, rangeColumns, multiColumns } = autoFilterMeta;
 
@@ -94,8 +105,7 @@ function renderAutoFacets(autoFilterMeta, filters, onRangeChange, onMultiChange)
         ...multiColumns.map(col =>
             h(DropdownFacet, {
                 key: col.name,
-                field: col.name,
-                label: multiMeta[col.name].label,
+                label: localize(multiMeta[col.name].label, lang, col.name),
                 options: (multiMeta[col.name].options || []).map(o => ({ ...o, count: null })),
                 selected: filters[col.name]?.selected ?? new Set(),
                 onChange: (sel) => onMultiChange(col.name, sel),
@@ -104,7 +114,7 @@ function renderAutoFacets(autoFilterMeta, filters, onRangeChange, onMultiChange)
         ...rangeColumns.map(col =>
             h(RangeSelector, {
                 key: col.name,
-                label: col.name,
+                label: localize(col.label, lang, col.name),
                 min: rangeMeta[col.name].min,
                 max: rangeMeta[col.name].max,
                 currentMin: filters[col.name]?.min ?? null,
@@ -121,7 +131,7 @@ function renderAutoFacets(autoFilterMeta, filters, onRangeChange, onMultiChange)
  * A searchable dropdown facet with optional counts.
  * Novel Echoes / Cinema Belgica style.
  */
-function DropdownFacet({ field, label, options, selected, onChange }) {
+function DropdownFacet({ label, options, selected, onChange }) {
     const [search, setSearch] = useState("");
     const [open, setOpen] = useState(false);
 
@@ -170,7 +180,7 @@ function DropdownFacet({ field, label, options, selected, onChange }) {
                 type: "text",
                 placeholder: "Search\u2026",
                 value: search,
-                onInput: (e) => setSearch(e.target.value),
+                onInput: (e) => setSearch(/** @type {HTMLInputElement} */ (e.target).value),
                 class: "facet-search",
             }),
             h("div", { class: "facet-options" },
@@ -195,8 +205,3 @@ function DropdownFacet({ field, label, options, selected, onChange }) {
     );
 }
 
-function labelText(label, fallback) {
-    if (!label) return fallback;
-    if (typeof label === "string") return label;
-    return label.en || Object.values(label)[0] || fallback;
-}

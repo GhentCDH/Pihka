@@ -33,16 +33,19 @@ pihka/
   app/                # User-customizable content
     config.json       # App config (database path, name)
     database/         # SQLite .db/.sqlite files served as static assets
-    pages/            # JSON page definitions (title + HTML content)
   core/               # Framework code (not user-modified)
     js/
       components/     # Preact components using h() hyperscript (no JSX)
-      utilities/      # Shared utilities (e.g. pages.js for loading page JSON)
+      utilities/      # Shared utilities (router, data layer, config)
     stylesheets/      # PicoCSS base framework
     assets/stylesheets/base.css  # Custom CSS variables and overrides
     vendor/           # Vendored npm packages (downloaded by vendorize-deps.js)
       importmap.json  # Generated import map for vendored packages
 ```
+
+### Routing
+
+Routing is hash-based: routes live in the URL fragment (`/#/:lang/:perspective/:view`, detail `/#/:lang/:perspective/:id/:view`, query params inside the fragment, e.g. `/#/en/works/table?bbox=...`). The server only ever sees a request for index.html, so deep links work on any static host (GitHub Pages, S3) without rewrite rules. `core/js/utilities/router.js` owns all URL parsing/navigation; `redirectLegacyPathUrl()` migrates old path-style URLs to hash routes on hosts that still serve them. In-app links are plain `#/...` anchors built with `buildPath()` — the browser handles clicks natively.
 
 ### How SQLite works in the browser
 
@@ -56,10 +59,61 @@ To update vendored deps: edit `package.json` dependencies, then run `npm run ven
 
 **Never add additional dependencies**. The whole point of this software is to keep running and introducting additional dependencies is not acceptable. Javascript, SQLite and plain SQL should be used at to interact with the database. preact to build a reactive UI. No dependencies on build tools.
 
-### Components and pages
+### Components
 
 - Preact components use `h()` hyperscript directly — no JSX, no transpilation needed.
-- Pages are defined as JSON files in `pihka/app/pages/<slug>.json` with `title` and either `content` (HTML string) or `contentLines` (array joined with `\n`). Load them via `loadPage(slug)` from `core/js/utilities/pages.js`.
+
+### Table display configuration
+
+The `tables` section of `app/config.json` configures how tables and columns display, keyed by table name. All keys are optional (opt-out model: everything shows by default, in schema order):
+
+```json
+"tables": {
+    "works": {
+        "label": { "en": "Works", "nl": "Werken" },
+        "columns": {
+            "title":    { "label": { "en": "Title", "nl": "Titel" } },
+            "cover":    { "type": "asset", "label": "Cover" },
+            "homepage": { "type": "url" },
+            "year":     { "type": "number", "format": { "useGrouping": false } },
+            "created":  { "type": "date", "format": { "dateStyle": "medium" } },
+            "internal_notes": { "hidden": true }
+        }
+    },
+    "audit_log": { "hidden": true }
+}
+```
+
+- Labels are strings or `{lang: string}` objects, resolved against the current URL language (then `en`, then the first language, then the raw name) by `localize()` in `core/js/utilities/table-config.js`.
+- A top-level `"languages": ["en", "nl"]` config key enables the header language switcher; it rewrites the URL's lang segment and persists the choice in localStorage for routes without one.
+- Column `type` overrides rendering: `url` → external link, `asset` → image from `app/assets/`, `number`/`date` → `Intl` formatting with the column's `format` options, `text` → plain. Without a type, image-looking paths still render as images (heuristic).
+- `hidden` on a column removes it from all views and filters; `hidden` on a table removes it from the home grid and from related-object sections. Hidden lookup tables still resolve FK display names and facets — hiding is a display concern, **not access control**: the data remains in the published `.sqlite` file.
+- `applyTableConfig()` annotates the schema metadata once at startup (`core/js/main.js`); components only ever see the annotated plain-JSON columns.
+
+### Views and the view registry
+
+All view types (list: `table`, `cards`, `map`; detail: `table`, `card`, `map`) are defined in one place: `core/js/utilities/view-registry.js`. The router, perspective normalization, and the view-toggle UIs all consult it — adding a view means one `registerView()` call, nothing else. Builtin views are registered by `core/js/components/data-views/builtin-views.js` (imported by `index.html`).
+
+Apps can register custom views (the platform's extension point for research-specific renderers — text annotations, IIIF, custom maps):
+
+1. Create e.g. `app/views.js`:
+   ```js
+   import { h } from "preact";
+   import { registerView } from "../core/js/utilities/view-registry.js";
+
+   registerView({
+       id: "timeline",
+       context: "list",            // or "detail"
+       icon: "▤",
+       paginated: false,           // non-paginated views receive ALL filtered rows
+       availableFor: (columns) => columns.some(c => c.name === "year"),
+       component: ({ columns, rows, fkResolved, lang, perspectiveId }) =>
+           h("div", null, /* ... */),
+   });
+   ```
+2. Point config at it: `"views": "app/views.js"` in `app/config.json`. A failing module logs a warning and the site boots with builtin views only.
+
+List components receive `{ id, name, perspectiveId, columns, rows, sort, onSort, fkResolved, lang }`; detail components receive `{ tableName, columns, row, fkResolved, lang, perspectiveId }` (see typedefs in `view-registry.js`). Re-registering an existing `context`+`id` overrides the builtin renderer. Caveat: view ids share the URL segment namespace with row ids — registering a new view id changes how legacy `/{perspective}/{id}` URLs with that exact id are parsed.
 
 ### Scripts
 

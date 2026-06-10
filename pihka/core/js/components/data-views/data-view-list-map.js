@@ -1,6 +1,6 @@
 import { h } from "preact";
 import MapView from "../map/map-view.js";
-import { findGeoColumns, rowsToPoints } from "../map/map-utils.js";
+import { findGeoColumns, rowsToPoints } from "../../utilities/geo.js";
 
 /**
  * Renders all rows as markers on a shared map.

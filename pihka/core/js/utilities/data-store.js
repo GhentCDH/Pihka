@@ -1,4 +1,5 @@
 import { buildWhereClause } from "./filter-sql.js";
+import { findGeoColumns } from "./geo.js";
 
 function quote(s) {
     return `"${s.replace(/"/g, '""')}"`;
@@ -7,9 +8,12 @@ function quote(s) {
 function classifyColumns(columns) {
     const rangeColumns = [];
     const multiColumns = [];
+    // Coordinate columns get a map viewport filter instead of range sliders.
+    const geo = findGeoColumns(columns);
 
     for (const col of columns) {
-        if (col.primaryKey) continue;
+        if (col.primaryKey || col.hidden) continue;
+        if (geo && (col === geo.latCol || col === geo.lonCol)) continue;
         if (col.references) {
             multiColumns.push(col);
         } else if (col.type === "INTEGER" || col.type === "REAL") {
@@ -17,7 +21,7 @@ function classifyColumns(columns) {
         }
     }
 
-    return { rangeColumns, multiColumns };
+    return { rangeColumns, multiColumns, geo };
 }
 
 /**
@@ -49,14 +53,16 @@ export class DataStore {
     }
 
     /**
-     * Returns filter metadata (range bounds + FK options) for a table.
-     * @returns {{ rangeMeta: Object, multiMeta: Object, rangeColumns: Array, multiColumns: Array }}
+     * Returns filter metadata (range bounds + FK options + geo columns) for a table.
+     * `geoMeta` is null unless the table has lat/lon columns; its `bounds` is
+     * the data extent, so a map viewport filter can start fitted to the data.
+     * @returns {{ rangeMeta: Object, multiMeta: Object, rangeColumns: Array, multiColumns: Array, geoMeta: Object|null }}
      */
     getFilterMeta(table) {
         const tableMeta = this.#meta.tables[table];
-        if (!tableMeta) return { rangeMeta: {}, multiMeta: {}, rangeColumns: [], multiColumns: [] };
+        if (!tableMeta) return { rangeMeta: {}, multiMeta: {}, rangeColumns: [], multiColumns: [], geoMeta: null };
 
-        const { rangeColumns, multiColumns } = classifyColumns(tableMeta.columns);
+        const { rangeColumns, multiColumns, geo } = classifyColumns(tableMeta.columns);
 
         const rangeMeta = {};
         for (const col of rangeColumns) {
@@ -67,11 +73,25 @@ export class DataStore {
         for (const col of multiColumns) {
             multiMeta[col.name] = {
                 options: this.#loadFkOptions(col.references.table, col.references.column),
-                label: col.references.table,
+                label: this.#meta.tables[col.references.table]?.label ?? col.references.table,
             };
         }
 
-        return { rangeMeta, multiMeta, rangeColumns, multiColumns };
+        let geoMeta = null;
+        if (geo) {
+            const latBounds = this.#loadRangeBounds(table, geo.latCol.name);
+            const lonBounds = this.#loadRangeBounds(table, geo.lonCol.name);
+            geoMeta = {
+                latCol: geo.latCol.name,
+                lonCol: geo.lonCol.name,
+                bounds: {
+                    minLat: latBounds.min, maxLat: latBounds.max,
+                    minLon: lonBounds.min, maxLon: lonBounds.max,
+                },
+            };
+        }
+
+        return { rangeMeta, multiMeta, rangeColumns, multiColumns, geoMeta };
     }
 
     /**
@@ -88,13 +108,13 @@ export class DataStore {
      * All parameters and return values are plain JSON.
      *
      * @param {string} table
-     * @param {Object} options
-     * @param {Object} options.filters - { colName: { type: "range"|"multi", ... } }
-     * @param {{ column: string, direction: "ASC"|"DESC" }|null} options.sort
-     * @param {number} options.page
-     * @param {number|null} options.pageSize - null disables pagination (all rows)
+     * @param {Object} [options]
+     * @param {Object} [options.filters] - { colName: { type: "range"|"multi"|"bounds", ... } }
+     * @param {{ column: string, direction: string }|null} [options.sort]
+     * @param {number} [options.page]
+     * @param {number|null} [options.pageSize] - null disables pagination (all rows)
      * @param {string} [options.search] - FTS5 MATCH expression; ignored when no FTS index exists
-     * @returns {{ columns, rows, totalRows, page, totalPages, fkResolved, searchError? }}
+     * @returns {{ columns: Array, rows: Array, totalRows: number, page: number, totalPages: number, fkResolved?: Object, searchError?: string }}
      */
     queryTable(table, { filters = {}, sort = null, page = 0, pageSize = 25, search = "" } = {}) {
         const tableMeta = this.#meta.tables[table];
@@ -170,36 +190,24 @@ export class DataStore {
     }
 
     /**
-     * Fetch all rows from a table (no filters, no pagination).
+     * Run a perspective's custom query (the `query` field from the site
+     * author's app/config.json). Components never see the SQL string — they
+     * hand over the perspective and get JSON back. A failing query (e.g. a
+     * config typo) is reported via `error` instead of throwing mid-render.
      *
-     * @param {string} table
-     * @returns {{ columns: Array, rows: Array }}
+     * @param {Object} perspective - normalized perspective with `table` and `query`
+     * @returns {{ columns: Array, rows: Array, error?: string }}
      */
-    queryAll(table) {
-        const tableMeta = this.#meta.tables[table];
-        if (!tableMeta) return { columns: [], rows: [] };
-
-        const rows = [];
-        this.#ds.exec(`SELECT * FROM ${quote(table)}`, {
-            rowMode: "object", callback: r => rows.push(r),
-        });
-        const fkResolved = this.resolveForeignKeys(table);
-        return { columns: tableMeta.columns, rows, fkResolved };
-    }
-
-    /**
-     * Execute a custom SQL query and return results with column schema.
-     *
-     * @param {string} table - Table name for schema lookup
-     * @param {string} sql - Custom SQL query
-     * @returns {{ columns: Array, rows: Array }}
-     */
-    queryCustom(table, sql) {
-        const tableMeta = this.#meta.tables[table];
+    queryPerspective(perspective) {
+        const tableMeta = this.#meta.tables[perspective.table];
         const columns = tableMeta ? tableMeta.columns : [];
 
         const rows = [];
-        this.#ds.exec(sql, { rowMode: "object", callback: r => rows.push(r) });
+        try {
+            this.#ds.exec(perspective.query, { rowMode: "object", callback: r => rows.push(r) });
+        } catch (err) {
+            return { columns, rows: [], error: String(err.message || err) };
+        }
         return { columns, rows };
     }
 
@@ -208,7 +216,7 @@ export class DataStore {
      *
      * @param {string} table
      * @param {*} id - Primary key value
-     * @returns {{ columns: Array, row: Object|null }}
+     * @returns {{ columns: Array, row: Object|null, fkResolved?: Object }}
      */
     queryRow(table, id) {
         const tableMeta = this.#meta.tables[table];
@@ -229,6 +237,49 @@ export class DataStore {
     }
 
     /**
+     * Discover relations pointing at a given row (reverse foreign keys):
+     * for a category row, the works in that category, etc. One entry per
+     * referencing column; empty relations are omitted. Rows themselves are
+     * fetched page by page via queryTable() with a multi filter on the
+     * relation column.
+     *
+     * @param {string} table - the detail row's table
+     * @param {Object} row - the detail row (values are read for the
+     *   referenced columns, which are usually but not necessarily the PK)
+     * @returns {Array<{ table: string, column: string, value: *, totalRows: number }>}
+     */
+    queryRelated(table, row) {
+        if (!row) return [];
+
+        const relations = [];
+        for (const [childName, childMeta] of Object.entries(this.#meta.tables)) {
+            if (childMeta.type !== "table" || childMeta.hidden) continue;
+            for (const col of childMeta.columns) {
+                if (col.references?.table !== table) continue;
+                const value = row[col.references.column];
+                if (value == null) continue;
+
+                const countResult = [];
+                this.#ds.exec(
+                    `SELECT COUNT(*) as n FROM ${quote(childName)} WHERE ${quote(col.name)} = ?`,
+                    { bind: [value], rowMode: "object", callback: r => countResult.push(r) },
+                );
+                const totalRows = countResult[0]?.n ?? 0;
+                if (totalRows === 0) continue;
+
+                relations.push({
+                    table: childName,
+                    label: childMeta.label ?? null,
+                    column: col.name,
+                    value,
+                    totalRows,
+                });
+            }
+        }
+        return relations;
+    }
+
+    /**
      * Count rows per distinct value of a column, respecting filters.
      * When excludeSelf is true, the filter for facetColumn itself is excluded
      * (standard faceted search behavior: counts reflect what you'd get if
@@ -236,8 +287,8 @@ export class DataStore {
      *
      * @param {string} table
      * @param {string} facetColumn
-     * @param {Object} options
-     * @param {Object} options.filters - current filter state
+     * @param {Object} [options]
+     * @param {Object} [options.filters] - current filter state
      * @param {boolean} [options.excludeSelf=true]
      * @returns {Array<{ value: *, count: number }>}
      */
@@ -329,6 +380,9 @@ export class DataStore {
             resolved[col.name] = {
                 displayMap: map,
                 referencedTable: col.references.table,
+                // Hidden tables still resolve display names, but the UI
+                // shouldn't link into them.
+                referencedTableHidden: this.#meta.tables[col.references.table]?.hidden === true,
             };
         }
         this.#fkResolvedCache.set(table, resolved);

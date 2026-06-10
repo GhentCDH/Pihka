@@ -4,6 +4,9 @@
  * @param {Object} filters - Map of columnName → filter descriptor
  *   Range:  { type: "range", min: number|null, max: number|null }
  *   Multi:  { type: "multi", selected: Set<any> }
+ *   Bounds: { type: "bounds", latCol, lonCol, minLat, maxLat, minLon, maxLon }
+ *           (keyed under a reserved name like "_viewport"; the key itself is
+ *           not a column — the lat/lon column names live inside the descriptor)
  * @param {Object} [options]
  * @param {string|null} [options.exclude] - Column name to exclude from the WHERE clause.
  *   Used for facet counts: when computing counts for column X, exclude X's own filter
@@ -16,6 +19,21 @@ export function buildWhereClause(filters, { exclude = null } = {}) {
 
     for (const [colName, filter] of Object.entries(filters)) {
         if (exclude && colName === exclude) continue;
+
+        if (filter.type === "bounds") {
+            const qLat = `"${filter.latCol.replace(/"/g, '""')}"`;
+            const qLon = `"${filter.lonCol.replace(/"/g, '""')}"`;
+            conditions.push(`${qLat} BETWEEN ? AND ?`);
+            params.push(filter.minLat, filter.maxLat);
+            if (filter.minLon > filter.maxLon) {
+                // Viewport crosses the antimeridian: two half-ranges.
+                conditions.push(`(${qLon} >= ? OR ${qLon} <= ?)`);
+            } else {
+                conditions.push(`${qLon} BETWEEN ? AND ?`);
+            }
+            params.push(filter.minLon, filter.maxLon);
+            continue;
+        }
 
         const quoted = `"${colName.replace(/"/g, '""')}"`;
 

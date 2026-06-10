@@ -9,7 +9,7 @@ const ICONS = { auto: "\u25D1", light: "\u2600\uFE0E", dark: "\u263E" };
  * Apply a theme to the document. "auto" removes the data-theme attribute so
  * PicoCSS falls back to the OS prefers-color-scheme setting.
  */
-export function applyTheme(theme) {
+function applyTheme(theme) {
     if (theme === "light" || theme === "dark") {
         document.documentElement.dataset.theme = theme;
     } else {

@@ -1,32 +1,41 @@
 import { h } from "preact";
-import DataViewDetailTable from "./data-views/data-view-detail-table.js";
-import DataViewDetailCard from "./data-views/data-view-detail-card.js";
-import DataViewDetailMap from "./data-views/data-view-detail-map.js";
-import { findGeoColumns } from "./map/map-utils.js";
-import { navigate } from "../utilities/router.js";
+import { useState, useMemo } from "preact/hooks";
+import { getView, listViews } from "../utilities/view-registry.js";
+import { navigate, buildPath } from "../utilities/router.js";
+import { localize } from "../utilities/table-config.js";
+import DataViewListTable from "./data-views/data-view-list-table.js";
+import Pagination from "./pagination.js";
+
+const RELATED_PAGE_SIZE = 10;
 
 /**
- * Detail view for a single row with view toggles (table, card, map).
+ * Detail view for a single row with view toggles (table, card, map, plus
+ * any registered custom detail views). Below the active view, rows from
+ * other tables referencing this one are listed per relation.
  *
  * Props:
  *   tableName     - name of the table
  *   columns       - column schema array
  *   row           - row data object, or null
  *   fkResolved    - FK display name map
+ *   related       - reverse-FK relations from store.queryRelated(), each
+ *                   with a `perspectiveId` for the child table (or null)
+ *   store         - DataStore (related sections page through it)
  *   view          - active view type from URL
  *   lang          - current language code
  *   perspectiveId - perspective id for URL building
  *   rowId         - row id for URL building
  */
-export default function DetailView({ tableName, columns, row, fkResolved, view, lang, perspectiveId, rowId }) {
+export default function DetailView({ tableName, columns, row, fkResolved, related = [], store, view, lang, perspectiveId, rowId }) {
     const activeView = view || "table";
     const effectiveLang = lang || "en";
 
-    // Determine available views
-    const availableViews = ["table", "card"];
-    if (findGeoColumns(columns)) {
-        availableViews.push("map");
-    }
+    const availableViews = listViews("detail")
+        .filter(d => !d.availableFor || d.availableFor(columns));
+
+    // Unknown detail views (e.g. a list-view id in a detail URL) fall back
+    // to the table renderer, leaving the URL untouched.
+    const viewDef = getView("detail", activeView) ?? getView("detail", "table");
 
     const onViewChange = (newView) => {
         navigate(`/${effectiveLang}/${perspectiveId}/${rowId}/${newView}`);
@@ -35,38 +44,69 @@ export default function DetailView({ tableName, columns, row, fkResolved, view, 
     return h("div", null,
         // View toggles
         availableViews.length > 1 && h("div", { class: "view-toggles", style: "margin:.25rem 0 .75rem" },
-            availableViews.map(v =>
+            availableViews.map(d =>
                 h("button", {
-                    key: v,
-                    class: v === activeView ? "" : "outline",
-                    onClick: () => onViewChange(v),
-                }, viewIcon(v), " ", v),
+                    key: d.id,
+                    class: d.id === activeView ? "" : "outline",
+                    onClick: () => onViewChange(d.id),
+                }, d.icon, " ", d.id),
             ),
         ),
 
         // Render active view
         !row
             ? h("p", null, "Row not found.")
-            : renderDetailView(activeView, { tableName, columns, row, fkResolved, lang: effectiveLang, perspectiveId }),
+            : h(viewDef.component, { tableName, columns, row, fkResolved, lang: effectiveLang, perspectiveId }),
+
+        // Related objects: rows from other tables referencing this one.
+        row && related.length > 0 && related.map(rel =>
+            h(RelatedSection, { key: `${rel.table}.${rel.column}`, rel, store, lang: effectiveLang }),
+        ),
     );
 }
 
-function renderDetailView(activeView, { tableName, columns, row, fkResolved, lang, perspectiveId }) {
-    if (activeView === "card") {
-        return h("div", { class: "detail-card", style: "max-width:32rem" },
-            h(DataViewDetailCard, { columns, row, fkResolved }),
-        );
-    }
+/**
+ * One reverse-FK relation as a paginated table, fetched through the same
+ * queryTable() path the list views use (a fixed multi filter on the
+ * relation column), rendered with the same table and pagination components.
+ */
+function RelatedSection({ rel, store, lang }) {
+    const [page, setPage] = useState(0);
 
-    if (activeView === "map") {
-        return h(DataViewDetailMap, { tableName, columns, row, fkResolved, lang, perspectiveId });
-    }
+    const { columns, rows, totalRows, totalPages } = useMemo(
+        () => store.queryTable(rel.table, {
+            filters: { [rel.column]: { type: "multi", selected: new Set([rel.value]) } },
+            page,
+            pageSize: RELATED_PAGE_SIZE,
+        }),
+        [store, rel.table, rel.column, rel.value, page],
+    );
+    const fkResolved = store.resolveForeignKeys(rel.table);
 
-    // Default: table view
-    return h(DataViewDetailTable, { tableName, columns, row, fkResolved });
-}
+    const firstRow = totalRows > 0 ? page * RELATED_PAGE_SIZE + 1 : 0;
+    const lastRow = Math.min((page + 1) * RELATED_PAGE_SIZE, totalRows);
+    const filterHref = rel.perspectiveId
+        ? buildPath(`/${lang}/${rel.perspectiveId}/table?${rel.column}=${encodeURIComponent(rel.value)}`)
+        : null;
 
-function viewIcon(v) {
-    const icons = { table: "\u2630", card: "\u2B1A", map: "\uD83C\uDF0D" };
-    return icons[v] || "";
+    return h("section", { class: "detail-related", style: "margin-top:1.5rem" },
+        h("h3", { style: "margin-bottom:.5rem" },
+            localize(rel.label, lang, rel.table), " ",
+            h("small", { style: "color:var(--text-muted);font-weight:normal" }, `(${totalRows})`),
+        ),
+        h(DataViewListTable, {
+            columns,
+            rows,
+            fkResolved,
+            lang,
+            perspectiveId: rel.perspectiveId,
+        }),
+        totalPages > 1 && h("div", { class: "faceted-toolbar", style: "margin-top:.5rem" },
+            h(Pagination, { page, totalPages, onPageChange: setPage }),
+            h("div", { class: "faceted-info" },
+                h("span", { class: "faceted-count" }, `Showing ${firstRow} to ${lastRow} of ${totalRows}`),
+                filterHref && h("a", { href: filterHref, style: "font-size:.85em" }, "View all →"),
+            ),
+        ),
+    );
 }

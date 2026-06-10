@@ -22,6 +22,7 @@ export default [
                 document: "readonly",
                 fetch: "readonly",
                 history: "readonly",
+                localStorage: "readonly",
                 location: "readonly",
                 console: "readonly",
                 CustomEvent: "readonly",

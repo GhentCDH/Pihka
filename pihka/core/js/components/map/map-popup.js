@@ -23,7 +23,7 @@ export default function MapPopup({ tableName, columns, row, fkResolved, lang, pe
         : null;
 
     return h("div", { class: "map-popup", style: "max-width:24rem;max-height:60vh;overflow:auto" },
-        h(DataViewDetailTable, { tableName, columns, row, fkResolved }),
+        h(DataViewDetailTable, { tableName, columns, row, fkResolved, lang }),
         detailHref && h("p", { style: "margin:.5rem 0 0;text-align:right" },
             h("a", { href: detailHref }, "View details →"),
         ),

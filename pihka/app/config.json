@@ -1,4 +1,22 @@
 {
     "defaultLanguage": "en",
-    "database": "app/database/sample.db"
+    "languages": ["en", "nl"],
+    "database": "app/database/sample.db",
+    "tables": {
+        "works": {
+            "label": { "en": "Works", "nl": "Werken" },
+            "columns": {
+                "cover": {
+                    "type": "asset",
+                    "label": { "en": "Cover", "nl": "Omslag" }
+                },
+                "year": {
+                    "type": "number",
+                    "format": {
+                        "useGrouping": false
+                    }
+                }
+            }
+        }
+    }
 }

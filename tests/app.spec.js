@@ -1,21 +1,11 @@
 import { test, expect } from "@playwright/test";
 
-// Helper: load the app at root, wait for it to be ready, then navigate to a route.
-// Without --single mode, deep routes return 404 from the static server,
-// so we load index.html first and use client-side navigation.
+// Helper: load a route directly. Routes are hash fragments, so deep links
+// load on any static server without rewrite rules. Wait for the app header
+// (only the loaded app renders one — the loading/error screen does not).
 async function gotoRoute(page, route) {
-  await page.goto("/");
-  // Wait for app to finish loading the database
-  await page.waitForSelector("#app main.container-fluid", { timeout: 10000 });
-  // Navigate client-side
-  if (route && route !== "/") {
-    await page.evaluate((r) => {
-      window.history.pushState(null, "", r);
-      window.dispatchEvent(new Event("pushstate"));
-    }, route);
-    // Give the app time to react to the route change
-    await page.waitForTimeout(200);
-  }
+  await page.goto(!route || route === "/" ? "/" : "/#" + route);
+  await page.waitForSelector("#app header", { timeout: 10000 });
 }
 
 test("has title", async ({ page }) => {
@@ -31,6 +21,44 @@ test("categories/1 contains Novel", async ({ page }) => {
 test("authors/1 contains Virginia", async ({ page }) => {
   await gotoRoute(page, "/authors/1");
   await expect(page.locator("body")).toContainText("Virginia");
+});
+
+test("detail page lists related objects in a paginated table", async ({ page }) => {
+  await gotoRoute(page, "/en/categories/1/table");
+  const related = page.locator(".detail-related");
+  await expect(related.locator("h3")).toContainText(/works/i);
+  await expect(related.locator("tbody tr")).toHaveCount(10);
+  await expect(related.locator(".faceted-count")).toContainText("Showing 1 to 10 of 1733");
+
+  // Page through with the shared pagination controls
+  const firstTitle = await related.locator("tbody tr td:nth-child(2)").first().textContent();
+  await related.locator("nav[aria-label='Pagination'] button", { hasText: "›" }).click();
+  await expect(related.locator(".faceted-count")).toContainText("Showing 11 to 20 of 1733");
+  const secondPageTitle = await related.locator("tbody tr td:nth-child(2)").first().textContent();
+  expect(secondPageTitle).not.toBe(firstTitle);
+
+  // View-all link jumps to the filtered list view
+  await related.locator("a", { hasText: "View all" }).click();
+  await expect(page).toHaveURL(/works\/table\?category_id=1/);
+  await expect(page.locator(".faceted-count")).toContainText("of 1733");
+});
+
+test("configured column labels and types render in the works table", async ({ page }) => {
+  await gotoRoute(page, "/en/works/table");
+  // "cover" column is configured with label "Cover" and type "asset"
+  await expect(page.locator("thead th", { hasText: "Cover" })).toBeVisible();
+  await expect(page.locator("tbody tr").first().locator("td img")).toBeVisible();
+  // Table label "Works" shows in the breadcrumb
+  await expect(page.locator("#app header nav")).toContainText("Works");
+});
+
+test("language switcher rewrites the lang segment and labels", async ({ page }) => {
+  await gotoRoute(page, "/en/works/table");
+  await expect(page.locator("#app header nav")).toContainText("Works");
+  await page.locator(".lang-switcher").click();
+  await expect(page).toHaveURL(/\/nl\/works\/table/);
+  await expect(page.locator("#app header nav")).toContainText("Werken");
+  await expect(page.locator("thead th", { hasText: "Omslag" })).toBeVisible();
 });
 
 test("works view shows sidebar with facet filters", async ({ page }) => {
