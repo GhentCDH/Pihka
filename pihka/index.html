@@ -4,6 +4,15 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>⛁ Pihka - Sustainable Data Publishing Platform for Digital Humanities Research</title>
+        <script>
+            // Apply the saved theme before first paint to avoid a flash.
+            (function () {
+                try {
+                    var t = localStorage.getItem("pihka-theme");
+                    if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+                } catch (e) { /* localStorage unavailable */ }
+            })();
+        </script>
         <link rel="stylesheet" href="./core/stylesheets/pico.min.css" />
         <link rel="stylesheet" href="./core/assets/stylesheets/base.css" />
         <link rel="stylesheet" href="./core/vendor/maplibre-gl/dist/maplibre-gl.css">
@@ -21,9 +30,9 @@
         </script>
     </head>
     <body>
-        <main id="app"></main>
+        <div id="app"></div>
         <script type="module">
-            import { h, render } from "preact";
+            import { h, Fragment, render } from "preact";
 
             import { DataSource } from './core/js/utilities/datasource.js';
             import { DataStore } from './core/js/utilities/data-store.js';
@@ -33,7 +42,33 @@
             import DetailView from './core/js/components/detail-view.js';
             import PerspectiveList from './core/js/components/perspective-list.js';
             import PerspectiveView from './core/js/components/perspective-view.js';
+            import ThemeToggle from './core/js/components/theme-toggle.js';
             import { Router, useRouter, navigate, buildPath, assetUrl } from './core/js/utilities/router.js';
+
+            // Slim app header: brand, breadcrumb, theme toggle.
+            function Header({ crumbs }) {
+                return h("header", { class: "container-fluid" },
+                    h("nav", null,
+                        h("ul", null,
+                            h("li", null, h("a", { class: "app-brand", href: buildPath("/") }, "\u26C1 Pihka")),
+                            ...(crumbs || []).flatMap((crumb, i) => [
+                                h("li", { key: `sep-${i}`, class: "app-crumb" }, "\u203A"),
+                                h("li", { key: `crumb-${i}` }, crumb),
+                            ]),
+                        ),
+                        h("ul", null,
+                            h("li", null, h(ThemeToggle)),
+                        ),
+                    ),
+                );
+            }
+
+            function Layout({ crumbs, children }) {
+                return h(Fragment, null,
+                    h(Header, { crumbs }),
+                    h("main", { class: "container-fluid" }, children),
+                );
+            }
 
             function App({ perspectives, store, defaultLang }) {
                 const route = useRouter();
@@ -55,11 +90,17 @@
                 if (perspectiveId && rowId) {
                     const p = perspectives.find(p => p.id === perspectiveId);
                     const tableName = p ? p.table : perspectiveId;
+                    const effectiveLang = lang || defaultLang;
                     const { columns, row, fkResolved } = store.queryRow(tableName, rowId);
-                    return h("div", { class: "container" },
+                    return h(Layout, {
+                        crumbs: [
+                            h("a", { href: buildPath(`/${effectiveLang}/${perspectiveId}/table`) }, p ? p.name : perspectiveId),
+                            String(rowId),
+                        ],
+                    },
                         h(DetailView, {
                             tableName, columns, row, fkResolved,
-                            view, lang: lang || defaultLang,
+                            view, lang: effectiveLang,
                             perspectiveId, rowId,
                         }),
                     );
@@ -68,27 +109,23 @@
                 // Perspective view: /:lang/:perspective/:view
                 if (perspectiveId) {
                     const p = perspectives.find(p => p.id === perspectiveId);
-                    if (!p) return h("div", { class: "container" },
-                        h("a", { href: buildPath("/") }, "\u2190 Perspectives"),
+                    if (!p) return h(Layout, null,
                         h("p", null, `Perspective not found: ${perspectiveId}`),
                     );
-                    return h("div", { class: "container" },
-                        h("a", { href: buildPath("/") }, "\u2190 Perspectives"),
-                        h("h2", null, p.name),
+                    return h(Layout, { crumbs: [p.name] },
                         h(PerspectiveView, { perspective: p, store, view, lang: lang || defaultLang }),
                     );
                 }
 
                 // Home: /
-                return h("div", { class: "container" },
-                    h("h1", null, "\u26C1 Pihka - Sustainable Data Publishing"),
+                return h(Layout, null,
                     h(PerspectiveList, { perspectives, store, lang: defaultLang }),
                 );
             }
 
             async function main() {
                 render(
-                    h("div", { class: "container" },
+                    h("main", { class: "container-fluid" },
                         h("div", { "aria-busy": "true" }, "Loading database\u2026"),
                     ),
                     document.getElementById("app"),

@@ -1,67 +1,93 @@
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
+/*
+ * Pihka base styles.
+ *
+ * PicoCSS does the heavy lifting (typography, forms, buttons, tables,
+ * light/dark themes). This file only:
+ *   1. Re-tints Pico's primary color to resin amber (pihka).
+ *   2. Aliases a handful of shorthand variables to Pico's theme variables
+ *      so custom components follow light/dark mode automatically.
+ *   3. Styles the custom components (facets, toolbar, cards, maps).
+ */
+
+/* 1. Resin accent — burnt amber, like resin capturing data in time */
+
+:root:not([data-theme=dark]),
+[data-theme=light] {
+  --pico-primary: #b35309;
+  --pico-primary-background: #b35309;
+  --pico-primary-border: var(--pico-primary-background);
+  --pico-primary-underline: rgba(179, 83, 9, 0.5);
+  --pico-primary-hover: #8c3f06;
+  --pico-primary-hover-background: #9a4607;
+  --pico-primary-hover-border: var(--pico-primary-hover-background);
+  --pico-primary-hover-underline: var(--pico-primary-hover);
+  --pico-primary-focus: rgba(179, 83, 9, 0.375);
+  --pico-primary-inverse: #fff;
 }
+
+[data-theme=dark] {
+  --pico-primary: #e8962f;
+  --pico-primary-background: #b35309;
+  --pico-primary-border: var(--pico-primary-background);
+  --pico-primary-underline: rgba(232, 150, 47, 0.5);
+  --pico-primary-hover: #f0a847;
+  --pico-primary-hover-background: #c75d0b;
+  --pico-primary-hover-border: var(--pico-primary-hover-background);
+  --pico-primary-hover-underline: var(--pico-primary-hover);
+  --pico-primary-focus: rgba(232, 150, 47, 0.375);
+  --pico-primary-inverse: #fff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --pico-primary: #e8962f;
+    --pico-primary-background: #b35309;
+    --pico-primary-border: var(--pico-primary-background);
+    --pico-primary-underline: rgba(232, 150, 47, 0.5);
+    --pico-primary-hover: #f0a847;
+    --pico-primary-hover-background: #c75d0b;
+    --pico-primary-hover-border: var(--pico-primary-hover-background);
+    --pico-primary-hover-underline: var(--pico-primary-hover);
+    --pico-primary-focus: rgba(232, 150, 47, 0.375);
+    --pico-primary-inverse: #fff;
+  }
+}
+
+/* 2. Shorthand aliases for custom components — track Pico's active theme */
 
 :root {
-  --text: #1a1a2e;
-  --text-muted: #555;
-  --border: #ddd;
-  --bg: #fff;
-  --bg-subtle: #f7f7f8;
-  --accent: #1e64c8;
+  --text: var(--pico-color);
+  --text-muted: var(--pico-muted-color);
+  --border: var(--pico-muted-border-color);
+  --bg: var(--pico-background-color);
+  --bg-subtle: var(--pico-code-background-color);
+  --accent: var(--pico-primary);
 }
 
-html {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-    "Helvetica Neue", Arial, sans-serif;
-  line-height: 1.6;
-  color: var(--text);
-  background: var(--bg);
-  -webkit-font-smoothing: antialiased;
+/* 3. Layout: slim header, full-width content */
+
+#app > header {
+  border-bottom: 1px solid var(--border);
+  --pico-nav-element-spacing-vertical: 0.3rem;
 }
 
-body {
-  margin: 2rem auto;
-  padding: 0 1.5rem;
-}
-
-.container {
-  max-width: none;
-}
-
-h1,
-h2,
-h3 {
-  line-height: 1.25;
-  margin: 1.5em 0 0.5em;
-}
-
-h1 {
-  font-size: 1.8rem;
+#app > header .app-brand {
   font-weight: 700;
-  border-bottom: 2px solid var(--text);
-  padding-bottom: 0.3em;
+  color: var(--text);
+  text-decoration: none;
 }
 
-h2 {
-  font-size: 1.3rem;
-  font-weight: 600;
-}
-
-h3 {
-  font-size: 1.05rem;
-  font-weight: 600;
+#app > header .app-crumb {
   color: var(--text-muted);
 }
 
-p {
-  margin: 0.75em 0;
+#app > main {
+  padding-block: 0.75rem 1.5rem;
 }
 
+/* Keep links clean in dense data views; underline on hover only */
+
 a {
-  color: var(--accent);
   text-decoration: none;
 }
 
@@ -69,34 +95,24 @@ a:hover {
   text-decoration: underline;
 }
 
-/* Tables */
+/* Compact data tables (Pico's defaults are too roomy for a data viewer) */
 
 table {
-  width: 100%;
-  border-collapse: collapse;
   font-size: 0.9rem;
-  margin: 1rem 0;
+  margin-bottom: 0;
+}
+
+th,
+td {
+  padding: 0.45em 0.75em;
 }
 
 thead th {
-  text-align: left;
-  font-weight: 600;
-  padding: 0.5em 0.75em;
-  border-bottom: 2px solid var(--text);
   white-space: nowrap;
-}
-
-tbody td {
-  padding: 0.45em 0.75em;
-  border-bottom: 1px solid var(--border);
 }
 
 tbody tr:hover {
   background: var(--bg-subtle);
-}
-
-tbody tr:last-child td {
-  border-bottom: none;
 }
 
 /* Range selector */
@@ -221,8 +237,8 @@ tbody tr:last-child td {
 
 .facet-sidebar {
   position: sticky;
-  top: 1rem;
-  max-height: calc(100vh - 2rem);
+  top: 0.5rem;
+  max-height: calc(100vh - 4rem);
   overflow-y: auto;
   padding-right: .5rem;
 }
@@ -261,6 +277,13 @@ tbody tr:last-child td {
 .view-toggles {
   display: flex;
   gap: .25rem;
+}
+
+.view-toggles button,
+.theme-toggle {
+  padding: .3em .7em;
+  font-size: .8em;
+  margin-bottom: 0;
 }
 
 /* Facet dropdown */
@@ -406,7 +429,7 @@ tbody tr:last-child td {
 .faceted-pagination .pagination-active {
   font-weight: 600;
   background: var(--accent);
-  color: #fff;
+  color: var(--pico-primary-inverse);
   border-color: var(--accent);
 }
 
@@ -433,7 +456,8 @@ tbody tr:last-child td {
 
 .faceted-pagesize {
   width: auto;
-  padding: .15rem .35rem;
+  margin: 0;
+  padding: .15rem 1.6rem .15rem .35rem;
   font-size: .8em;
   border-radius: 3px;
 }
@@ -546,7 +570,7 @@ article {
 .fts-error {
     margin: .35rem 0 0;
     font-size: .75em;
-    color: #b00020;
+    color: var(--pico-del-color);
 }
 
 .fts-help-toggle {
@@ -608,14 +632,4 @@ article {
 .maplibregl-ctrl-group button {
   width: 29px;
   height: 29px;
-}
-
-/* Utility */
-
-code {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 0.85em;
-  background: var(--bg-subtle);
-  padding: 0.15em 0.35em;
-  border-radius: 3px;
 }

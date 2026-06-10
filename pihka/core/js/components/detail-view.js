@@ -3,7 +3,7 @@ import DataViewDetailTable from "./data-views/data-view-detail-table.js";
 import DataViewDetailCard from "./data-views/data-view-detail-card.js";
 import DataViewDetailMap from "./data-views/data-view-detail-map.js";
 import { findGeoColumns } from "./map/map-utils.js";
-import { navigate, buildPath } from "../utilities/router.js";
+import { navigate } from "../utilities/router.js";
 
 /**
  * Detail view for a single row with view toggles (table, card, map).
@@ -32,18 +32,13 @@ export default function DetailView({ tableName, columns, row, fkResolved, view, 
         navigate(`/${effectiveLang}/${perspectiveId}/${rowId}/${newView}`);
     };
 
-    const backPath = buildPath(`/${effectiveLang}/${perspectiveId}/table`);
-
     return h("div", null,
-        h("a", { href: backPath }, "\u2190 Back"),
-
         // View toggles
-        availableViews.length > 1 && h("div", { class: "view-toggles", style: "margin:.75rem 0" },
+        availableViews.length > 1 && h("div", { class: "view-toggles", style: "margin:.25rem 0 .75rem" },
             availableViews.map(v =>
                 h("button", {
                     key: v,
                     class: v === activeView ? "" : "outline",
-                    style: "padding:.3em .7em;font-size:.8em",
                     onClick: () => onViewChange(v),
                 }, viewIcon(v), " ", v),
             ),

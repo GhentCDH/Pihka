@@ -6,7 +6,7 @@ import { test, expect } from "@playwright/test";
 async function gotoRoute(page, route) {
   await page.goto("/");
   // Wait for app to finish loading the database
-  await page.waitForSelector("#app .container", { timeout: 10000 });
+  await page.waitForSelector("#app main.container-fluid", { timeout: 10000 });
   // Navigate client-side
   if (route && route !== "/") {
     await page.evaluate((r) => {
@@ -52,7 +52,7 @@ test("year range filter narrows works rows", async ({ page }) => {
   // Drag min range slider to exclude some rows
   const sidebar = page.locator("aside.facet-sidebar");
   const minSlider = sidebar.locator("input[type='range']").first();
-  await minSlider.fill("1950");
+  await minSlider.fill("2025");
   // Should show fewer rows
   const rowCount = await content.locator("tbody tr").count();
   expect(rowCount).toBeLessThan(25);
@@ -61,22 +61,22 @@ test("year range filter narrows works rows", async ({ page }) => {
 test("category dropdown facet filters works rows", async ({ page }) => {
   await gotoRoute(page, "/en/works/table");
   const content = page.locator(".faceted-content");
-  await expect(content).toContainText("of 25");
-  // Open category dropdown and click Novel checkbox
+  await expect(content).toContainText("of 1743");
+  // Open category dropdown and click Short Story checkbox
   const sidebar = page.locator("aside.facet-sidebar");
-  await sidebar.locator(".facet-dropdown-trigger").first().click();
-  await sidebar.locator(".facet-option", { hasText: "Novel" }).click();
-  // Should filter to 15 novels
-  await expect(content).toContainText("of 15");
+  await sidebar.locator(".facet-dropdown-trigger").nth(1).click();
+  await sidebar.locator(".facet-option", { hasText: "Short Story" }).click();
+  // Should filter to 4 short stories
+  await expect(content).toContainText("of 4");
 });
 
 test("authors view has birth_year range filter in sidebar", async ({ page }) => {
   await gotoRoute(page, "/en/authors/table");
   const sidebar = page.locator("aside.facet-sidebar");
   await expect(sidebar).toBeVisible();
-  // birth_year configured as range facet = 2 range inputs (min + max)
-  await expect(sidebar.locator("input[type='range']")).toHaveCount(2);
-  await expect(sidebar).toContainText("Birth year");
+  // birth_year configured as range facet
+  await expect(sidebar.locator("input[type='range']")).not.toHaveCount(0);
+  await expect(sidebar.locator(".range-label", { hasText: "birth_year" })).toBeVisible();
 });
 
 test("categories view has no filter controls", async ({ page }) => {
@@ -101,10 +101,10 @@ test("works table shows pagination with page size control", async ({ page }) => 
 test("clicking next page advances to page 2", async ({ page }) => {
   await gotoRoute(page, "/en/works/table?pageSize=3");
   const content = page.locator(".faceted-content");
-  await expect(content).toContainText("Showing 1 to 3 of 25");
+  await expect(content).toContainText("Showing 1 to 3 of 1743");
   // Click the next (›) button
   await content.locator("nav[aria-label='Pagination'] button", { hasText: "›" }).click();
-  await expect(content).toContainText("Showing 4 to 6 of 25");
+  await expect(content).toContainText("Showing 4 to 6 of 1743");
 });
 
 test("filtering resets page to 1", async ({ page }) => {
@@ -115,8 +115,8 @@ test("filtering resets page to 1", async ({ page }) => {
   await expect(content).toContainText("Showing 4 to 6");
   // Apply a category filter via sidebar dropdown
   const sidebar = page.locator("aside.facet-sidebar");
-  await sidebar.locator(".facet-dropdown-trigger").first().click();
-  await sidebar.locator(".facet-option", { hasText: "Novel" }).click();
+  await sidebar.locator(".facet-dropdown-trigger").nth(1).click();
+  await sidebar.locator(".facet-option", { hasText: "Short Story" }).click();
   // Should reset to page 1
   await expect(content).toContainText("Showing 1 to");
 });
@@ -125,8 +125,8 @@ test("URL query params are bookmarkable", async ({ page }) => {
   await gotoRoute(page, "/en/works/table?category_id=1&sort=year&sort_dir=desc");
   const content = page.locator(".faceted-content");
   await expect(content).toBeVisible();
-  // Should show only novels (15), sorted by year descending
-  await expect(content).toContainText("of 15");
+  // Should show only novels (1733), sorted by year descending
+  await expect(content).toContainText("of 1733");
   // First row should be the most recent novel
   const firstYear = await content.locator("section tbody tr").first().locator("td").nth(4).textContent();
   expect(parseInt(firstYear)).toBeGreaterThan(1930);

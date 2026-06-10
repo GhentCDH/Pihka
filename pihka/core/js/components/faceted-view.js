@@ -82,7 +82,6 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
                         h("button", {
                             key: v,
                             class: v === activeView ? "" : "outline",
-                            style: "padding:.3em .7em;font-size:.8em",
                             onClick: () => onViewChange(v),
                         }, viewIcon(v), " ", v),
                     ),

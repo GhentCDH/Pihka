@@ -35,6 +35,6 @@ export default function DataViewDetailMap({ tableName, columns, row, fkResolved,
         tableName,
         lang,
         perspectiveId,
-        height: "min(70vh, calc(100vh - 10rem))",
+        height: "calc(100vh - 12rem)",
     });
 }

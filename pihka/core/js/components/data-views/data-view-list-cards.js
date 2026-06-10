@@ -5,13 +5,12 @@ import DataViewDetailCard from "./data-view-detail-card.js";
  * Renders a table's rows as a responsive grid of cards.
  *
  * Props:
- *   name     - table name (used as section heading)
+ *   name     - table name (used as section id fallback)
  *   columns  - array of column metadata objects
  *   rows     - array of row data objects
  */
 export default function DataViewListCards({ name, id, columns, rows, fkResolved }) {
     return h("section", { id: id ?? name },
-        h("h2", null, name),
         rows.length === 0
             ? h("p", null, "No rows.")
             : h("div", {
