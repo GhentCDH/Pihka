@@ -1,4 +1,4 @@
 {
-    "defaultLanguage": "en"
-
+    "defaultLanguage": "en",
+    "database": "app/database/sample.db"
 }

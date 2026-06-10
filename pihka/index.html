@@ -35,16 +35,14 @@
             import PerspectiveView from './core/js/components/perspective-view.js';
             import { Router, useRouter, navigate, buildPath, assetUrl } from './core/js/utilities/router.js';
 
-            const DEFAULT_LANG = "en";
-
-            function App({ perspectives, store }) {
+            function App({ perspectives, store, defaultLang }) {
                 const route = useRouter();
                 const { lang, perspective: perspectiveId, id: rowId, view } = route;
 
                 // Legacy URL redirect: /{perspective} or /{perspective}/{id}
                 if (route.legacy && perspectiveId) {
                     const p = perspectives.find(p => p.id === perspectiveId);
-                    const effectiveLang = lang || DEFAULT_LANG;
+                    const effectiveLang = lang || defaultLang;
                     const effectiveView = view || p?.default_view || p?.view || "table";
                     const newPath = rowId
                         ? `/${effectiveLang}/${perspectiveId}/${rowId}/${effectiveView}`
@@ -61,7 +59,7 @@
                     return h("div", { class: "container" },
                         h(DetailView, {
                             tableName, columns, row, fkResolved,
-                            view, lang: lang || DEFAULT_LANG,
+                            view, lang: lang || defaultLang,
                             perspectiveId, rowId,
                         }),
                     );
@@ -77,20 +75,18 @@
                     return h("div", { class: "container" },
                         h("a", { href: buildPath("/") }, "\u2190 Perspectives"),
                         h("h2", null, p.name),
-                        h(PerspectiveView, { perspective: p, store, view, lang: lang || DEFAULT_LANG }),
+                        h(PerspectiveView, { perspective: p, store, view, lang: lang || defaultLang }),
                     );
                 }
 
                 // Home: /
                 return h("div", { class: "container" },
                     h("h1", null, "\u26C1 Pihka - Sustainable Data Publishing"),
-                    h(PerspectiveList, { perspectives, store, lang: DEFAULT_LANG }),
+                    h(PerspectiveList, { perspectives, store, lang: defaultLang }),
                 );
             }
 
             async function main() {
-                const ds = new DataSource(assetUrl("app/database/sample.db"));
-
                 render(
                     h("div", { class: "container" },
                         h("div", { "aria-busy": "true" }, "Loading database\u2026"),
@@ -98,16 +94,17 @@
                     document.getElementById("app"),
                 );
 
+                const config = await loadConfig();
+                const ds = new DataSource(assetUrl(config.database || "app/database/sample.db"));
                 await ds.ready;
 
-                const config = await loadConfig();
                 const meta = ds.metadata();
                 await runEnrichment(ds, meta, config);
                 const store = new DataStore(ds, meta);
-                const { perspectives } = await loadPerspectives(ds);
+                const { perspectives, defaultLanguage } = await loadPerspectives(ds);
 
                 render(
-                    h(Router, null, h(App, { perspectives, store })),
+                    h(Router, null, h(App, { perspectives, store, defaultLang: defaultLanguage })),
                     document.getElementById("app"),
                 );
             }

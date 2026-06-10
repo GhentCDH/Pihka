@@ -23,7 +23,7 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
 
     const {
         columns, rows, totalRows, page, totalPages, pageSize,
-        sort, filterMeta, filters, fkResolved,
+        sort, filterMeta, filters, filtersKey, fkResolved,
         search, searchError,
         onSort, onRangeChange, onMultiChange, onPageChange, onPageSizeChange, onSearchChange,
     } = useUrlState(store, p.table, { defaultPageSize, defaultSort });
@@ -33,7 +33,14 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
     const facetMeta = useMemo(() => {
         if (!p.facets) return null;
         return store.getFacetMeta(p.table, p.facets, filters);
-    }, [store, p.table, p.facets, filters]);
+    }, [store, p.table, p.facets, filtersKey]);
+
+    // The map plots every row matching the current filters, not just the
+    // current page, so it needs its own unpaginated query.
+    const mapRows = useMemo(() => {
+        if (activeView !== "map") return null;
+        return store.queryTable(p.table, { filters, sort, search, pageSize: null }).rows;
+    }, [activeView, store, p.table, filtersKey, sort?.column, sort?.direction, search]);
 
     const onClearAll = () => {
         navigate(`/${lang || "en"}/${p.id}/${activeView}`);
@@ -104,9 +111,11 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
                 // Result count + page size selector
                 h("div", { class: "faceted-info" },
                     h("span", { class: "faceted-count" },
-                        totalRows > 0
-                            ? `Showing ${firstRow} to ${lastRow} of ${totalRows}`
-                            : "No results",
+                        totalRows === 0
+                            ? "No results"
+                            : paginatedView
+                                ? `Showing ${firstRow} to ${lastRow} of ${totalRows}`
+                                : `${totalRows} results`,
                     ),
                     paginatedView && h("select", {
                         value: pageSize,
@@ -122,13 +131,13 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
 
             // Active view
             h("section", { id: p.table },
-                renderView(activeView, { p, columns, rows, sort, onSort, totalRows, fkResolved, lang }),
+                renderView(activeView, { p, columns, rows, mapRows, sort, onSort, totalRows, fkResolved, lang }),
             ),
         ),
     );
 }
 
-function renderView(activeView, { p, columns, rows, sort, onSort, totalRows, fkResolved, lang }) {
+function renderView(activeView, { p, columns, rows, mapRows, sort, onSort, totalRows, fkResolved, lang }) {
     if (totalRows === 0) return h("p", null, "No results match your filters.");
 
     if (activeView === "table") {
@@ -139,7 +148,7 @@ function renderView(activeView, { p, columns, rows, sort, onSort, totalRows, fkR
     }
     if (activeView === "map") {
         return h(DataViewListMap, {
-            id: p.id, name: p.table, columns, rows, fkResolved, lang, perspectiveId: p.id,
+            id: p.id, name: p.table, columns, rows: mapRows ?? rows, fkResolved, lang, perspectiveId: p.id,
         });
     }
     return h("p", null, `Unknown view: ${activeView}`);

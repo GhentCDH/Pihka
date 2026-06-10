@@ -60,6 +60,22 @@ function decodeParams(params, filterMeta) {
     return { filters, sort, page, pageSize, search };
 }
 
+/**
+ * Stable string key for a filter state object, usable as a useMemo
+ * dependency (the decoded filters object is rebuilt every render, so
+ * identity comparison would never hit).
+ */
+export function serializeFilters(filters) {
+    return Object.entries(filters)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([col, f]) =>
+            f.type === "range"
+                ? `${col}:r:${f.min}:${f.max}`
+                : `${col}:m:${Array.from(f.selected).sort().join(",")}`,
+        )
+        .join("|");
+}
+
 // Params that are NOT filter encodings and must be preserved when a
 // filter toggles (sort, pagination, page size, full-text query).
 const PRESERVED_PARAMS = new Set(["sort", "sort_dir", "pageSize", "q"]);
@@ -115,10 +131,12 @@ export function useUrlState(store, table, { defaultPageSize = 25, defaultSort = 
     const page = decoded.page;
     const pageSize = decoded.pageSize || defaultPageSize;
     const search = decoded.search;
+    const filtersKey = serializeFilters(filters);
 
-    const queryResult = store.queryTable(table, {
-        filters, sort, page, pageSize, search,
-    });
+    const queryResult = useMemo(
+        () => store.queryTable(table, { filters, sort, page, pageSize, search }),
+        [store, table, filtersKey, sort?.column, sort?.direction, page, pageSize, search],
+    );
     const { columns, rows, totalRows, totalPages, fkResolved, searchError } = queryResult;
 
     const onSort = (column) => {
@@ -179,6 +197,7 @@ export function useUrlState(store, table, { defaultPageSize = 25, defaultSort = 
         sort,
         filterMeta,
         filters,
+        filtersKey,
         fkResolved,
         search,
         searchError,

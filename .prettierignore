@@ -1,0 +1,6 @@
+node_modules
+pihka/core/vendor
+pihka/core/stylesheets/pico.min.css
+package-lock.json
+test-results
+playwright-report

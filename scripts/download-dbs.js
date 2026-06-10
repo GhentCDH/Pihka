@@ -1,6 +1,4 @@
 import { createWriteStream, existsSync, mkdirSync } from "node:fs";
-import { pipeline } from "node:stream/promises";
-import { basename } from "node:path";
 
 const DATABASES = [
   {

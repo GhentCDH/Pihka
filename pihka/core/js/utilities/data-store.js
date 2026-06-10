@@ -27,6 +27,11 @@ function classifyColumns(columns) {
 export class DataStore {
     #ds;
     #meta;
+    // The database is immutable after enrichment, so per-table lookups
+    // (FK display maps, range bounds, FK options) are computed once.
+    #fkResolvedCache = new Map();
+    #rangeBoundsCache = new Map();
+    #fkOptionsCache = new Map();
 
     constructor(ds, meta) {
         this.#ds = ds;
@@ -87,11 +92,11 @@ export class DataStore {
      * @param {Object} options.filters - { colName: { type: "range"|"multi", ... } }
      * @param {{ column: string, direction: "ASC"|"DESC" }|null} options.sort
      * @param {number} options.page
-     * @param {number} options.pageSize
+     * @param {number|null} options.pageSize - null disables pagination (all rows)
      * @param {string} [options.search] - FTS5 MATCH expression; ignored when no FTS index exists
      * @returns {{ columns, rows, totalRows, page, totalPages, fkResolved, searchError? }}
      */
-    queryTable(table, { filters = {}, sort = null, page = 0, pageSize = 3, search = "" } = {}) {
+    queryTable(table, { filters = {}, sort = null, page = 0, pageSize = 25, search = "" } = {}) {
         const tableMeta = this.#meta.tables[table];
         if (!tableMeta) return { columns: [], rows: [], totalRows: 0, page: 0, totalPages: 1 };
 
@@ -136,13 +141,16 @@ export class DataStore {
                 { bind: whereBinds, rowMode: "object", callback: r => countResult.push(r) },
             );
             const totalRows = countResult[0]?.n ?? 0;
-            const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+            const paginated = pageSize != null;
+            const totalPages = paginated ? Math.max(1, Math.ceil(totalRows / pageSize)) : 1;
+            if (!paginated) page = 0;
 
-            const offset = page * pageSize;
-            const sql = `SELECT ${quote(table)}.* FROM ${quote(table)} ${joinClause} ${whereClause} ${orderClause} LIMIT ? OFFSET ?`;
+            const limitClause = paginated ? "LIMIT ? OFFSET ?" : "";
+            const limitBinds = paginated ? [pageSize, page * pageSize] : [];
+            const sql = `SELECT ${quote(table)}.* FROM ${quote(table)} ${joinClause} ${whereClause} ${orderClause} ${limitClause}`;
             const rows = [];
             this.#ds.exec(sql, {
-                bind: [...whereBinds, pageSize, offset],
+                bind: [...whereBinds, ...limitBinds],
                 rowMode: "object",
                 callback: r => rows.push(r),
             });
@@ -305,6 +313,8 @@ export class DataStore {
      * @returns {Object} - { [colName]: { [id]: displayName } }
      */
     resolveForeignKeys(table) {
+        if (this.#fkResolvedCache.has(table)) return this.#fkResolvedCache.get(table);
+
         const tableMeta = this.#meta.tables[table];
         if (!tableMeta) return {};
 
@@ -321,21 +331,30 @@ export class DataStore {
                 referencedTable: col.references.table,
             };
         }
+        this.#fkResolvedCache.set(table, resolved);
         return resolved;
     }
 
     // --- Private helpers ---
 
     #loadRangeBounds(table, colName) {
+        const cacheKey = `${table} ${colName}`;
+        if (this.#rangeBoundsCache.has(cacheKey)) return this.#rangeBoundsCache.get(cacheKey);
+
         const rows = [];
         this.#ds.exec(
             `SELECT MIN(${quote(colName)}) as lo, MAX(${quote(colName)}) as hi FROM ${quote(table)}`,
             { rowMode: "object", callback: r => rows.push(r) },
         );
-        return { min: rows[0]?.lo ?? 0, max: rows[0]?.hi ?? 0 };
+        const bounds = { min: rows[0]?.lo ?? 0, max: rows[0]?.hi ?? 0 };
+        this.#rangeBoundsCache.set(cacheKey, bounds);
+        return bounds;
     }
 
     #loadFkOptions(referencedTable, referencedColumn) {
+        const cacheKey = `${referencedTable} ${referencedColumn}`;
+        if (this.#fkOptionsCache.has(cacheKey)) return this.#fkOptionsCache.get(cacheKey);
+
         const refMeta = this.#meta.tables[referencedTable];
         if (!refMeta) return [];
 
@@ -352,6 +371,7 @@ export class DataStore {
             `SELECT ${quote(referencedColumn)} as value, ${quote(displayCol.name)} as display FROM ${quote(referencedTable)} ORDER BY ${quote(displayCol.name)}`,
             { rowMode: "object", callback: r => options.push(r) },
         );
+        this.#fkOptionsCache.set(cacheKey, options);
         return options;
     }
 }
