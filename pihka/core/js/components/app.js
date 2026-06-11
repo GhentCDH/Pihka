@@ -31,8 +31,8 @@ function Header({ crumbs, lang, languages, onLangChange }) {
                 ]),
             ),
             h("ul", null,
-                h("li", null, h(LangSwitcher, { lang, languages, onChange: onLangChange })),
                 h("li", null, h(ThemeToggle, null)),
+                h("li", null, h(LangSwitcher, { lang, languages, onChange: onLangChange })),
             ),
         ),
     );

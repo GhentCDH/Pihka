@@ -1,9 +1,10 @@
 import { h } from "preact";
 import FacetedView from "./faceted-view.js";
-import DataViewListTable from "./data-views/data-view-list-table.js";
 
 /**
- * Renders a single perspective's data view.
+ * Renders a single perspective's data view. Query-backed perspectives are
+ * SQL views by the time this renders (created at startup), so every
+ * perspective gets the same faceted treatment.
  *
  * Props:
  *   perspective  - Perspective object from loadPerspectives()
@@ -18,13 +19,5 @@ export default function PerspectiveView({ perspective: p, store, view, lang }) {
         return h("p", null, `Unknown table: ${p.table}`);
     }
 
-    // Custom query perspectives get static display, no facets
-    if (p.query) {
-        const { columns, rows, error } = store.queryPerspective(p);
-        if (error) return h("p", null, `Query failed: ${error}`);
-        return h(DataViewListTable, { columns, rows });
-    }
-
-    // All non-custom perspectives go through FacetedView (sidebar + content)
     return h(FacetedView, { perspective: p, store, view, lang });
 }

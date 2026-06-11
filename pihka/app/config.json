@@ -1,19 +1,117 @@
 {
     "defaultLanguage": "en",
-    "languages": ["en", "nl"],
+    "languages": [
+        "en",
+        "nl"
+    ],
     "database": "app/database/sample.db",
+    "perspectives": [
+        {
+            "id": "author-overview",
+            "label": {
+                "en": "Author overview",
+                "nl": "Auteursoverzicht"
+            },
+            "table": "author_overview",
+            "query": "SELECT a.id, a.name, a.birth_year, COUNT(w.id) AS work_count, GROUP_CONCAT(w.title, '|' ORDER BY w.year) AS works, MIN(w.year) AS first_year FROM authors a JOIN works w ON w.author_id = a.id GROUP BY a.id",
+            "default_sort": "name"
+        }
+    ],
     "tables": {
         "works": {
-            "label": { "en": "Works", "nl": "Werken" },
+            "label": {
+                "en": "Works",
+                "nl": "Boeken"
+            },
             "columns": {
                 "cover": {
                     "type": "asset",
-                    "label": { "en": "Cover", "nl": "Omslag" }
+                    "label": {
+                        "en": "Cover",
+                        "nl": "Omslag"
+                    }
                 },
                 "year": {
                     "type": "number",
                     "format": {
                         "useGrouping": false
+                    },
+                    "label": {
+                        "en": "Year",
+                        "nl": "Jaar"
+                    }
+                },
+                "category_id": {
+                    "label": {
+                        "en": "Category",
+                        "nl": "Categorie"
+                    }
+                },
+                "author_id": {
+                    "label": {
+                        "en": "Author",
+                        "nl": "Auteur"
+                    }
+                }
+            }
+        },
+        "categories": {
+            "label": {
+                "en": "Categories",
+                "nl": "Categorie\u00ebn"
+            }
+        },
+        "authors": {
+            "label": {
+                "en": "Authors",
+                "nl": "Auteurs"
+            }
+        },
+        "author_overview": {
+            "label": {
+                "en": "Author overview",
+                "nl": "Auteursoverzicht"
+            },
+            "columns": {
+                "id": {
+                    "linkTo": "authors",
+                    "label": "ID"
+                },
+                "name": {
+                    "label": {
+                        "en": "Name",
+                        "nl": "Naam"
+                    }
+                },
+                "birth_year": {
+                    "label": {
+                        "en": "Born",
+                        "nl": "Geboren"
+                    }
+                },
+                "work_count": {
+                    "type": "number",
+                    "label": {
+                        "en": "Works",
+                        "nl": "Aantal"
+                    }
+                },
+                "works": {
+                    "type": "list",
+                    "separator": "|",
+                    "label": {
+                        "en": "Titles",
+                        "nl": "Titels"
+                    }
+                },
+                "first_year": {
+                    "type": "number",
+                    "format": {
+                        "useGrouping": false
+                    },
+                    "label": {
+                        "en": "First published",
+                        "nl": "Eerste publicatie"
                     }
                 }
             }

@@ -118,11 +118,16 @@ tbody tr:hover {
 /* Range selector */
 
 .range-selector {
-  margin-bottom: .75rem;
+  margin-bottom: .4rem;
 }
 
+/* One row: label left, current values right */
 .range-header {
-  margin-bottom: .25rem;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: .5rem;
+  margin-bottom: .15rem;
 }
 
 .range-label {
@@ -132,8 +137,13 @@ tbody tr:hover {
 
 .range-values {
   display: flex;
-  justify-content: space-between;
-  margin-bottom: .25rem;
+  align-items: center;
+  gap: .3rem;
+}
+
+.range-value-sep {
+  font-size: .75em;
+  color: var(--text-muted);
 }
 
 .range-value-box {
@@ -280,7 +290,9 @@ tbody tr:hover {
 }
 
 .view-toggles button,
-.theme-toggle {
+/* Header pickers (theme + language) share one compact style */
+.theme-toggle,
+.lang-switcher {
   padding: .3em .7em;
   font-size: .8em;
   margin-bottom: 0;
@@ -289,7 +301,14 @@ tbody tr:hover {
 /* Facet dropdown */
 
 .facet-dropdown {
-  margin-bottom: .75rem;
+  margin-bottom: .4rem;
+}
+
+/* Divider above each filter in the sidebar */
+.facet-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: .6rem 0 .5rem;
 }
 
 .facet-dropdown-trigger {
@@ -475,6 +494,41 @@ article {
 
 /* Perspective grid */
 
+.perspective-section-title {
+  font-size: 1.1em;
+  margin: 1rem 0 .5rem;
+}
+
+/* Aggregated multi-value cells (perspective list columns) */
+.cell-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .25rem;
+  align-items: center;
+}
+
+.cell-list-item {
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: .05em .4em;
+  font-size: .85em;
+  white-space: nowrap;
+}
+
+.cell-list-toggle {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: .8em;
+  cursor: pointer;
+  padding: 0 .2em;
+}
+
+.cell-list-toggle:hover {
+  text-decoration: underline;
+}
+
 .perspective-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
@@ -516,26 +570,53 @@ article {
 /* FTS search input */
 
 .fts-search {
-    margin-bottom: 1rem;
-    padding-bottom: .75rem;
-    border-bottom: 1px solid var(--border);
+    margin-bottom: .25rem;
 }
 
 .fts-search-form {
-    position: relative;
     display: flex;
     align-items: center;
     margin: 0;
 }
 
+/* Carries the Pico data-tooltip for the input; neutralise Pico's
+   dashed-underline/help-cursor styling for tooltip hosts. */
+.fts-search-box[data-tooltip] {
+    border-bottom: none;
+    cursor: text;
+}
+
+/* Pico tooltips are single-line; the syntax help is long, so wrap it and
+   keep it within the sidebar instead of clipping at the viewport edge. */
+.fts-search-box[data-tooltip]::before {
+    white-space: normal;
+    width: 100%;
+    text-align: left;
+    line-height: 1.4;
+}
+
+.fts-search-box {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex: 1;
+}
+
 .fts-search-input {
     flex: 1;
     width: 100%;
-    padding: .4rem .55rem;
+    padding: .3rem .5rem;
     border: 1px solid var(--border);
     border-radius: 4px;
     background: var(--bg);
-    font-size: .85em;
+    font-size: .8em;
+}
+
+/* The component renders its own clear button; hide the native WebKit one
+   so the input doesn't show two ×'s. */
+.fts-search-input::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
 }
 
 .fts-search-input:focus {
@@ -551,16 +632,19 @@ article {
 
 .fts-search-clear {
     position: absolute;
-    right: 4px;
-    top: 50%;
-    transform: translateY(-50%);
+    right: .25rem;
+    top: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     background: transparent;
     border: none;
     color: var(--text-muted);
     cursor: pointer;
-    font-size: 1.2em;
+    font-size: 1.1em;
     line-height: 1;
-    padding: 0 .35rem;
+    padding: 0 .3rem;
 }
 
 .fts-search-clear:hover {
@@ -573,44 +657,6 @@ article {
     color: var(--pico-del-color);
 }
 
-.fts-help-toggle {
-    display: inline-block;
-    margin-top: .4rem;
-    padding: 0;
-    background: none;
-    border: none;
-    color: var(--accent);
-    font-size: .75em;
-    cursor: pointer;
-    text-decoration: none;
-}
-
-.fts-help-toggle:hover {
-    text-decoration: underline;
-}
-
-.fts-help {
-    margin-top: .4rem;
-    padding: .5rem .65rem;
-    background: var(--bg-subtle);
-    border-radius: 4px;
-    font-size: .75em;
-}
-
-.fts-help ul {
-    margin: 0;
-    padding-left: 1.1em;
-}
-
-.fts-help li {
-    margin: .15em 0;
-}
-
-.fts-help code {
-    background: var(--bg);
-    padding: 0 .25em;
-    font-size: .95em;
-}
 
 /* MapLibre controls — strip Pico's [role="button"] / button styling so the
    library's own SVG markers and zoom controls render unobscured. */

@@ -12,6 +12,7 @@ import { loadPerspectives } from "./utilities/perspectives.js";
 import { loadConfig } from "./utilities/config.js";
 import { runEnrichment } from "./utilities/enrichment/index.js";
 import { applyTableConfig } from "./utilities/table-config.js";
+import { createPerspectiveViews } from "./utilities/perspective-views.js";
 import { Router, assetUrl, redirectLegacyPathUrl } from "./utilities/router.js";
 import { App, Status } from "./components/app.js";
 
@@ -46,6 +47,10 @@ async function main() {
             showStatus(`Opening database (${(bytes / (1024 * 1024)).toFixed(1)} MB)…`);
         });
         await ds.ready;
+
+        // Multi-table perspectives become SQL views before the schema is
+        // read, so they show up in the metadata like any table.
+        createPerspectiveViews(ds, config);
 
         const meta = ds.metadata();
         applyTableConfig(meta, config);

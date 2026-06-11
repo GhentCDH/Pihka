@@ -28,7 +28,7 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
         search, searchError,
         onSort, onRangeChange, onMultiChange, onBoundsChange,
         onPageChange, onPageSizeChange, onSearchChange,
-    } = useUrlState(store, p.table, { defaultPageSize, defaultSort });
+    } = useUrlState(store, p.table, { defaultPageSize, defaultSort, facets: p.facets });
 
     const searchAvailable = !!store.getFtsInfo(p.table);
 

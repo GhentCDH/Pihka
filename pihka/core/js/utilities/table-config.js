@@ -22,7 +22,7 @@
  * never touches the config itself.
  */
 
-const DISPLAY_TYPES = new Set(["text", "number", "date", "url", "asset"]);
+const DISPLAY_TYPES = new Set(["text", "number", "date", "url", "asset", "list"]);
 
 /**
  * Annotate schema metadata in place with display configuration.
@@ -56,6 +56,13 @@ export function applyTableConfig(meta, config) {
             col.hidden = c.hidden === true;
             col.label = c.label ?? null;
             col.format = c.format ?? null;
+            // "list" columns: separator the values were aggregated with
+            // (e.g. GROUP_CONCAT(x, '|')) and how many to show collapsed.
+            col.separator = typeof c.separator === "string" ? c.separator : null;
+            col.limit = typeof c.limit === "number" ? c.limit : null;
+            // Render values as links into another perspective's detail pages
+            // (used for view columns, which have no FK metadata).
+            col.linkTo = typeof c.linkTo === "string" ? c.linkTo : null;
             if (c.type != null) {
                 if (DISPLAY_TYPES.has(c.type)) {
                     col.displayType = c.type;

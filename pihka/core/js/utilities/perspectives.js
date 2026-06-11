@@ -12,8 +12,10 @@ import { getView, listViews } from "./view-registry.js";
  * @property {string} default_view
  * @property {string|null} default_sort
  * @property {number} page_size
- * @property {string|null} query - custom SQL query (static display)
+ * @property {string|null} query - SQL backing the perspective's view
  * @property {Array|null} facets
+ * @property {"perspective"|"table"} kind - configured perspective or
+ *   auto-generated table card (drives homepage grouping)
  */
 
 /**
@@ -30,24 +32,35 @@ export async function loadPerspectives(meta) {
     const cfg = await loadConfig();
     const defaultLanguage = cfg.defaultLanguage || "en";
 
-    let perspectives;
-    if (Array.isArray(cfg.perspectives) && cfg.perspectives.length > 0) {
-        perspectives = cfg.perspectives.map(p => normalizePerspective(p, meta));
-    } else {
-        perspectives = Object.entries(meta.tables)
-            .filter(([, t]) => t.type !== "virtual" && !t.hidden)
-            .map(([name, t]) => normalizePerspective(
-                { id: name, name, table: name, view: "table", label: t.label },
-                meta,
-            ));
+    // Configured perspectives (multi-table views or curated table views).
+    const configured = Array.isArray(cfg.perspectives)
+        ? cfg.perspectives.map(p => normalizePerspective(p, meta, "perspective"))
+        : [];
+
+    // Auto-generated table cards: every non-virtual, non-hidden relation
+    // that isn't already claimed by a configured perspective. Claimed by
+    // `table` covers perspective views; claimed by `id` avoids two
+    // perspectives answering the same route.
+    const claimed = new Set();
+    for (const p of configured) {
+        claimed.add(p.table);
+        claimed.add(p.id);
     }
+    const tables = Object.entries(meta.tables)
+        .filter(([name, t]) => t.type !== "virtual" && !t.hidden && !claimed.has(name))
+        .map(([name, t]) => normalizePerspective(
+            { id: name, name, table: name, view: "table", label: t.label },
+            meta,
+            "table",
+        ));
 
-    perspectives.sort((a, b) => a.name.localeCompare(b.name));
+    configured.sort((a, b) => a.name.localeCompare(b.name));
+    tables.sort((a, b) => a.name.localeCompare(b.name));
 
-    return { defaultLanguage, perspectives };
+    return { defaultLanguage, perspectives: [...configured, ...tables] };
 }
 
-function normalizePerspective(p, meta) {
+function normalizePerspective(p, meta, kind = "table") {
     const view = getView("list", p.view) ? p.view : "table";
 
     let allowedViews;
@@ -76,5 +89,6 @@ function normalizePerspective(p, meta) {
         page_size:     typeof p.page_size === "number" ? p.page_size : 25,
         query:         typeof p.query === "string" ? p.query : null,
         facets:        Array.isArray(p.facets) ? p.facets : null,
+        kind,
     };
 }

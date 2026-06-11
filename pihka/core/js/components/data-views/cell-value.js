@@ -1,7 +1,11 @@
 import { h } from "preact";
+import { useState } from "preact/hooks";
 import { isImagePath } from "./render-helpers.js";
 import { buildPath, assetUrl } from "../../utilities/router.js";
 import { formatValue } from "../../utilities/table-config.js";
+
+const LIST_SEPARATOR = "|";
+const LIST_LIMIT = 3;
 
 /**
  * Render a single value according to its column metadata. The one shared
@@ -44,6 +48,17 @@ export default function CellValue({ col, value, fkResolved, lang, imageHeight = 
 
     if (raw === "") return "";
 
+    // Configured link into another perspective's detail page (used on view
+    // columns, which carry no FK metadata).
+    if (col.linkTo) {
+        const href = lang ? `/${lang}/${col.linkTo}/${raw}/table` : `/${col.linkTo}/${raw}`;
+        return h("a", { href: buildPath(href) }, String(raw));
+    }
+
+    if (col.displayType === "list") {
+        return h(ListValue, { col, value: String(raw) });
+    }
+
     if (col.displayType === "url") {
         return h("a", { href: String(raw), target: "_blank", rel: "noopener noreferrer" }, String(raw));
     }
@@ -70,4 +85,30 @@ export default function CellValue({ col, value, fkResolved, lang, imageHeight = 
     }
 
     return String(raw);
+}
+
+/**
+ * Aggregated multi-value cell (e.g. GROUP_CONCAT of an author's works):
+ * values render as chips, collapsed to the first `col.limit` with a
+ * "+N more" toggle.
+ */
+function ListValue({ col, value }) {
+    const [expanded, setExpanded] = useState(false);
+
+    const values = value
+        .split(col.separator ?? LIST_SEPARATOR)
+        .map(v => v.trim())
+        .filter(Boolean);
+    const limit = col.limit ?? LIST_LIMIT;
+    const shown = expanded ? values : values.slice(0, limit);
+    const hiddenCount = values.length - shown.length;
+
+    return h("span", { class: "cell-list" },
+        shown.map((v, i) => h("span", { key: i, class: "cell-list-item" }, v)),
+        (hiddenCount > 0 || expanded) && values.length > limit && h("button", {
+            type: "button",
+            class: "cell-list-toggle",
+            onClick: () => setExpanded(e => !e),
+        }, expanded ? "Show less" : `+${hiddenCount} more`),
+    );
 }

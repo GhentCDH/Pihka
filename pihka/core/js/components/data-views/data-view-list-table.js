@@ -15,7 +15,9 @@ function ColumnHeader({ col, lang, sort, onSort }) {
     const isSorted = sort && sort.column === col.name;
     const label = localize(col.label, lang, col.name);
 
-    if (onSort) {
+    // Sorting an aggregated list column compares concatenated strings —
+    // meaningless, so no sort affordance.
+    if (onSort && col.displayType !== "list") {
         return h("th", {
             style: "cursor:pointer;user-select:none",
             onClick: () => onSort(col.name),

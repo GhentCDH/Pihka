@@ -90,6 +90,30 @@ The `tables` section of `app/config.json` configures how tables and columns disp
 - `hidden` on a column removes it from all views and filters; `hidden` on a table removes it from the home grid and from related-object sections. Hidden lookup tables still resolve FK display names and facets — hiding is a display concern, **not access control**: the data remains in the published `.sqlite` file.
 - `applyTableConfig()` annotates the schema metadata once at startup (`core/js/main.js`); components only ever see the annotated plain-JSON columns.
 
+### Perspectives (multi-table views)
+
+The `perspectives` section of `app/config.json` defines curated entry points backed by **plain SQL** — joins, aggregates, and the GROUP BY stay readable in the config, no DSL:
+
+```json
+"perspectives": [{
+    "id": "author-overview",
+    "label": { "en": "Author overview" },
+    "table": "author_overview",
+    "query": "SELECT a.id, a.name, COUNT(w.id) AS work_count, GROUP_CONCAT(w.title, '|' ORDER BY w.year) AS works FROM authors a JOIN works w ON w.author_id = a.id GROUP BY a.id",
+    "default_sort": "name"
+}]
+```
+
+At startup each query becomes `CREATE VIEW "<table>" AS <query>` on the in-memory database (transient, recreated per session). The view then behaves like any table: faceted, sorted, paginated, and configurable via `tables.<view-name>` (labels, types). A failing query is warned about and the perspective skipped — the rest of the site keeps working.
+
+- **Multi-value columns**: aggregate with `GROUP_CONCAT(x, '|' ORDER BY y)` (`ORDER BY` inside aggregates needs SQLite ≥ 3.44 — the vendored wasm is 3.51; older local CLIs can't replay such queries) and configure the column as `{ "type": "list", "separator": "|", "limit": 3 }` — values render as chips collapsed to `limit` with a "+N more" toggle. List columns are not sortable.
+- **Row links**: views have no PK/FK metadata, so configure `{ "linkTo": "authors" }` on the id column to link rows into the underlying table's detail pages. Detail routes *on* a view itself show "Row not found" by design.
+- **Facets**: numeric passthrough columns get range facets automatically; typeless aggregate columns (COUNT, MIN…) get them when configured `"type": "number"`. Dropdown facets come from the perspective's `facets` config. No FK dropdowns and no full-text search on views.
+- **Homepage**: configured perspectives appear under "Perspectives", remaining (unclaimed, non-hidden) tables under "Tables"; with no `perspectives` config the homepage shows tables only, as before.
+- **Naming**: perspective `id` must not collide with table names, view ids (`table`, `cards`, `map`), or language codes. The `table` name is claimed — no auto card is generated for it.
+- **Performance**: the view's GROUP BY re-runs on every query — fine in-memory at tens of thousands of rows; for large datasets precompute a real table in your publishing pipeline instead.
+- Avoid passing lat/lon columns through a view unless you accept that map popups' detail links lead to "Row not found".
+
 ### Views and the view registry
 
 All view types (list: `table`, `cards`, `map`; detail: `table`, `card`, `map`) are defined in one place: `core/js/utilities/view-registry.js`. The router, perspective normalization, and the view-toggle UIs all consult it — adding a view means one `registerView()` call, nothing else. Builtin views are registered by `core/js/components/data-views/builtin-views.js` (imported by `index.html`).

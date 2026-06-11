@@ -22,13 +22,14 @@ export default function RangeSelector({
     const hiPercent = ((hi - min) / range) * 100;
 
     return h("div", { class: "range-selector" },
-        // Label row with values in boxes (Cinema Belgica style)
+        // Single row: label left, current values right (saves vertical space)
         h("div", { class: "range-header" },
             h("span", { class: "range-label" }, label),
-        ),
-        h("div", { class: "range-values" },
-            h("span", { class: "range-value-box" }, lo),
-            h("span", { class: "range-value-box" }, hi),
+            h("span", { class: "range-values" },
+                h("span", { class: "range-value-box" }, lo),
+                h("span", { class: "range-value-sep" }, "-"),
+                h("span", { class: "range-value-box" }, hi),
+            ),
         ),
         // Slider track with two overlaid inputs
         h("div", { class: "range-track-container" },

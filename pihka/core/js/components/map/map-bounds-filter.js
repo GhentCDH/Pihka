@@ -106,7 +106,7 @@ export default function MapBoundsFilter({ geoMeta, activeBounds, onBoundsChange 
     };
 
     return h("div", { class: "map-bounds-filter" },
-        h("div", { style: "display:flex;align-items:baseline;gap:.5rem;margin-bottom:.25rem" },
+        h("div", { style: "display:flex;align-items:baseline;gap:.5rem;margin-bottom:.15rem" },
             h("label", { style: "font-size:.8em;font-weight:600" }, "Location"),
             activeBounds && h("button", {
                 class: "outline",
@@ -119,7 +119,7 @@ export default function MapBoundsFilter({ geoMeta, activeBounds, onBoundsChange 
             ref: containerRef,
             style: "width:100%;height:200px;border-radius:var(--border-radius,4px);overflow:hidden",
         }),
-        h("p", { style: "font-size:.7em;color:var(--text-muted);margin:.25rem 0 .75rem" },
+        h("p", { style: "font-size:.7em;color:var(--text-muted);margin:.15rem 0 .25rem" },
             activeBounds ? "Showing items in the map view" : "Move the map to filter by location",
         ),
     );

@@ -57,8 +57,21 @@ test("language switcher rewrites the lang segment and labels", async ({ page }) 
   await expect(page.locator("#app header nav")).toContainText("Works");
   await page.locator(".lang-switcher").click();
   await expect(page).toHaveURL(/\/nl\/works\/table/);
-  await expect(page.locator("#app header nav")).toContainText("Werken");
+  await expect(page.locator("#app header nav")).toContainText("Boeken");
   await expect(page.locator("thead th", { hasText: "Omslag" })).toBeVisible();
+});
+
+test("search filters reactively on input", async ({ page }) => {
+  await gotoRoute(page, "/en/works/table");
+  await expect(page.locator(".faceted-count")).toContainText("of 1743");
+  // fill() fires input events; no Enter pressed — the debounce applies it
+  await page.locator(".fts-search-input").fill("love");
+  await expect(page).toHaveURL(/q=love/);
+  await expect(page.locator(".faceted-count")).not.toContainText("of 1743");
+  // Exactly one clear button (native WebKit × is suppressed)
+  await expect(page.locator(".fts-search-clear")).toHaveCount(1);
+  await page.locator(".fts-search-clear").click();
+  await expect(page.locator(".faceted-count")).toContainText("of 1743");
 });
 
 test("works view shows sidebar with facet filters", async ({ page }) => {
@@ -170,8 +183,32 @@ test("view toggle switches between table and cards", async ({ page }) => {
   await expect(page).toHaveURL(/category_id=1/);
 });
 
-test("home page shows perspective navigation", async ({ page }) => {
+test("home page shows perspectives and tables sections", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator(".perspective-grid")).toBeVisible();
-  await expect(page.locator("a.perspective-card")).not.toHaveCount(0);
+  await expect(page.locator(".perspective-section-title", { hasText: "Perspectives" })).toBeVisible();
+  await expect(page.locator(".perspective-section-title", { hasText: "Tables" })).toBeVisible();
+  await expect(page.locator(".perspective-grid").first()).toBeVisible();
+  // 1 configured perspective + 3 tables, the perspective view not double-listed
+  await expect(page.locator("a.perspective-card")).toHaveCount(4);
+});
+
+test("multi-table perspective aggregates rows with expandable list cells", async ({ page }) => {
+  // Virginia Woolf row: 5 works aggregated, ordered by year (top row when
+  // sorted by work_count desc; page 1 of name-sorted 1010 won't have her)
+  await gotoRoute(page, "/en/author-overview/table?sort=work_count&sort_dir=desc");
+  const row = page.locator("tbody tr", { hasText: "Virginia Woolf" });
+  await expect(row.locator(".cell-list-item")).toHaveCount(3); // collapsed to limit
+  await expect(row.locator(".cell-list-item").first()).toHaveText("Mrs Dalloway"); // earliest year first
+  await row.locator(".cell-list-toggle").click(); // "+2 more"
+  await expect(row.locator(".cell-list-item")).toHaveCount(5);
+  // list column header is not sortable, number column is
+  await expect(page.locator("thead th", { hasText: "Titles" })).not.toHaveAttribute("style", /cursor:pointer/);
+  // id links into the authors detail page
+  await row.locator("td a").first().click();
+  await expect(page).toHaveURL(/\/en\/authors\/1\/table/);
+});
+
+test("range facet on aggregate column filters the perspective", async ({ page }) => {
+  await gotoRoute(page, "/en/author-overview/table?work_count_min=3");
+  await expect(page.locator(".faceted-count")).toContainText("of 214");
 });

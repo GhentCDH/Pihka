@@ -14,12 +14,19 @@ import { useRouter, updateParams } from "./router.js";
  *   {col}=1,3,7           → multi-select filter (comma-separated)
  *   bbox=w,s,e,n          → map viewport filter (minLon,minLat,maxLon,maxLat)
  */
-function decodeParams(params, filterMeta) {
+function decodeParams(params, filterMeta, facets) {
     const filters = {};
     const { rangeColumns, multiColumns, geoMeta } = filterMeta;
 
     const rangeNames = new Set(rangeColumns.map(c => c.name));
     const multiNames = new Set(multiColumns.map(c => c.name));
+    // Configured dropdown/checkbox facets filter on plain (non-FK) columns
+    // too — e.g. on perspective views, which have no FK metadata at all.
+    for (const facet of facets || []) {
+        if (facet.type === "dropdown" || facet.type === "checkbox") {
+            multiNames.add(facet.field);
+        }
+    }
 
     for (const [key, value] of Object.entries(params)) {
         if (key === "sort" || key === "sort_dir" || key === "page" || key === "pageSize" || key === "q" || key === "bbox") continue;
@@ -133,9 +140,9 @@ function encodeFilters(filters) {
  *
  * @param {import('./data-store.js').DataStore} store
  * @param {string} table
- * @param {{ defaultPageSize?: number, defaultSort?: string }} options
+ * @param {{ defaultPageSize?: number, defaultSort?: string, facets?: Array|null }} options
  */
-export function useUrlState(store, table, { defaultPageSize = 25, defaultSort = null } = {}) {
+export function useUrlState(store, table, { defaultPageSize = 25, defaultSort = null, facets = null } = {}) {
     const { params } = useRouter();
 
     const filterMeta = useMemo(
@@ -143,7 +150,7 @@ export function useUrlState(store, table, { defaultPageSize = 25, defaultSort = 
         [store, table],
     );
 
-    const decoded = decodeParams(params, filterMeta);
+    const decoded = decodeParams(params, filterMeta, facets);
     const filters = decoded.filters;
     const sort = decoded.sort || (defaultSort ? { column: defaultSort, direction: "ASC" } : null);
     const page = decoded.page;

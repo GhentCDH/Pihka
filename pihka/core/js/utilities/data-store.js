@@ -12,11 +12,14 @@ function classifyColumns(columns) {
     const geo = findGeoColumns(columns);
 
     for (const col of columns) {
-        if (col.primaryKey || col.hidden) continue;
+        // linkTo columns are identifiers (views have no PK metadata).
+        if (col.primaryKey || col.hidden || col.linkTo) continue;
         if (geo && (col === geo.latCol || col === geo.lonCol)) continue;
         if (col.references) {
             multiColumns.push(col);
-        } else if (col.type === "INTEGER" || col.type === "REAL") {
+        } else if (col.type === "INTEGER" || col.type === "REAL" || col.displayType === "number") {
+            // displayType covers view columns whose SQLite type is empty
+            // (aggregates like COUNT) but are configured as numbers.
             rangeColumns.push(col);
         }
     }
@@ -187,28 +190,6 @@ export class DataStore {
             }
             throw err;
         }
-    }
-
-    /**
-     * Run a perspective's custom query (the `query` field from the site
-     * author's app/config.json). Components never see the SQL string — they
-     * hand over the perspective and get JSON back. A failing query (e.g. a
-     * config typo) is reported via `error` instead of throwing mid-render.
-     *
-     * @param {Object} perspective - normalized perspective with `table` and `query`
-     * @returns {{ columns: Array, rows: Array, error?: string }}
-     */
-    queryPerspective(perspective) {
-        const tableMeta = this.#meta.tables[perspective.table];
-        const columns = tableMeta ? tableMeta.columns : [];
-
-        const rows = [];
-        try {
-            this.#ds.exec(perspective.query, { rowMode: "object", callback: r => rows.push(r) });
-        } catch (err) {
-            return { columns, rows: [], error: String(err.message || err) };
-        }
-        return { columns, rows };
     }
 
     /**

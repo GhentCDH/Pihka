@@ -1,4 +1,4 @@
-import { h } from "preact";
+import { h, Fragment } from "preact";
 import { useState } from "preact/hooks";
 import RangeSelector from "./range-selector.js";
 import FtsSearchInput from "./fts-search-input.js";
@@ -40,7 +40,7 @@ export default function FacetSidebar({
                 onClick: onClearAll,
             }, "Clear all"),
         ),
-        h("p", { style: "font-size:.8em;color:var(--text-muted);margin:.25rem 0 .75rem" },
+        h("p", { style: "font-size:.8em;color:var(--text-muted);margin:.2rem 0 .5rem" },
             `${totalRows} ${perspectiveName || "results"}`,
         ),
 
@@ -57,21 +57,32 @@ export default function FacetSidebar({
 
         // Location facet: rendered for any table with geo columns, on both
         // the configured and auto paths.
-        autoFilterMeta?.geoMeta && onBoundsChange && h(MapBoundsFilter, {
-            key: "_viewport",
-            geoMeta: autoFilterMeta.geoMeta,
-            activeBounds: filters._viewport ?? null,
-            onBoundsChange,
-        }),
+        autoFilterMeta?.geoMeta && onBoundsChange && h(Fragment, { key: "_viewport" },
+            divider("_viewport"),
+            h(MapBoundsFilter, {
+                geoMeta: autoFilterMeta.geoMeta,
+                activeBounds: filters._viewport ?? null,
+                onBoundsChange,
+            }),
+        ),
     );
+}
+
+function divider(key) {
+    return h("hr", { key: `${key}-divider`, class: "facet-divider" });
+}
+
+// Each filter is preceded by a divider; the keyed Fragment keeps the pair
+// stable across re-renders.
+function facetBlock(key, facet) {
+    return h(Fragment, { key }, divider(key), facet);
 }
 
 function renderConfiguredFacets(facetMeta, filters, onRangeChange, onMultiChange, lang) {
     return Object.entries(facetMeta).map(([field, meta]) => {
         if (meta.type === "range") {
             const current = filters[field];
-            return h(RangeSelector, {
-                key: field,
+            return facetBlock(field, h(RangeSelector, {
                 label: localize(meta.label, lang, field),
                 min: meta.min,
                 max: meta.max,
@@ -80,17 +91,16 @@ function renderConfiguredFacets(facetMeta, filters, onRangeChange, onMultiChange
                 step: 1,
                 onChangeMin: (v) => onRangeChange(field, "min", v),
                 onChangeMax: (v) => onRangeChange(field, "max", v),
-            });
+            }));
         }
 
         if (meta.type === "dropdown" || meta.type === "checkbox") {
-            return h(DropdownFacet, {
-                key: field,
+            return facetBlock(field, h(DropdownFacet, {
                 label: localize(meta.label, lang, field),
                 options: meta.options || [],
                 selected: filters[field]?.selected ?? new Set(),
                 onChange: (sel) => onMultiChange(field, sel),
-            });
+            }));
         }
 
         return null;
@@ -103,17 +113,15 @@ function renderAutoFacets(autoFilterMeta, filters, onRangeChange, onMultiChange,
 
     return [
         ...multiColumns.map(col =>
-            h(DropdownFacet, {
-                key: col.name,
+            facetBlock(col.name, h(DropdownFacet, {
                 label: localize(multiMeta[col.name].label, lang, col.name),
                 options: (multiMeta[col.name].options || []).map(o => ({ ...o, count: null })),
                 selected: filters[col.name]?.selected ?? new Set(),
                 onChange: (sel) => onMultiChange(col.name, sel),
-            }),
+            })),
         ),
         ...rangeColumns.map(col =>
-            h(RangeSelector, {
-                key: col.name,
+            facetBlock(col.name, h(RangeSelector, {
                 label: localize(col.label, lang, col.name),
                 min: rangeMeta[col.name].min,
                 max: rangeMeta[col.name].max,
@@ -122,7 +130,7 @@ function renderAutoFacets(autoFilterMeta, filters, onRangeChange, onMultiChange,
                 step: col.type === "REAL" ? 0.01 : 1,
                 onChangeMin: (v) => onRangeChange(col.name, "min", v),
                 onChangeMax: (v) => onRangeChange(col.name, "max", v),
-            }),
+            })),
         ),
     ];
 }
