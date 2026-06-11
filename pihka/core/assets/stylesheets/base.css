@@ -196,12 +196,29 @@ tbody tr:hover {
   pointer-events: none;
 }
 
+/* Pico styles [type=range] pseudo-elements; reset the track so the inputs
+   (stacked above .range-track/.range-track-fill) don't paint their own. */
+.range-input::-webkit-slider-runnable-track {
+  -webkit-appearance: none;
+  height: 100%;
+  background: transparent;
+  border: none;
+}
+
+.range-input::-moz-range-track {
+  height: 100%;
+  background: transparent;
+  border: none;
+}
+
 .range-input::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   pointer-events: auto;
   width: 16px;
   height: 16px;
+  /* WebKit top-aligns the thumb in the track: (24px track - 16px thumb) / 2 */
+  margin-top: 4px;
   border-radius: 50%;
   background: var(--bg);
   border: 2px solid var(--accent);
@@ -213,6 +230,7 @@ tbody tr:hover {
   pointer-events: auto;
   width: 16px;
   height: 16px;
+  margin-top: 0; /* cancel Pico's -.4375rem */
   border-radius: 50%;
   background: var(--bg);
   border: 2px solid var(--accent);

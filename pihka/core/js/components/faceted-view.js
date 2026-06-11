@@ -6,6 +6,7 @@ import { getView } from "../utilities/view-registry.js";
 import { localize } from "../utilities/table-config.js";
 import { useUrlState } from "../utilities/use-url-state.js";
 import { navigate, useRouter } from "../utilities/router.js";
+import { setPref } from "../utilities/prefs.js";
 
 /**
  * Top-level faceted view layout: sidebar on the left, content on the right.
@@ -25,10 +26,10 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
     const {
         columns, rows, totalRows, page, totalPages, pageSize,
         sort, filterMeta, filters, filtersKey, fkResolved,
-        search, searchError,
-        onSort, onRangeChange, onMultiChange, onBoundsChange,
-        onPageChange, onPageSizeChange, onSearchChange,
-    } = useUrlState(store, p.table, { defaultPageSize, defaultSort, facets: p.facets });
+        search, searchError, actions,
+    } = useUrlState(store, p.table, {
+        defaultPageSize, defaultSort, facets: p.facets, perspectiveId: p.id,
+    });
 
     const searchAvailable = !!store.getFtsInfo(p.table);
 
@@ -53,8 +54,14 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
     };
 
     const onViewChange = (newView) => {
+        // Remember the choice for future visits to this perspective.
+        setPref(`view:${p.id}`, newView);
         navigate(`/${lang || "en"}/${p.id}/${newView}`, params);
     };
+
+    // One object for everything views/sidebar can do — no per-callback
+    // prop drilling.
+    const viewActions = { ...actions, onClearAll, onViewChange };
 
     const firstRow = totalRows > 0 ? page * pageSize + 1 : 0;
     const lastRow = Math.min((page + 1) * pageSize, totalRows);
@@ -69,14 +76,10 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
             totalRows,
             perspectiveName: localize(p.label, lang, p.name),
             lang,
-            onRangeChange,
-            onMultiChange,
-            onBoundsChange,
-            onClearAll,
             search,
             searchError,
             searchAvailable,
-            onSearchChange,
+            actions: viewActions,
         }),
 
         h("div", { class: "faceted-content" },
@@ -94,7 +97,7 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
                 ),
 
                 // Pagination (inline, compact)
-                showPagination && h(Pagination, { page, totalPages, onPageChange }),
+                showPagination && h(Pagination, { page, totalPages, onPageChange: actions.onPageChange }),
 
                 // Result count + page size selector
                 h("div", { class: "faceted-info" },
@@ -107,7 +110,7 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
                     ),
                     paginatedView && h("select", {
                         value: pageSize,
-                        onChange: (e) => onPageSizeChange(parseInt(/** @type {HTMLSelectElement} */ (e.target).value, 10)),
+                        onChange: (e) => actions.onPageSizeChange(parseInt(/** @type {HTMLSelectElement} */ (e.target).value, 10)),
                         class: "faceted-pagesize",
                     },
                         [3, 10, 25, 50, 100, 1000].map(n =>
@@ -125,7 +128,7 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
                     perspectiveId: p.id,
                     columns,
                     rows: paginatedView ? rows : (allRows ?? rows),
-                    sort, onSort, fkResolved, lang,
+                    sort, onSort: actions.onSort, fkResolved, lang,
                 }, totalRows),
             ),
         ),

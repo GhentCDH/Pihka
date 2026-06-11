@@ -1,5 +1,4 @@
 import { h, Fragment } from "preact";
-import { useState } from "preact/hooks";
 import DetailView from "./detail-view.js";
 import PerspectiveList from "./perspective-list.js";
 import PerspectiveView from "./perspective-view.js";
@@ -7,17 +6,8 @@ import ThemeToggle from "./theme-toggle.js";
 import LangSwitcher from "./lang-switcher.js";
 import { useRouter, navigate, buildPath } from "../utilities/router.js";
 import { localize } from "../utilities/table-config.js";
-
-const LANG_STORAGE_KEY = "pihka-lang";
-
-function storedLang(languages) {
-    try {
-        const v = localStorage.getItem(LANG_STORAGE_KEY);
-        return Array.isArray(languages) && languages.includes(v) ? v : null;
-    } catch {
-        return null;
-    }
-}
+import { usePref, setPref } from "../utilities/prefs.js";
+import { preferredView } from "../utilities/perspectives.js";
 
 // Slim app header: brand, breadcrumb, language switcher, theme toggle.
 function Header({ crumbs, lang, languages, onLangChange }) {
@@ -55,17 +45,12 @@ export function App({ perspectives, store, defaultLang, languages = null }) {
 
     // Language preference: the URL's lang segment wins; on routes without
     // one (home) the persisted choice applies, then the configured default.
-    const [prefLang, setPrefLang] = useState(() => storedLang(languages));
-    const fallbackLang = prefLang || defaultLang;
-    const effectiveLang = lang || fallbackLang;
+    const storedLang = usePref("lang");
+    const prefLang = Array.isArray(languages) && languages.includes(storedLang) ? storedLang : null;
+    const effectiveLang = lang || prefLang || defaultLang;
 
     const onLangChange = (next) => {
-        try {
-            localStorage.setItem(LANG_STORAGE_KEY, next);
-        } catch {
-            /* localStorage unavailable */
-        }
-        setPrefLang(next);
+        setPref("lang", next);
         // Rewrite the lang segment in place; replace so Back skips the
         // language flip.
         if (lang && perspectiveId) {
@@ -83,7 +68,7 @@ export function App({ perspectives, store, defaultLang, languages = null }) {
     // redirecting entry.
     if (route.legacy && perspectiveId) {
         const p = perspectives.find(p => p.id === perspectiveId);
-        const effectiveView = view || p?.default_view || p?.view || "table";
+        const effectiveView = view || preferredView(p) || "table";
         const newPath = rowId
             ? `/${effectiveLang}/${perspectiveId}/${rowId}/${effectiveView}`
             : `/${effectiveLang}/${perspectiveId}/${effectiveView}`;
@@ -109,7 +94,7 @@ export function App({ perspectives, store, defaultLang, languages = null }) {
         return h(Layout, {
             ...layoutProps,
             crumbs: [
-                h("a", { href: buildPath(`/${effectiveLang}/${perspectiveId}/table`) }, displayName),
+                h("a", { href: buildPath(`/${effectiveLang}/${perspectiveId}/${preferredView(p) || "table"}`) }, displayName),
                 String(rowId),
             ],
         },

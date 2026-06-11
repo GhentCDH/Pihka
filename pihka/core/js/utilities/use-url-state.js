@@ -1,5 +1,6 @@
 import { useMemo } from "preact/hooks";
 import { useRouter, updateParams } from "./router.js";
+import { usePref, setPref } from "./prefs.js";
 
 /**
  * Decode URL query params into filter/sort/page state.
@@ -140,9 +141,9 @@ function encodeFilters(filters) {
  *
  * @param {import('./data-store.js').DataStore} store
  * @param {string} table
- * @param {{ defaultPageSize?: number, defaultSort?: string, facets?: Array|null }} options
+ * @param {{ defaultPageSize?: number, defaultSort?: string, facets?: Array|null, perspectiveId?: string|null }} options
  */
-export function useUrlState(store, table, { defaultPageSize = 25, defaultSort = null, facets = null } = {}) {
+export function useUrlState(store, table, { defaultPageSize = 25, defaultSort = null, facets = null, perspectiveId = null } = {}) {
     const { params } = useRouter();
 
     const filterMeta = useMemo(
@@ -154,7 +155,11 @@ export function useUrlState(store, table, { defaultPageSize = 25, defaultSort = 
     const filters = decoded.filters;
     const sort = decoded.sort || (defaultSort ? { column: defaultSort, direction: "ASC" } : null);
     const page = decoded.page;
-    const pageSize = decoded.pageSize || defaultPageSize;
+    // Page size: explicit URL param > stored per-perspective preference >
+    // configured default.
+    const pageSizePrefKey = `pageSize:${perspectiveId ?? table}`;
+    const prefPageSize = usePref(pageSizePrefKey);
+    const pageSize = decoded.pageSize || prefPageSize || defaultPageSize;
     const search = decoded.search;
     const filtersKey = serializeFilters(filters);
 
@@ -223,6 +228,7 @@ export function useUrlState(store, table, { defaultPageSize = 25, defaultSort = 
     };
 
     const onPageSizeChange = (newSize) => {
+        setPref(pageSizePrefKey, newSize);
         updateParams({ pageSize: String(newSize), page: null });
     };
 
@@ -245,12 +251,16 @@ export function useUrlState(store, table, { defaultPageSize = 25, defaultSort = 
         fkResolved,
         search,
         searchError,
-        onSort,
-        onRangeChange,
-        onMultiChange,
-        onBoundsChange,
-        onPageChange,
-        onPageSizeChange,
-        onSearchChange,
+        // All state mutations bundled in one object — consumers pass it
+        // down as a single prop instead of drilling individual callbacks.
+        actions: {
+            onSort,
+            onRangeChange,
+            onMultiChange,
+            onBoundsChange,
+            onPageChange,
+            onPageSizeChange,
+            onSearchChange,
+        },
     };
 }

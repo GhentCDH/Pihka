@@ -6,9 +6,11 @@
         <title>⛁ Pihka - Sustainable Data Publishing Platform for Digital Humanities Research</title>
         <script>
             // Apply the saved theme before first paint to avoid a flash.
+            // Reads the prefs store (with the pre-prefs key as fallback).
             (function () {
                 try {
-                    var t = localStorage.getItem("pihka-theme");
+                    var prefs = JSON.parse(localStorage.getItem("pihka-prefs") || "{}");
+                    var t = prefs.theme || localStorage.getItem("pihka-theme");
                     if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
                 } catch (e) { /* localStorage unavailable */ }
             })();

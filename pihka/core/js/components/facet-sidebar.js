@@ -15,16 +15,13 @@ import { localize } from "../utilities/table-config.js";
  *   filters        - current filter state from URL
  *   totalRows      - total matching rows
  *   perspectiveName - display name for the result count
- *   onRangeChange  - (colName, bound, value) => void
- *   onMultiChange  - (colName, newSelected) => void
- *   onBoundsChange - (bounds|null) => void — map viewport filter
- *   onClearAll     - () => void
+ *   actions        - bundled mutation callbacks from useUrlState plus
+ *                    onClearAll/onViewChange (single prop, no drilling)
  */
 export default function FacetSidebar({
     facetMeta, autoFilterMeta, filters,
     totalRows, perspectiveName, lang,
-    onRangeChange, onMultiChange, onBoundsChange, onClearAll,
-    search, searchError, searchAvailable, onSearchChange,
+    search, searchError, searchAvailable, actions,
 }) {
     const hasActiveFilters = Object.keys(filters).length > 0 || (search && search.length > 0);
 
@@ -37,32 +34,32 @@ export default function FacetSidebar({
             hasActiveFilters && h("button", {
                 class: "outline",
                 style: "padding:.2em .6em;font-size:.75em;margin-left:auto",
-                onClick: onClearAll,
+                onClick: actions.onClearAll,
             }, "Clear all"),
         ),
         h("p", { style: "font-size:.8em;color:var(--text-muted);margin:.2rem 0 .5rem" },
             `${totalRows} ${perspectiveName || "results"}`,
         ),
 
-        onSearchChange && h(FtsSearchInput, {
+        h(FtsSearchInput, {
             value: search || "",
-            onSubmit: onSearchChange,
+            onSubmit: actions.onSearchChange,
             error: searchError,
             available: !!searchAvailable,
         }),
 
         hasFacetMeta
-            ? renderConfiguredFacets(facetMeta, filters, onRangeChange, onMultiChange, lang)
-            : renderAutoFacets(autoFilterMeta, filters, onRangeChange, onMultiChange, lang),
+            ? renderConfiguredFacets(facetMeta, filters, actions, lang)
+            : renderAutoFacets(autoFilterMeta, filters, actions, lang),
 
         // Location facet: rendered for any table with geo columns, on both
         // the configured and auto paths.
-        autoFilterMeta?.geoMeta && onBoundsChange && h(Fragment, { key: "_viewport" },
+        autoFilterMeta?.geoMeta && h(Fragment, { key: "_viewport" },
             divider("_viewport"),
             h(MapBoundsFilter, {
                 geoMeta: autoFilterMeta.geoMeta,
                 activeBounds: filters._viewport ?? null,
-                onBoundsChange,
+                onBoundsChange: actions.onBoundsChange,
             }),
         ),
     );
@@ -78,7 +75,7 @@ function facetBlock(key, facet) {
     return h(Fragment, { key }, divider(key), facet);
 }
 
-function renderConfiguredFacets(facetMeta, filters, onRangeChange, onMultiChange, lang) {
+function renderConfiguredFacets(facetMeta, filters, actions, lang) {
     return Object.entries(facetMeta).map(([field, meta]) => {
         if (meta.type === "range") {
             const current = filters[field];
@@ -89,8 +86,8 @@ function renderConfiguredFacets(facetMeta, filters, onRangeChange, onMultiChange
                 currentMin: current?.min ?? null,
                 currentMax: current?.max ?? null,
                 step: 1,
-                onChangeMin: (v) => onRangeChange(field, "min", v),
-                onChangeMax: (v) => onRangeChange(field, "max", v),
+                onChangeMin: (v) => actions.onRangeChange(field, "min", v),
+                onChangeMax: (v) => actions.onRangeChange(field, "max", v),
             }));
         }
 
@@ -99,7 +96,7 @@ function renderConfiguredFacets(facetMeta, filters, onRangeChange, onMultiChange
                 label: localize(meta.label, lang, field),
                 options: meta.options || [],
                 selected: filters[field]?.selected ?? new Set(),
-                onChange: (sel) => onMultiChange(field, sel),
+                onChange: (sel) => actions.onMultiChange(field, sel),
             }));
         }
 
@@ -107,7 +104,7 @@ function renderConfiguredFacets(facetMeta, filters, onRangeChange, onMultiChange
     });
 }
 
-function renderAutoFacets(autoFilterMeta, filters, onRangeChange, onMultiChange, lang) {
+function renderAutoFacets(autoFilterMeta, filters, actions, lang) {
     if (!autoFilterMeta) return null;
     const { rangeMeta, multiMeta, rangeColumns, multiColumns } = autoFilterMeta;
 
@@ -117,7 +114,7 @@ function renderAutoFacets(autoFilterMeta, filters, onRangeChange, onMultiChange,
                 label: localize(multiMeta[col.name].label, lang, col.name),
                 options: (multiMeta[col.name].options || []).map(o => ({ ...o, count: null })),
                 selected: filters[col.name]?.selected ?? new Set(),
-                onChange: (sel) => onMultiChange(col.name, sel),
+                onChange: (sel) => actions.onMultiChange(col.name, sel),
             })),
         ),
         ...rangeColumns.map(col =>
@@ -128,8 +125,8 @@ function renderAutoFacets(autoFilterMeta, filters, onRangeChange, onMultiChange,
                 currentMin: filters[col.name]?.min ?? null,
                 currentMax: filters[col.name]?.max ?? null,
                 step: col.type === "REAL" ? 0.01 : 1,
-                onChangeMin: (v) => onRangeChange(col.name, "min", v),
-                onChangeMax: (v) => onRangeChange(col.name, "max", v),
+                onChangeMin: (v) => actions.onRangeChange(col.name, "min", v),
+                onChangeMax: (v) => actions.onRangeChange(col.name, "max", v),
             })),
         ),
     ];

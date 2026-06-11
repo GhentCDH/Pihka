@@ -74,6 +74,27 @@ test("search filters reactively on input", async ({ page }) => {
   await expect(page.locator(".faceted-count")).toContainText("of 1743");
 });
 
+test("page size preference persists across navigation", async ({ page }) => {
+  await gotoRoute(page, "/en/works/table");
+  await page.locator(".faceted-pagesize").selectOption("50");
+  await expect(page.locator(".faceted-count")).toContainText("Showing 1 to 50");
+  // Leave and come back without a pageSize in the URL
+  await page.locator(".app-brand").click();
+  await page.locator("a.perspective-card", { hasText: "Works" }).click();
+  await expect(page).not.toHaveURL(/pageSize/);
+  await expect(page.locator(".faceted-count")).toContainText("Showing 1 to 50");
+});
+
+test("view preference persists across navigation", async ({ page }) => {
+  await gotoRoute(page, "/en/works/table");
+  await page.locator(".view-toggles button", { hasText: "cards" }).click();
+  await expect(page).toHaveURL(/\/works\/cards/);
+  // The home card now targets the remembered view
+  await page.locator(".app-brand").click();
+  await page.locator("a.perspective-card", { hasText: "Works" }).click();
+  await expect(page).toHaveURL(/\/works\/cards/);
+});
+
 test("works view shows sidebar with facet filters", async ({ page }) => {
   await gotoRoute(page, "/en/works/table");
   const sidebar = page.locator("aside.facet-sidebar");

@@ -1,9 +1,8 @@
 import { h } from "preact";
-import { useState } from "preact/hooks";
+import { usePref, setPref } from "../utilities/prefs.js";
 
-const STORAGE_KEY = "pihka-theme";
 const CYCLE = ["auto", "light", "dark"];
-const ICONS = { auto: "\u25D1", light: "\u2600\uFE0E", dark: "\u263E" };
+const ICONS = { auto: "◑", light: "☀︎", dark: "☾" };
 
 /**
  * Apply a theme to the document. "auto" removes the data-theme attribute so
@@ -18,20 +17,17 @@ function applyTheme(theme) {
 }
 
 /**
- * Small header button cycling auto -> light -> dark, persisted in
- * localStorage. The saved theme is applied before first paint by an inline
+ * Small header button cycling auto -> light -> dark, persisted in the
+ * prefs store. The saved theme is applied before first paint by an inline
  * script in index.html to avoid a flash of the wrong theme.
  */
 export default function ThemeToggle() {
-    const [theme, setTheme] = useState(() => {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        return CYCLE.includes(saved) ? saved : "auto";
-    });
+    const stored = usePref("theme", "auto");
+    const theme = CYCLE.includes(stored) ? stored : "auto";
 
     const onClick = () => {
         const next = CYCLE[(CYCLE.indexOf(theme) + 1) % CYCLE.length];
-        setTheme(next);
-        localStorage.setItem(STORAGE_KEY, next);
+        setPref("theme", next);
         applyTheme(next);
     };
 

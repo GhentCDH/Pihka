@@ -1,5 +1,6 @@
 import { loadConfig } from "./config.js";
 import { getView, listViews } from "./view-registry.js";
+import { getPref } from "./prefs.js";
 
 /**
  * @typedef {Object} Perspective
@@ -58,6 +59,20 @@ export async function loadPerspectives(meta) {
     tables.sort((a, b) => a.name.localeCompare(b.name));
 
     return { defaultLanguage, perspectives: [...configured, ...tables] };
+}
+
+/**
+ * The list view to open a perspective with: the user's stored preference
+ * (when still allowed), then the configured default.
+ *
+ * @param {Perspective|undefined} p
+ * @returns {string|null}
+ */
+export function preferredView(p) {
+    if (!p) return null;
+    const stored = getPref(`view:${p.id}`);
+    if (stored && (!p.allowed_views || p.allowed_views.includes(stored))) return stored;
+    return p.default_view || p.view || null;
 }
 
 function normalizePerspective(p, meta, kind = "table") {

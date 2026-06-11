@@ -1,6 +1,7 @@
 import { h, Fragment } from "preact";
 import { buildPath } from "../utilities/router.js";
 import { localize, visibleColumns } from "../utilities/table-config.js";
+import { preferredView } from "../utilities/perspectives.js";
 
 /**
  * Homepage navigation: configured perspectives first, then the auto-
@@ -33,7 +34,7 @@ export default function PerspectiveList({ perspectives, store, lang = "en" }) {
 function Grid({ perspectives, store, lang }) {
     return h("div", { class: "perspective-grid" },
         perspectives.map(p => {
-            const view = p.default_view || p.view || "table";
+            const view = preferredView(p) || "table";
             const schema = store.getSchema(p.table);
             const colCount = schema ? visibleColumns(schema.columns).length : null;
             const kind = p.kind === "perspective" ? "perspective" : "table";
