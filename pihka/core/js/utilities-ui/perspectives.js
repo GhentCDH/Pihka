@@ -1,4 +1,4 @@
-import { loadConfig } from "./config.js";
+import { loadConfig } from "../utilities-data/config.js";
 import { getView, listViews } from "./view-registry.js";
 import { getPref } from "./prefs.js";
 

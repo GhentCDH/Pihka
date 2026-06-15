@@ -1,6 +1,6 @@
 import { h } from "preact";
-import { registerView } from "../../utilities/view-registry.js";
-import { findGeoColumns } from "../../utilities/geo.js";
+import { registerView } from "../../utilities-ui/view-registry.js";
+import { findGeoColumns } from "../../utilities-data/geo.js";
 import DataViewListTable from "./data-view-list-table.js";
 import DataViewListCards from "./data-view-list-cards.js";
 import DataViewListMap from "./data-view-list-map.js";

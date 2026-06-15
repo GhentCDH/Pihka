@@ -1,6 +1,6 @@
 import { h } from "preact";
 import DataViewDetailTable from "../data-views/data-view-detail-table.js";
-import { buildPath } from "../../utilities/router.js";
+import { buildPath } from "../../utilities-ui/router.js";
 
 /**
  * Default popup body for a marker. Renders the same detail-table layout

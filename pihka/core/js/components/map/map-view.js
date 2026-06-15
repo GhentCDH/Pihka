@@ -1,6 +1,6 @@
 import { h, render } from "preact";
 import { useEffect, useRef } from "preact/hooks";
-import { assetUrl } from "../../utilities/router.js";
+import { assetUrl } from "../../utilities-data/paths.js";
 import { loadMaplibre } from "./maplibre-shim.js";
 import { ensurePmtilesProtocol } from "./pmtiles-protocol.js";
 import MapPopup from "./map-popup.js";

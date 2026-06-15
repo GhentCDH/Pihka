@@ -1,8 +1,9 @@
 import { h } from "preact";
 import { useState } from "preact/hooks";
 import { isImagePath } from "./render-helpers.js";
-import { buildPath, assetUrl } from "../../utilities/router.js";
-import { formatValue } from "../../utilities/table-config.js";
+import { buildPath } from "../../utilities-ui/router.js";
+import { assetUrl } from "../../utilities-data/paths.js";
+import { formatValue } from "../../utilities-data/table-config.js";
 
 const LIST_SEPARATOR = "|";
 const LIST_LIMIT = 3;

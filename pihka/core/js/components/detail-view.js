@@ -1,8 +1,8 @@
 import { h } from "preact";
 import { useState, useMemo } from "preact/hooks";
-import { getView, listViews } from "../utilities/view-registry.js";
-import { navigate, buildPath } from "../utilities/router.js";
-import { localize } from "../utilities/table-config.js";
+import { getView, listViews } from "../utilities-ui/view-registry.js";
+import { navigate, buildPath } from "../utilities-ui/router.js";
+import { localize } from "../utilities-data/table-config.js";
 import DataViewListTable from "./data-views/data-view-list-table.js";
 import Pagination from "./pagination.js";
 

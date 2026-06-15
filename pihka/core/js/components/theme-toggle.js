@@ -1,5 +1,5 @@
 import { h } from "preact";
-import { usePref, setPref } from "../utilities/prefs.js";
+import { usePref, setPref } from "../utilities-ui/prefs.js";
 
 const CYCLE = ["auto", "light", "dark"];
 const ICONS = { auto: "◑", light: "☀︎", dark: "☾" };

@@ -27,6 +27,8 @@ The UI should use only preact and Javascript. There is a clear separation in int
 
 The application specific assets, data, css, configuration ends up in the app directory. The core contains all reusable components.
 
+The reusable code is split along the data/UI seam so the data engine can be lifted out and driven by a different UI: `core/js/utilities-data/` is everything needed to open a SQLite database and query it as JSON — SQLite access, SQL generation, schema annotation, config loading, asset-path resolution — and contains **no preact import**. `core/js/utilities-ui/` holds the Preact-dependent reactive plumbing (router, signals, prefs, the view registry, perspective normalization). Keep this boundary: never add a preact import under `utilities-data/`.
+
 ```
 pihka/
   index.html          # Entry point; inline <script type="module">
@@ -36,7 +38,8 @@ pihka/
   core/               # Framework code (not user-modified)
     js/
       components/     # Preact components using h() hyperscript (no JSX)
-      utilities/      # Shared utilities (router, data layer, config)
+      utilities-data/ # Reusable data layer — SQLite access, SQL, schema, config, asset paths (no preact)
+      utilities-ui/   # Preact-dependent plumbing (router, signal, prefs, view-registry, perspectives)
     stylesheets/      # PicoCSS base framework
     assets/stylesheets/base.css  # Custom CSS variables and overrides
     vendor/           # Vendored npm packages (downloaded by vendorize-deps.js)
@@ -45,7 +48,7 @@ pihka/
 
 ### Routing
 
-Routing is hash-based: routes live in the URL fragment (`/#/:lang/:perspective/:view`, detail `/#/:lang/:perspective/:id/:view`, query params inside the fragment, e.g. `/#/en/works/table?bbox=...`). The server only ever sees a request for index.html, so deep links work on any static host (GitHub Pages, S3) without rewrite rules. `core/js/utilities/router.js` owns all URL parsing/navigation; `redirectLegacyPathUrl()` migrates old path-style URLs to hash routes on hosts that still serve them. In-app links are plain `#/...` anchors built with `buildPath()` — the browser handles clicks natively.
+Routing is hash-based: routes live in the URL fragment (`/#/:lang/:perspective/:view`, detail `/#/:lang/:perspective/:id/:view`, query params inside the fragment, e.g. `/#/en/works/table?bbox=...`). The server only ever sees a request for index.html, so deep links work on any static host (GitHub Pages, S3) without rewrite rules. `core/js/utilities-ui/router.js` owns all URL parsing/navigation; `redirectLegacyPathUrl()` migrates old path-style URLs to hash routes on hosts that still serve them. In-app links are plain `#/...` anchors built with `buildPath()` — the browser handles clicks natively.
 
 ### How SQLite works in the browser
 
@@ -84,7 +87,7 @@ The `tables` section of `app/config.json` configures how tables and columns disp
 }
 ```
 
-- Labels are strings or `{lang: string}` objects, resolved against the current URL language (then `en`, then the first language, then the raw name) by `localize()` in `core/js/utilities/table-config.js`.
+- Labels are strings or `{lang: string}` objects, resolved against the current URL language (then `en`, then the first language, then the raw name) by `localize()` in `core/js/utilities-data/table-config.js`.
 - A top-level `"languages": ["en", "nl"]` config key enables the header language switcher; it rewrites the URL's lang segment and persists the choice in localStorage for routes without one.
 - Column `type` overrides rendering: `url` → external link, `asset` → image from `app/assets/`, `number`/`date` → `Intl` formatting with the column's `format` options, `text` → plain. Without a type, image-looking paths still render as images (heuristic).
 - `hidden` on a column removes it from all views and filters; `hidden` on a table removes it from the home grid and from related-object sections. Hidden lookup tables still resolve FK display names and facets — hiding is a display concern, **not access control**: the data remains in the published `.sqlite` file.
@@ -94,9 +97,9 @@ The `tables` section of `app/config.json` configures how tables and columns disp
 
 Two kinds of state, two mechanisms:
 
-- **Shareable state lives in the URL** — filters, sort, page, search, the active view. The URL is the message bus: mutations go through `navigate()`/`updateParams()` (`core/js/utilities/router.js`), the router re-parses, and views re-derive everything from the route. Never duplicate this state elsewhere; that is what keeps every screen bookmarkable. `useUrlState` bundles all mutations into a single `actions` object that is passed down as one prop.
-- **Device-local preferences live in `core/js/utilities/prefs.js`** — one localStorage JSON object (`pihka-prefs`) exposed as signals (`getPref`/`setPref`/`usePref`). Keys: `theme`, `lang`, `view:<perspectiveId>`, `pageSize:<perspectiveId>`. Resolution is always **URL > stored pref > config default**, and prefs are conveniences only: without localStorage the site works identically (session-only memory).
-- `core/js/utilities/signal.js` is the deliberately tiny in-house signal primitive backing prefs (a value + subscribers + a `useSignalValue` hook). It is kept in-repo instead of vendoring `@preact/signals`, per the no-additional-dependencies rule.
+- **Shareable state lives in the URL** — filters, sort, page, search, the active view. The URL is the message bus: mutations go through `navigate()`/`updateParams()` (`core/js/utilities-ui/router.js`), the router re-parses, and views re-derive everything from the route. Never duplicate this state elsewhere; that is what keeps every screen bookmarkable. `useUrlState` bundles all mutations into a single `actions` object that is passed down as one prop.
+- **Device-local preferences live in `core/js/utilities-ui/prefs.js`** — one localStorage JSON object (`pihka-prefs`) exposed as signals (`getPref`/`setPref`/`usePref`). Keys: `theme`, `lang`, `view:<perspectiveId>`, `pageSize:<perspectiveId>`. Resolution is always **URL > stored pref > config default**, and prefs are conveniences only: without localStorage the site works identically (session-only memory).
+- `core/js/utilities-ui/signal.js` is the deliberately tiny in-house signal primitive backing prefs (a value + subscribers + a `useSignalValue` hook). It is kept in-repo instead of vendoring `@preact/signals`, per the no-additional-dependencies rule.
 
 ### Perspectives (multi-table views)
 
@@ -124,14 +127,14 @@ At startup each query becomes `CREATE VIEW "<table>" AS <query>` on the in-memor
 
 ### Views and the view registry
 
-All view types (list: `table`, `cards`, `map`; detail: `table`, `card`, `map`) are defined in one place: `core/js/utilities/view-registry.js`. The router, perspective normalization, and the view-toggle UIs all consult it — adding a view means one `registerView()` call, nothing else. Builtin views are registered by `core/js/components/data-views/builtin-views.js` (imported by `index.html`).
+All view types (list: `table`, `cards`, `map`; detail: `table`, `card`, `map`) are defined in one place: `core/js/utilities-ui/view-registry.js`. The router, perspective normalization, and the view-toggle UIs all consult it — adding a view means one `registerView()` call, nothing else. Builtin views are registered by `core/js/components/data-views/builtin-views.js` (imported by `index.html`).
 
 Apps can register custom views (the platform's extension point for research-specific renderers — text annotations, IIIF, custom maps):
 
 1. Create e.g. `app/views.js`:
    ```js
    import { h } from "preact";
-   import { registerView } from "../core/js/utilities/view-registry.js";
+   import { registerView } from "../core/js/utilities-ui/view-registry.js";
 
    registerView({
        id: "timeline",

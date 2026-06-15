@@ -6,14 +6,15 @@
 import "./components/data-views/builtin-views.js";
 
 import { h, render } from "preact";
-import { DataSource } from "./utilities/datasource.js";
-import { DataStore } from "./utilities/data-store.js";
-import { loadPerspectives } from "./utilities/perspectives.js";
-import { loadConfig } from "./utilities/config.js";
-import { runEnrichment } from "./utilities/enrichment/index.js";
-import { applyTableConfig } from "./utilities/table-config.js";
-import { createPerspectiveViews } from "./utilities/perspective-views.js";
-import { Router, assetUrl, redirectLegacyPathUrl } from "./utilities/router.js";
+import { DataSource } from "./utilities-data/datasource.js";
+import { DataStore } from "./utilities-data/data-store.js";
+import { loadPerspectives } from "./utilities-ui/perspectives.js";
+import { loadConfig } from "./utilities-data/config.js";
+import { runEnrichment } from "./utilities-data/enrichment/index.js";
+import { applyTableConfig } from "./utilities-data/table-config.js";
+import { createPerspectiveViews } from "./utilities-data/perspective-views.js";
+import { assetUrl } from "./utilities-data/paths.js";
+import { Router, redirectLegacyPathUrl } from "./utilities-ui/router.js";
 import { App, Status } from "./components/app.js";
 
 async function main() {

@@ -1,6 +1,7 @@
 import { createContext, h } from "preact";
 import { useState, useContext, useEffect } from "preact/hooks";
 import { isValidViewId } from "./view-registry.js";
+import { basePath } from "../utilities-data/paths.js";
 
 /**
  * Hash-based router. Routes live entirely in the URL fragment —
@@ -10,36 +11,15 @@ import { isValidViewId } from "./view-registry.js";
  */
 
 /**
- * Auto-detect the base path from the location of this module file.
- * router.js lives at <base>/core/js/utilities/router.js, so we strip
- * the known suffix to recover the base path.
- * E.g. if served at /pihka/core/js/utilities/router.js → base is "/pihka".
- * If served at /core/js/utilities/router.js → base is "".
- */
-const _basePath = (() => {
-    const url = new URL(import.meta.url);
-    const path = url.pathname;
-    const suffix = "/core/js/utilities/router.js";
-    const idx = path.lastIndexOf(suffix);
-    if (idx === -1) return "";
-    return path.slice(0, idx); // e.g. "/pihka" or ""
-})();
-
-/**
  * Build an app-internal href. Routes are hash fragments, so no base path
  * is needed — the fragment is always relative to the current document.
  * Usage: buildPath(`/${lang}/${perspective}/${view}`)
+ *
+ * Static-asset URL resolution (assetUrl) is a data-layer concern and lives
+ * in ../utilities-data/paths.js, separate from these UI navigation hrefs.
  */
 export function buildPath(path) {
     return "#" + path;
-}
-
-/**
- * Resolve an asset path relative to the app root.
- * Usage: assetUrl("app/config.json") → "/pihka/app/config.json" (or "/app/config.json" at root)
- */
-export function assetUrl(relativePath) {
-    return _basePath + "/" + relativePath;
 }
 
 /**
@@ -177,8 +157,8 @@ export function updateParams(updates) {
  */
 export function redirectLegacyPathUrl() {
     let pathname = window.location.pathname;
-    if (_basePath && pathname.startsWith(_basePath)) {
-        pathname = pathname.slice(_basePath.length);
+    if (basePath && pathname.startsWith(basePath)) {
+        pathname = pathname.slice(basePath.length);
     }
     const parts = pathname.replace(/^\//, "").split("/").filter(Boolean);
     // A direct index.html load is not a route.
@@ -187,7 +167,7 @@ export function redirectLegacyPathUrl() {
 
     const search = window.location.search.replace(/^\?/, "");
     const route = "/" + parts.join("/") + (search ? "?" + search : "");
-    window.history.replaceState(null, "", `${_basePath}/#${route}`);
+    window.history.replaceState(null, "", `${basePath}/#${route}`);
 }
 
 /**

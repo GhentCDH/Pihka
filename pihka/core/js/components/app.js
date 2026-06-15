@@ -4,10 +4,10 @@ import PerspectiveList from "./perspective-list.js";
 import PerspectiveView from "./perspective-view.js";
 import ThemeToggle from "./theme-toggle.js";
 import LangSwitcher from "./lang-switcher.js";
-import { useRouter, navigate, buildPath } from "../utilities/router.js";
-import { localize } from "../utilities/table-config.js";
-import { usePref, setPref } from "../utilities/prefs.js";
-import { preferredView } from "../utilities/perspectives.js";
+import { useRouter, navigate, buildPath } from "../utilities-ui/router.js";
+import { localize } from "../utilities-data/table-config.js";
+import { usePref, setPref } from "../utilities-ui/prefs.js";
+import { preferredView } from "../utilities-ui/perspectives.js";
 
 // Slim app header: brand, breadcrumb, language switcher, theme toggle.
 function Header({ crumbs, lang, languages, onLangChange }) {

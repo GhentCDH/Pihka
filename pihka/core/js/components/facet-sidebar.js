@@ -3,7 +3,7 @@ import { useState } from "preact/hooks";
 import RangeSelector from "./range-selector.js";
 import FtsSearchInput from "./fts-search-input.js";
 import MapBoundsFilter from "./map/map-bounds-filter.js";
-import { localize } from "../utilities/table-config.js";
+import { localize } from "../utilities-data/table-config.js";
 
 /**
  * Sidebar with faceted search filters.

@@ -2,11 +2,11 @@ import { h } from "preact";
 import { useMemo } from "preact/hooks";
 import FacetSidebar from "./facet-sidebar.js";
 import Pagination from "./pagination.js";
-import { getView } from "../utilities/view-registry.js";
-import { localize } from "../utilities/table-config.js";
-import { useUrlState } from "../utilities/use-url-state.js";
-import { navigate, useRouter } from "../utilities/router.js";
-import { setPref } from "../utilities/prefs.js";
+import { getView } from "../utilities-ui/view-registry.js";
+import { localize } from "../utilities-data/table-config.js";
+import { useUrlState } from "../utilities-ui/use-url-state.js";
+import { navigate, useRouter } from "../utilities-ui/router.js";
+import { setPref } from "../utilities-ui/prefs.js";
 
 /**
  * Top-level faceted view layout: sidebar on the left, content on the right.

@@ -1,4 +1,4 @@
-import { assetUrl } from "./router.js";
+import { assetUrl } from "./paths.js";
 
 let cached = null;
 

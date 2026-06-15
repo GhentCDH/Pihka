@@ -1,7 +1,7 @@
 import { h, Fragment } from "preact";
-import { buildPath } from "../utilities/router.js";
-import { localize, visibleColumns } from "../utilities/table-config.js";
-import { preferredView } from "../utilities/perspectives.js";
+import { buildPath } from "../utilities-ui/router.js";
+import { localize, visibleColumns } from "../utilities-data/table-config.js";
+import { preferredView } from "../utilities-ui/perspectives.js";
 
 /**
  * Homepage navigation: configured perspectives first, then the auto-

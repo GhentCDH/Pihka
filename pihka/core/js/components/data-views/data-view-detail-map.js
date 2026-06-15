@@ -1,6 +1,6 @@
 import { h } from "preact";
 import MapView from "../map/map-view.js";
-import { findGeoColumns, rowToPoint } from "../../utilities/geo.js";
+import { findGeoColumns, rowToPoint } from "../../utilities-data/geo.js";
 
 /**
  * Renders a single row's location on a map.

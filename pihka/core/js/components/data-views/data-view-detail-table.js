@@ -1,6 +1,6 @@
 import { h } from "preact";
 import CellValue from "./cell-value.js";
-import { localize, visibleColumns } from "../../utilities/table-config.js";
+import { localize, visibleColumns } from "../../utilities-data/table-config.js";
 
 /**
  * Renders a single row as a two-column table (field name | value).

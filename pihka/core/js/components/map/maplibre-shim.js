@@ -7,7 +7,7 @@
  * Confining this hack to one file means callers can keep writing normal
  * `await loadMaplibre()` and stay agnostic of the loading mechanism.
  */
-import { assetUrl } from "../../utilities/router.js";
+import { assetUrl } from "../../utilities-data/paths.js";
 
 const UMD_PATH = assetUrl("core/vendor/maplibre-gl/dist/maplibre-gl.js");
 
