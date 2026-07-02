@@ -5,6 +5,16 @@ function quote(s) {
     return `"${s.replace(/"/g, '""')}"`;
 }
 
+// FTS5 parses the MATCH argument as a query expression whose barewords can't
+// contain punctuation ('.', '-', '(' …). Quoting each whitespace-separated
+// term turns the input into literal phrase queries (implicitly AND-ed)
+// instead of a syntax error.
+function literalizeFtsQuery(search) {
+    return search.trim().split(/\s+/)
+        .map(t => `"${t.replace(/"/g, '""')}"`)
+        .join(" ");
+}
+
 function classifyColumns(columns) {
     const rangeColumns = [];
     const multiColumns = [];
@@ -128,8 +138,11 @@ export class DataStore {
 
         // Compose the FTS JOIN + predicate when a non-empty search is set on
         // a table that actually has an FTS index. Anything else: no join.
-        const ftsInfo = search && tableMeta.fts ? tableMeta.fts : null;
-        const ftsBinds = ftsInfo ? [search] : [];
+        // Trigram tokens need >= 3 characters — shorter queries would match
+        // nothing mid-typing, so treat them as "no search yet".
+        const searchActive = search && tableMeta.fts
+            && !(tableMeta.fts.mode === "trigram" && search.trim().length < 3);
+        const ftsInfo = searchActive ? tableMeta.fts : null;
         const joinClause = ftsInfo
             ? `JOIN ${quote(ftsInfo.table)} ON ${quote(table)}.rowid = ${quote(ftsInfo.table)}.rowid`
             : "";
@@ -142,8 +155,6 @@ export class DataStore {
         const whereClause = allConditions.length
             ? "WHERE " + allConditions.join(" AND ")
             : "";
-        // Bind order matches placeholder order: filters first, then FTS.
-        const whereBinds = [...filterBinds, ...ftsBinds];
 
         // ORDER BY: explicit user sort wins; otherwise rank by FTS score when
         // searching, otherwise no order.
@@ -154,10 +165,9 @@ export class DataStore {
             orderClause = `ORDER BY ${quote(ftsInfo.table)}.rank`;
         }
 
-        // FTS5 throws on malformed MATCH expressions (unclosed quote, lone
-        // wildcard, etc.). Catch and surface a friendly message instead of
-        // crashing the view.
-        try {
+        const run = (matchTerm) => {
+            // Bind order matches placeholder order: filters first, then FTS.
+            const whereBinds = [...filterBinds, ...(ftsInfo ? [matchTerm] : [])];
             const countResult = [];
             this.#ds.exec(
                 `SELECT COUNT(*) as n FROM ${quote(table)} ${joinClause} ${whereClause}`,
@@ -180,15 +190,25 @@ export class DataStore {
 
             const fkResolved = this.resolveForeignKeys(table);
             return { columns, rows, totalRows, page, totalPages, fkResolved };
+        };
+
+        // FTS5 throws on MATCH expressions its query grammar can't parse —
+        // including everyday punctuation ("2014.", "U.S.", unclosed quotes).
+        // Retry those as literal quoted terms so punctuation just works,
+        // while syntactically valid queries keep the full FTS5 syntax.
+        try {
+            return run(search);
         } catch (err) {
-            if (ftsInfo) {
+            if (!ftsInfo) throw err;
+            try {
+                return run(literalizeFtsQuery(search));
+            } catch {
                 return {
                     columns, rows: [], totalRows: 0, page: 0, totalPages: 1,
                     fkResolved: this.resolveForeignKeys(table),
                     searchError: "Invalid search query",
                 };
             }
-            throw err;
         }
     }
 

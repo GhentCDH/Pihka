@@ -48,7 +48,7 @@ pihka/
 
 ### Routing
 
-Routing is hash-based: routes live in the URL fragment (`/#/:lang/:perspective/:view`, detail `/#/:lang/:perspective/:id/:view`, query params inside the fragment, e.g. `/#/en/works/table?bbox=...`). The server only ever sees a request for index.html, so deep links work on any static host (GitHub Pages, S3) without rewrite rules. `core/js/utilities-ui/router.js` owns all URL parsing/navigation; `redirectLegacyPathUrl()` migrates old path-style URLs to hash routes on hosts that still serve them. In-app links are plain `#/...` anchors built with `buildPath()` — the browser handles clicks natively.
+Routing is hash-based: routes live in the URL fragment (`/#/:lang/:perspective/:view`, detail `/#/:lang/:perspective/:id/:view`, global search `/#/:lang/search?q=...`, query params inside the fragment, e.g. `/#/en/works/table?bbox=...`). The server only ever sees a request for index.html, so deep links work on any static host (GitHub Pages, S3) without rewrite rules. `core/js/utilities-ui/router.js` owns all URL parsing/navigation; `redirectLegacyPathUrl()` migrates old path-style URLs to hash routes on hosts that still serve them. In-app links are plain `#/...` anchors built with `buildPath()` — the browser handles clicks natively.
 
 ### How SQLite works in the browser
 
@@ -93,6 +93,24 @@ The `tables` section of `app/config.json` configures how tables and columns disp
 - `hidden` on a column removes it from all views and filters; `hidden` on a table removes it from the home grid and from related-object sections. Hidden lookup tables still resolve FK display names and facets — hiding is a display concern, **not access control**: the data remains in the published `.sqlite` file.
 - `applyTableConfig()` annotates the schema metadata once at startup (`core/js/main.js`); components only ever see the annotated plain-JSON columns.
 
+### Enrichment (full-text search)
+
+At startup `runEnrichment()` (`core/js/utilities-data/enrichment/`) builds an external-content FTS5 index per table with text columns and an INTEGER primary key. The `enrichment.fts` config key selects the tokenizer:
+
+```json
+"enrichment": { "fts": "trigram" }
+```
+
+- `"trigram"` (default, also when the key is absent) — substring/autocomplete-style matching, `tokenize='trigram remove_diacritics 1'`. Queries shorter than 3 characters can't produce trigrams; the data layer treats them as "no search yet" instead of returning zero rows. FTS5 boolean/phrase syntax still works, but `pre*`, `column:`, and `NEAR` are pointless.
+- `"unicode61"` — whole-word matching with the full FTS5 query syntax, `tokenize='unicode61 remove_diacritics 2'`.
+- `false` — no FTS index; the search input renders disabled.
+
+The chosen mode is annotated as `meta.tables[name].fts.mode` so the UI (search tooltip) and data layer can adapt. Unknown values warn and fall back to trigram.
+
+Search input is passed to `MATCH` as a raw FTS5 query first; if FTS5 rejects it (its query grammar disallows punctuation like `.` in barewords), `queryTable` retries once with each term double-quoted as a literal phrase — punctuation just works, valid advanced syntax keeps full power.
+
+When any table has an FTS index, the header shows a global search box (`core/js/components/global-search-input.js`); Enter navigates to `/#/:lang/search?q=...`, where `SearchView` (`core/js/components/search-view.js`) queries every searchable perspective's table via `store.queryTable` and renders the top matches as one small table per entity with "view all" links into the filtered list view.
+
 ### State management
 
 Two kinds of state, two mechanisms:
@@ -121,7 +139,7 @@ At startup each query becomes `CREATE VIEW "<table>" AS <query>` on the in-memor
 - **Row links**: views have no PK/FK metadata, so configure `{ "linkTo": "authors" }` on the id column to link rows into the underlying table's detail pages. Detail routes *on* a view itself show "Row not found" by design.
 - **Facets**: numeric passthrough columns get range facets automatically; typeless aggregate columns (COUNT, MIN…) get them when configured `"type": "number"`. Dropdown facets come from the perspective's `facets` config. No FK dropdowns and no full-text search on views.
 - **Homepage**: configured perspectives appear under "Perspectives", remaining (unclaimed, non-hidden) tables under "Tables"; with no `perspectives` config the homepage shows tables only, as before.
-- **Naming**: perspective `id` must not collide with table names, view ids (`table`, `cards`, `map`), or language codes. The `table` name is claimed — no auto card is generated for it.
+- **Naming**: perspective `id` must not collide with table names, view ids (`table`, `cards`, `map`), language codes, or the reserved `search` segment (a table or perspective named `search` is unreachable — that URL renders the global search page). The `table` name is claimed — no auto card is generated for it.
 - **Performance**: the view's GROUP BY re-runs on every query — fine in-memory at tens of thousands of rows; for large datasets precompute a real table in your publishing pipeline instead.
 - Avoid passing lat/lon columns through a view unless you accept that map popups' detail links lead to "Row not found".
 

@@ -21,7 +21,8 @@ export async function runEnrichment(ds, meta, config = {}) {
 function buildPipeline(config) {
     const e = config?.enrichment || {};
     const plugins = [];
-    // FTS5 is on unless explicitly disabled.
+    // FTS5 is on unless explicitly disabled; string values ("trigram",
+    // "unicode61") select the tokenizer inside the plugin itself.
     if (e.fts !== false) plugins.push(fts5Plugin);
     return plugins;
 }

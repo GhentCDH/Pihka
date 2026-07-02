@@ -21,7 +21,7 @@ import { localize } from "../utilities-data/table-config.js";
 export default function FacetSidebar({
     facetMeta, autoFilterMeta, filters,
     totalRows, perspectiveName, lang,
-    search, searchError, searchAvailable, actions,
+    search, searchError, searchAvailable, searchMode, actions,
 }) {
     const hasActiveFilters = Object.keys(filters).length > 0 || (search && search.length > 0);
 
@@ -46,6 +46,7 @@ export default function FacetSidebar({
             onSubmit: actions.onSearchChange,
             error: searchError,
             available: !!searchAvailable,
+            mode: searchMode,
         }),
 
         hasFacetMeta

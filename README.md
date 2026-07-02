@@ -10,7 +10,7 @@ Pihka lets you publish SQLite databases as interactive, searchable websites. Dro
 - **Detail views** for individual records
 - **Zero backend** — runs entirely in the browser, no server components which need active maintenance
 - **Relationship views** — shows names or labels for linked columns.
-- **Full text search** - To search accross columns. By default, a database is enriched with a full text search index. For small datasets creating such index goes instantly.
+- **Full text search** - To search accross columns. By default, a database is enriched with a trigram full text search index: queries match anywhere in the text, autocomplete-style. A search box in the header searches across all indexed tables at once, with results grouped per table. Set `"enrichment": {"fts": "unicode61"}` in `app/config.json` for whole-word matching with the richer FTS5 query syntax (`pre*`, `NEAR`, `column:word`), or `"fts": false` to skip indexing. For small datasets creating such index goes instantly; trigram indexes are somewhat larger and slower to build on big databases.
 - **Modern mapping solutions** - To show interactive, flexible maps without relying on external services. Technically a solution with protomaps and maplibre-gl is envisioned.
 
 ## Why

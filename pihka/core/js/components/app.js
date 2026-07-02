@@ -2,6 +2,8 @@ import { h, Fragment } from "preact";
 import DetailView from "./detail-view.js";
 import PerspectiveList from "./perspective-list.js";
 import PerspectiveView from "./perspective-view.js";
+import SearchView from "./search-view.js";
+import GlobalSearchInput from "./global-search-input.js";
 import ThemeToggle from "./theme-toggle.js";
 import LangSwitcher from "./lang-switcher.js";
 import { useRouter, navigate, buildPath } from "../utilities-ui/router.js";
@@ -9,8 +11,10 @@ import { localize } from "../utilities-data/table-config.js";
 import { usePref, setPref } from "../utilities-ui/prefs.js";
 import { preferredView } from "../utilities-ui/perspectives.js";
 
-// Slim app header: brand, breadcrumb, language switcher, theme toggle.
-function Header({ crumbs, lang, languages, onLangChange }) {
+// Slim app header: brand, breadcrumb, global search, language switcher,
+// theme toggle. The search box only renders when some table has an FTS
+// index (search: { lang, value } or null).
+function Header({ crumbs, lang, languages, onLangChange, search }) {
     return h("header", { class: "container-fluid" },
         h("nav", null,
             h("ul", null,
@@ -21,6 +25,9 @@ function Header({ crumbs, lang, languages, onLangChange }) {
                 ]),
             ),
             h("ul", null,
+                search && h("li", null, h(GlobalSearchInput, {
+                    lang: search.lang, value: search.value, key: search.value,
+                })),
                 h("li", null, h(ThemeToggle, null)),
                 h("li", null, h(LangSwitcher, { lang, languages, onChange: onLangChange })),
             ),
@@ -28,9 +35,9 @@ function Header({ crumbs, lang, languages, onLangChange }) {
     );
 }
 
-function Layout({ crumbs = null, lang = null, languages = null, onLangChange = null, children = null }) {
+function Layout({ crumbs = null, lang = null, languages = null, onLangChange = null, search = null, children = null }) {
     return h(Fragment, null,
-        h(Header, { crumbs, lang, languages, onLangChange }),
+        h(Header, { crumbs, lang, languages, onLangChange, search }),
         h("main", { class: "container-fluid" }, children),
     );
 }
@@ -53,7 +60,9 @@ export function App({ perspectives, store, defaultLang, languages = null }) {
         setPref("lang", next);
         // Rewrite the lang segment in place; replace so Back skips the
         // language flip.
-        if (lang && perspectiveId) {
+        if (perspectiveId === "search") {
+            navigate(`/${next}/search`, route.params, { replace: true });
+        } else if (lang && perspectiveId) {
             const path = rowId
                 ? `/${next}/${perspectiveId}/${rowId}/${view}`
                 : `/${next}/${perspectiveId}/${view}`;
@@ -61,7 +70,13 @@ export function App({ perspectives, store, defaultLang, languages = null }) {
         }
     };
 
-    const layoutProps = { lang: effectiveLang, languages, onLangChange };
+    const searchEnabled = perspectives.some(p => store.getFtsInfo(p.table));
+    const layoutProps = {
+        lang: effectiveLang, languages, onLangChange,
+        search: searchEnabled
+            ? { lang: effectiveLang, value: perspectiveId === "search" ? (route.params.q || "") : "" }
+            : null,
+    };
 
     // Legacy URL redirect: /{perspective} or /{perspective}/{id}.
     // Replace (not push) so the Back button doesn't bounce off the
@@ -74,6 +89,18 @@ export function App({ perspectives, store, defaultLang, languages = null }) {
             : `/${effectiveLang}/${perspectiveId}/${effectiveView}`;
         setTimeout(() => navigate(newPath, undefined, { replace: true }), 0);
         // Fall through to render with resolved values
+    }
+
+    // Global search results: /:lang/search?q=... ("search" is a reserved
+    // segment — see parseLocation).
+    if (perspectiveId === "search") {
+        return h(Layout, { ...layoutProps, crumbs: ["Search"] },
+            h(SearchView, {
+                perspectives, store,
+                lang: effectiveLang,
+                query: route.params.q || "",
+            }),
+        );
     }
 
     // Detail view: /:lang/:perspective/:id/:view

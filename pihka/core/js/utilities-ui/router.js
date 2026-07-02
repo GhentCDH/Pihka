@@ -48,6 +48,7 @@ function currentHash() {
  * New patterns:
  *   #/:lang/:perspective/:view          → list view
  *   #/:lang/:perspective/:id/:view      → detail view
+ *   #/:lang/search?q=...                → global search results (reserved)
  *
  * Legacy patterns (redirected on first render):
  *   #/:perspective                       → #/{defaultLang}/:perspective/table
@@ -68,6 +69,12 @@ function parseLocation() {
     // Legacy: /:perspective (1 segment, not a lang code)
     if (parts.length === 1) {
         return { lang: null, perspective: parts[0], id: null, view: null, params, legacy: true };
+    }
+
+    // Reserved: /:lang/search → global search results page. Must precede
+    // the legacy branch, which would read it as /:perspective/:id.
+    if (parts.length === 2 && parts[1] === "search") {
+        return { lang: parts[0], perspective: "search", id: null, view: null, params };
     }
 
     // Legacy: /:perspective/:id (2 segments, second is not a valid view)

@@ -3,9 +3,16 @@ import { useState, useEffect, useRef } from "preact/hooks";
 
 const DEBOUNCE_MS = 300;
 
-const SYNTAX_HELP =
-    'word1 word2 = both · word1 OR word2 = either · "exact phrase" · '
-    + "pre* = prefix · column:word · NOT word · NEAR(a b, 5)";
+// Trigram matches substrings anywhere, so prefix*/NEAR syntax is pointless
+// there; word-token (unicode61) mode supports the full FTS5 query syntax.
+const SYNTAX_HELP = {
+    trigram:
+        'matches anywhere in the text (min. 3 characters) · '
+        + 'word1 word2 = both · "exact phrase" · NOT word',
+    default:
+        'word1 word2 = both · word1 OR word2 = either · "exact phrase" · '
+        + "pre* = prefix · column:word · NOT word · NEAR(a b, 5)",
+};
 
 /**
  * Free-text search input backed by SQLite FTS5. Filters live while typing
@@ -18,8 +25,10 @@ const SYNTAX_HELP =
  *                   immediately on Enter or clear
  *   error         - optional error message from the FTS engine
  *   available     - false when the current table has no FTS index
+ *   mode          - FTS tokenizer mode ("trigram" | "unicode61"); picks the
+ *                   syntax help tooltip
  */
-export default function FtsSearchInput({ value, onSubmit, error, available }) {
+export default function FtsSearchInput({ value, onSubmit, error, available, mode }) {
     const [draft, setDraft] = useState(value || "");
     const timerRef = useRef(null);
     const cancelPending = () => {
@@ -68,7 +77,7 @@ export default function FtsSearchInput({ value, onSubmit, error, available }) {
             h("span", {
                 class: "fts-search-box",
                 ...(available && {
-                    "data-tooltip": SYNTAX_HELP,
+                    "data-tooltip": SYNTAX_HELP[mode] || SYNTAX_HELP.default,
                     "data-placement": "bottom",
                 }),
             },

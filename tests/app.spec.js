@@ -74,6 +74,67 @@ test("search filters reactively on input", async ({ page }) => {
   await expect(page.locator(".faceted-count")).toContainText("of 1743");
 });
 
+test("trigram search matches mid-word fragments", async ({ page }) => {
+  await gotoRoute(page, "/en/works/table");
+  await expect(page.locator(".faceted-count")).toContainText("of 1743");
+  // "ightho" is not a word — only trigram substring matching finds "Lighthouse"
+  await page.locator(".fts-search-input").fill("ightho");
+  await expect(page).toHaveURL(/q=ightho/);
+  await expect(page.locator(".faceted-count")).toContainText("of 1");
+  await expect(page.locator("tbody")).toContainText("To the Lighthouse");
+});
+
+test("searches shorter than 3 characters leave all rows in place", async ({ page }) => {
+  await gotoRoute(page, "/en/works/table");
+  await page.locator(".fts-search-input").fill("lo");
+  await expect(page).toHaveURL(/q=lo/);
+  // Too short for a trigram — treated as "no search yet", not zero results
+  await expect(page.locator(".faceted-count")).toContainText("of 1743");
+});
+
+test("global search from the header shows grouped results", async ({ page }) => {
+  await gotoRoute(page, "/");
+  const box = page.locator(".global-search input");
+  await expect(box).toBeVisible();
+  await box.fill("novel");
+  await box.press("Enter");
+  await expect(page).toHaveURL(/\/en\/search\?q=novel/);
+  await expect(page.locator(".search-results-summary")).toContainText("in 2 of 3 searchable tables");
+  // One section per matching entity, capped at 5 rows each
+  const groups = page.locator(".search-results-group");
+  await expect(groups).toHaveCount(2);
+  await expect(groups.filter({ hasText: "Categories" }).locator("tbody tr")).toHaveCount(1);
+  await expect(groups.filter({ hasText: "Works" }).locator("tbody tr")).toHaveCount(5);
+  // "View all" jumps to the filtered per-table list view
+  await groups.filter({ hasText: "Works" }).locator(".search-results-more").click();
+  await expect(page).toHaveURL(/works\/table\?q=novel/);
+  await expect(page.locator(".faceted-count")).not.toContainText("of 1743");
+});
+
+test("punctuation in a search is matched literally, not a syntax error", async ({ page }) => {
+  await gotoRoute(page, "/en/works/table");
+  // "2014." is invalid FTS5 syntax; the literal-quoted retry matches the
+  // descriptions ending in "published in 2014."
+  await page.locator(".fts-search-input").fill("2014.");
+  await expect(page).toHaveURL(/q=2014/);
+  await expect(page.locator(".fts-error")).toHaveCount(0);
+  await expect(page.locator(".faceted-count")).not.toContainText("of 1743");
+  await expect(page.locator("tbody tr").first()).toBeVisible();
+});
+
+test("advanced FTS5 syntax still reaches the engine unescaped", async ({ page }) => {
+  await gotoRoute(page, "/en/search?q=lighthouse OR woolf");
+  // OR across tables: matches works ("To the Lighthouse") and authors ("Virginia Woolf")
+  await expect(page.locator(".search-results-group")).toHaveCount(2);
+  await expect(page.locator("main")).not.toContainText("Invalid search query");
+});
+
+test("global search rejects queries under 3 characters", async ({ page }) => {
+  await gotoRoute(page, "/en/search?q=lo");
+  await expect(page.locator("main")).toContainText("at least 3 characters");
+  await expect(page.locator(".search-results-group")).toHaveCount(0);
+});
+
 test("page size preference persists across navigation", async ({ page }) => {
   await gotoRoute(page, "/en/works/table");
   await page.locator(".faceted-pagesize").selectOption("50");

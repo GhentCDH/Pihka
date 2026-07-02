@@ -31,7 +31,8 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
         defaultPageSize, defaultSort, facets: p.facets, perspectiveId: p.id,
     });
 
-    const searchAvailable = !!store.getFtsInfo(p.table);
+    const ftsInfo = store.getFtsInfo(p.table);
+    const searchAvailable = !!ftsInfo;
 
     const facetMeta = useMemo(() => {
         if (!p.facets) return null;
@@ -79,6 +80,7 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
             search,
             searchError,
             searchAvailable,
+            searchMode: ftsInfo?.mode,
             actions: viewActions,
         }),
 

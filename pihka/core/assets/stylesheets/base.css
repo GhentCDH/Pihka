@@ -81,6 +81,47 @@
   color: var(--text-muted);
 }
 
+/* Global search box in the header: compact, no Pico full-width/margins */
+.global-search {
+  display: flex;
+  align-items: center;
+  margin: 0;
+}
+
+.global-search input[type="search"] {
+  width: 13rem;
+  max-width: 40vw;
+  margin-bottom: 0;
+  padding: 0.2rem 0.6rem 0.2rem 2rem; /* room for Pico's magnifier icon */
+  background-position: center left 0.6rem;
+  height: auto;
+  font-size: 0.85rem;
+}
+
+/* Search results page: one section per matching table */
+.search-results-summary {
+  color: var(--text-muted);
+}
+
+.search-results-group {
+  margin-bottom: 2rem;
+}
+
+.search-results-group h3 {
+  margin-bottom: 0.5rem;
+}
+
+.search-results-group h3 small {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.search-results-more {
+  display: inline-block;
+  margin-top: 0.25rem;
+  font-size: 0.9em;
+}
+
 #app > main {
   padding-block: 0.75rem 1.5rem;
 }
