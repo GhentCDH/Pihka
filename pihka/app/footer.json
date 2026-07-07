@@ -1,0 +1,13 @@
+{
+    "credits": {
+        "en": "<p><a href=\"https://www.ghentcdh.ugent.be\" target=\"_blank\" rel=\"noopener noreferrer\">Ghent Centre for Digital Humanities</a></p>",
+        "nl": "<p><a href=\"https://www.ghentcdh.ugent.be\" target=\"_blank\" rel=\"noopener noreferrer\">Ghent Centre for Digital Humanities</a></p>"
+    },
+    "links": [
+        { "label": { "en": "Contact", "nl": "Contact" }, "href": "mailto:ghentcdh@ugent.be" }
+    ],
+    "logos": [
+        { "src": "core/assets/logo/ghentcdh_logo_blue_text_transparent_bg_square.svg", "alt": "Ghent Centre for Digital Humanities", "href": "https://www.ghentcdh.ugent.be" },
+        { "src": "core/assets/logo/pihka.svg", "alt": "Pihka" }
+    ]
+}

@@ -66,6 +66,39 @@
 
 /* 3. Layout: slim header, full-width content */
 
+/* Full-height column: header and footer take their natural size, main
+   grows to fill the rest so the footer sits at the bottom of the viewport
+   even on tall screens and short pages. */
+html, body {
+  height: 100%;
+}
+#app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+#app > main {
+  flex: 1 1 auto;
+  /* Let flex children (e.g. a full-height viewer) size against main. */
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Detail view fills main as a flex column so a full-height view (e.g. the
+   IIIF viewer) can grow into exactly the space left below the toggles —
+   no magic offsets, no scrollbar. When related sections follow, the page
+   simply scrolls as normal content. */
+#app > main > .detail-view {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+#app > main > .detail-view > .view-toggles {
+  flex: 0 0 auto;
+}
+
 #app > header {
   border-bottom: 1px solid var(--border);
   --pico-nav-element-spacing-vertical: 0.3rem;
@@ -79,6 +112,76 @@
 
 #app > header .app-crumb {
   color: var(--text-muted);
+}
+
+/* Top-nav menu links (About, Instructions, …) from menu.json */
+#app > header .app-menu-item a {
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+#app > header .app-menu-item a:hover {
+  text-decoration: underline;
+}
+
+/* Site footer: a short band — credits + links | logos, laid out with
+   Pico's .grid (two columns, collapsing to one below 768px). */
+.site-footer {
+  border-top: 1px solid var(--border);
+  margin-top: 1.5rem;
+  padding-top: 0.75rem;
+  padding-bottom: 0.75rem;
+  color: var(--text-muted);
+  background: var(--bg-subtle);
+  --pico-grid-column-gap: 1.5rem;
+}
+.site-footer .grid {
+  align-items: center;
+}
+.site-footer small {
+  color: var(--text-muted);
+}
+.site-footer small p {
+  margin: 0;
+}
+.site-footer .footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin-top: 0.25rem;
+  font-size: 0.8rem;
+}
+.site-footer .footer-logos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1.5rem;
+}
+.site-footer .footer-logos img {
+  height: 2.25rem;
+  width: auto;
+  opacity: 0.85;
+}
+.site-footer .footer-logos a:hover img {
+  opacity: 1;
+}
+/* When stacked (small screens) the logos align left with the text. */
+@media (max-width: 768px) {
+  .site-footer .footer-logos {
+    justify-content: flex-start;
+    margin-top: 0.5rem;
+  }
+}
+
+/* Static menu pages (About, Instructions, …) */
+.static-page {
+  max-width: 46rem;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+.static-page h1 {
+  margin-top: 0.5rem;
 }
 
 /* Global search box in the header: compact, no Pico full-width/margins */
@@ -322,6 +425,39 @@ tbody tr:hover {
 
 .faceted-content {
   min-width: 0; /* prevent grid blowout */
+}
+
+/* When the active list view is the (non-paginated) map, make the whole
+   faceted layout fill main's height as a flex chain so the map uses
+   exactly the space left below the toolbar — no fixed offsets, no page
+   scrollbar. Table/cards views are unaffected and keep their natural,
+   scrollable height. */
+.faceted-view:has(.map-list-section) {
+  flex: 1 1 auto;
+  min-height: 0;
+  align-items: stretch;
+}
+.faceted-view:has(.map-list-section) .faceted-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.faceted-view:has(.map-list-section) .faceted-toolbar {
+  flex: 0 0 auto;
+}
+/* The wrapper <section id={table}> between .faceted-content and the map
+   section must also grow and pass the height down. */
+.faceted-view:has(.map-list-section) .faceted-content > section {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.faceted-view:has(.map-list-section) .map-list-section {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .faceted-content table {

@@ -10,6 +10,7 @@ import { DataSource } from "./utilities-data/datasource.js";
 import { DataStore } from "./utilities-data/data-store.js";
 import { loadPerspectives } from "./utilities-ui/perspectives.js";
 import { loadConfig } from "./utilities-data/config.js";
+import { loadFooter, loadMenu } from "./utilities-data/site-content.js";
 import { runEnrichment } from "./utilities-data/enrichment/index.js";
 import { applyTableConfig } from "./utilities-data/table-config.js";
 import { createPerspectiveViews } from "./utilities-data/perspective-views.js";
@@ -86,12 +87,18 @@ async function main() {
         const store = new DataStore(ds, meta);
         const { perspectives, defaultLanguage } = await loadPerspectives(meta);
 
+        // Descriptive chrome (footer credits/provenance/logos + nav menu
+        // pages) — fail-soft, so a missing or broken file never blocks boot.
+        const [footer, menu] = await Promise.all([loadFooter(), loadMenu()]);
+
         render(
             h(Router, null, h(App, {
                 perspectives,
                 store,
                 defaultLang: defaultLanguage,
                 languages: Array.isArray(config.languages) ? config.languages : null,
+                menu,
+                footer,
             })),
             app,
         );

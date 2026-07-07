@@ -7,7 +7,7 @@ export default [
             "node_modules/**",
             "pihka/core/vendor/**",
             "pihka/extensions/*/vendor/**",
-            "pihka/core/stylesheets/**",
+            "pihka/core/assets/stylesheets/pico.min.css",
             "test-results/**",
             "playwright-report/**",
         ],

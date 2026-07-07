@@ -439,3 +439,80 @@ test("fault: hanging extension load times out and boot continues", async ({ page
   await page.goto("/");
   await expectCoreWorks(page);
 });
+
+// --- Site footer and menu pages -------------------------------------------
+
+test("footer: app override renders credits, links, logos on every page", async ({ page }) => {
+  await gotoRoute(page, "/en/authors/table");
+  const footer = page.locator("#app > footer");
+  await expect(footer).toBeVisible();
+  // app/footer.json override wins over the core default
+  await expect(footer).toContainText("Ghent Centre for Digital Humanities");
+  await expect(footer.locator(".footer-logos img")).toHaveCount(2);
+  await expect(footer.locator(".footer-links a")).toHaveAttribute("href", "mailto:ghentcdh@ugent.be");
+  // provenance is intentionally not shown in the footer
+  await expect(footer).not.toContainText("provenance");
+  await expect(footer.locator(".footer-provenance")).toHaveCount(0);
+  // footer is present on a detail page too
+  await gotoRoute(page, "/en/authors/1/table");
+  await expect(page.locator("#app > footer")).toContainText("Ghent Centre for Digital Humanities");
+});
+
+test("menu: header links navigate to static pages", async ({ page }) => {
+  await gotoRoute(page, "/en/authors/table");
+  const menu = page.locator(".app-menu-item a");
+  await expect(menu.filter({ hasText: "About" })).toHaveAttribute("href", "#/en/page/about");
+  await menu.filter({ hasText: "About" }).click();
+  await expect(page).toHaveURL(/\/en\/page\/about/);
+  await expect(page.locator(".static-page h1")).toContainText("About this dataset");
+});
+
+test("menu: all three entry forms — asset src, inline html, external link", async ({ page }) => {
+  // Inject a menu exercising every content form, independent of what the
+  // sample app happens to ship, so all code paths stay covered.
+  await page.route("**/app/menu.json", r => r.fulfill({
+    contentType: "application/json",
+    body: JSON.stringify([
+      { id: "about", label: { en: "About" }, src: { en: "app/pages/about.en.html" } },
+      { id: "dataset", label: { en: "Dataset" }, html: { en: "<h1>The dataset</h1><p>Inline.</p>" } },
+      { label: { en: "External" }, href: "https://example.com" },
+    ]),
+  }));
+  await gotoRoute(page, "/en/authors/table");
+  const menu = page.locator(".app-menu-item a");
+  // external link opens in a new tab
+  await expect(menu.filter({ hasText: "External" })).toHaveAttribute("target", "_blank");
+  // asset-src page
+  await menu.filter({ hasText: "About" }).click();
+  await expect(page.locator(".static-page h1")).toContainText("About this dataset");
+  // inline-html page — switching pages must not show stale content
+  await menu.filter({ hasText: "Dataset" }).click();
+  await expect(page.locator(".static-page h1")).toContainText("The dataset");
+});
+
+test("menu: language switch rewrites a page route and shows the other language", async ({ page }) => {
+  await gotoRoute(page, "/en/page/about");
+  await expect(page.locator(".static-page")).toContainText("demonstration deployment");
+  await page.locator("header button", { hasText: /^(en|EN|🌐)/ }).first().click();
+  await expect(page).toHaveURL(/\/nl\/page\/about/);
+  await expect(page.locator(".static-page")).toContainText("demonstratie van Pihka");
+});
+
+test("page: unknown page id renders a not-found message", async ({ page }) => {
+  await gotoRoute(page, "/en/page/does-not-exist");
+  await expect(page.locator("main")).toContainText("Page not found");
+  // core chrome still fine
+  await expect(page.locator("#app > footer")).toBeVisible();
+});
+
+test("fault: broken footer.json + menu.json leave core working", async ({ page }) => {
+  for (const p of ["**/app/footer.json", "**/core/assets/footer.json",
+                   "**/app/menu.json", "**/core/assets/menu.json"]) {
+    await page.route(p, r => r.fulfill({ contentType: "application/json", body: "{ not json" }));
+  }
+  await page.goto("/");
+  await expectCoreWorks(page);
+  // no footer, no menu links, but the app runs
+  await expect(page.locator("#app > footer")).toHaveCount(0);
+  await expect(page.locator(".app-menu-item")).toHaveCount(0);
+});

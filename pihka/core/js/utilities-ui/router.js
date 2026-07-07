@@ -49,6 +49,7 @@ function currentHash() {
  *   #/:lang/:perspective/:view          → list view
  *   #/:lang/:perspective/:id/:view      → detail view
  *   #/:lang/search?q=...                → global search results (reserved)
+ *   #/:lang/page/:id                     → static menu page (reserved)
  *
  * Legacy patterns (redirected on first render):
  *   #/:perspective                       → #/{defaultLang}/:perspective/table
@@ -75,6 +76,12 @@ function parseLocation() {
     // the legacy branch, which would read it as /:perspective/:id.
     if (parts.length === 2 && parts[1] === "search") {
         return { lang: parts[0], perspective: "search", id: null, view: null, params };
+    }
+
+    // Reserved: /:lang/page/:id → a static menu page (About, Instructions,
+    // …). Must precede the generic 3-segment view branch below.
+    if (parts.length === 3 && parts[1] === "page") {
+        return { lang: parts[0], perspective: "page", id: parts[2], view: null, params };
     }
 
     // Legacy: /:perspective/:id (2 segments, second is not a valid view)

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="132" height="32" viewBox="0 0 132 32" role="img" aria-label="Pihka">
+  <g fill="currentColor">
+    <ellipse cx="16" cy="7" rx="10" ry="4" fill="none" stroke="currentColor" stroke-width="1.6"/>
+    <path d="M6 7v10c0 2.2 4.5 4 10 4s10-1.8 10-4V7" fill="none" stroke="currentColor" stroke-width="1.6"/>
+    <path d="M6 12c0 2.2 4.5 4 10 4s10-1.8 10-4" fill="none" stroke="currentColor" stroke-width="1.6"/>
+  </g>
+  <text x="34" y="22" font-family="system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="18" font-weight="600" fill="currentColor">Pihka</text>
+</svg>

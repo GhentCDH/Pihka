@@ -3,6 +3,8 @@ import DetailView from "./detail-view.js";
 import PerspectiveList from "./perspective-list.js";
 import PerspectiveView from "./perspective-view.js";
 import SearchView from "./search-view.js";
+import StaticPage from "./static-page.js";
+import SiteFooter from "./site-footer.js";
 import GlobalSearchInput from "./global-search-input.js";
 import ThemeToggle from "./theme-toggle.js";
 import LangSwitcher from "./lang-switcher.js";
@@ -11,10 +13,24 @@ import { localize } from "../utilities-data/table-config.js";
 import { usePref, setPref } from "../utilities-ui/prefs.js";
 import { preferredView } from "../utilities-ui/perspectives.js";
 
-// Slim app header: brand, breadcrumb, global search, language switcher,
-// theme toggle. The search box only renders when some table has an FTS
-// index (search: { lang, value } or null).
-function Header({ crumbs, lang, languages, onLangChange, search }) {
+// Render one nav menu entry: an external link (href) or a link to a
+// static page route (/:lang/page/:id).
+function MenuLink({ item, lang }) {
+    const label = localize(item.label, lang, item.id || item.href);
+    if (typeof item.href === "string") {
+        return h("a", {
+            href: item.href,
+            ...(/^https?:\/\//i.test(item.href) ? { target: "_blank", rel: "noopener noreferrer" } : {}),
+        }, label);
+    }
+    return h("a", { href: buildPath(`/${lang}/page/${item.id}`) }, label);
+}
+
+// Slim app header: brand, breadcrumb, menu links, global search, language
+// switcher, theme toggle. The search box only renders when some table has
+// an FTS index (search: { lang, value } or null). `menu` is the parsed
+// menu.json (may be empty).
+function Header({ crumbs, lang, languages, onLangChange, search, menu = [] }) {
     return h("header", { class: "container-fluid" },
         h("nav", null,
             h("ul", null,
@@ -25,6 +41,9 @@ function Header({ crumbs, lang, languages, onLangChange, search }) {
                 ]),
             ),
             h("ul", null,
+                ...menu.map((item, i) => h("li", { key: `menu-${i}`, class: "app-menu-item" },
+                    h(MenuLink, { item, lang }),
+                )),
                 search && h("li", null, h(GlobalSearchInput, {
                     lang: search.lang, value: search.value, key: search.value,
                 })),
@@ -35,10 +54,11 @@ function Header({ crumbs, lang, languages, onLangChange, search }) {
     );
 }
 
-function Layout({ crumbs = null, lang = null, languages = null, onLangChange = null, search = null, children = null }) {
+function Layout({ crumbs = null, lang = null, languages = null, onLangChange = null, search = null, menu = [], footer = null, children = null }) {
     return h(Fragment, null,
-        h(Header, { crumbs, lang, languages, onLangChange, search }),
+        h(Header, { crumbs, lang, languages, onLangChange, search, menu }),
         h("main", { class: "container-fluid" }, children),
+        h(SiteFooter, { footer, lang }),
     );
 }
 
@@ -46,7 +66,7 @@ function Layout({ crumbs = null, lang = null, languages = null, onLangChange = n
  * Root route dispatcher: renders the home grid, a perspective's list view,
  * or a row's detail view based on the current route.
  */
-export function App({ perspectives, store, defaultLang, languages = null }) {
+export function App({ perspectives, store, defaultLang, languages = null, menu = [], footer = null }) {
     const route = useRouter();
     const { lang, perspective: perspectiveId, id: rowId, view } = route;
 
@@ -62,6 +82,8 @@ export function App({ perspectives, store, defaultLang, languages = null }) {
         // language flip.
         if (perspectiveId === "search") {
             navigate(`/${next}/search`, route.params, { replace: true });
+        } else if (perspectiveId === "page" && rowId) {
+            navigate(`/${next}/page/${rowId}`, route.params, { replace: true });
         } else if (lang && perspectiveId) {
             const path = rowId
                 ? `/${next}/${perspectiveId}/${rowId}/${view}`
@@ -72,7 +94,7 @@ export function App({ perspectives, store, defaultLang, languages = null }) {
 
     const searchEnabled = perspectives.some(p => store.getFtsInfo(p.table));
     const layoutProps = {
-        lang: effectiveLang, languages, onLangChange,
+        lang: effectiveLang, languages, onLangChange, menu, footer,
         search: searchEnabled
             ? { lang: effectiveLang, value: perspectiveId === "search" ? (route.params.q || "") : "" }
             : null,
@@ -100,6 +122,17 @@ export function App({ perspectives, store, defaultLang, languages = null }) {
                 lang: effectiveLang,
                 query: route.params.q || "",
             }),
+        );
+    }
+
+    // Static menu page: /:lang/page/:id ("page" is a reserved segment).
+    if (perspectiveId === "page") {
+        const item = menu.find(m => m.id === rowId);
+        if (!item) {
+            return h(Layout, layoutProps, h("p", null, "Page not found."));
+        }
+        return h(Layout, { ...layoutProps, crumbs: [localize(item.label, effectiveLang, rowId)] },
+            h(StaticPage, { item, lang: effectiveLang }),
         );
     }
 

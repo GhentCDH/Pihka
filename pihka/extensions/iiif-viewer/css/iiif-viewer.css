@@ -1,8 +1,16 @@
-/* TIFY needs a container with an explicit height. */
+/* TIFY needs a container with a definite height. Inside the detail-view
+   flex column it grows to fill exactly the space left below the toggles
+   (see #app > main > .detail-view), so the viewer uses the available
+   height without overflowing into a page scrollbar. A min-height keeps it
+   usable if the window is very short. */
 .iiif-detail-view {
-    height: min(75vh, 50rem);
+    flex: 1 1 auto;
+    min-height: 24rem;
     border-radius: 6px;
     overflow: hidden;
+    /* Flex container so TIFY's own root fills the resolved height. */
+    display: flex;
+    flex-direction: column;
 
     /* Map TIFY's palette onto the app's black/white Pico theme. TIFY
        derives its greys from these via light-dark(), so following the
@@ -14,6 +22,13 @@
     --tify-link-color: var(--pico-primary);
     --tify-link-hover-color: var(--pico-primary-hover);
     --tify-border-radius: var(--pico-border-radius);
+}
+
+/* TIFY's own root must fill the container so its viewer canvas uses the
+   full available height (TIFY sizes its OpenSeadragon canvas to this). */
+.iiif-detail-view > .tify {
+    flex: 1 1 auto;
+    min-height: 0;
 }
 
 /* TIFY defaults to `color-scheme: light dark` (OS preference); pin it to

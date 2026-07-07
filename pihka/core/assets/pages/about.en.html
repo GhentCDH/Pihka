@@ -1,0 +1,27 @@
+<h1>About this site</h1>
+
+<p>
+    This website is built with <strong>Pihka</strong>, a zero-backend platform
+    for publishing research datasets. The entire dataset lives in a single
+    SQLite file that is downloaded once and queried directly in your browser
+    using WebAssembly — there is no database server, no API, and nothing is
+    sent back to a host as you browse.
+</p>
+
+<p>
+    Because everything is a set of static files, the site can be hosted
+    anywhere — a university web space, GitHub Pages, an institutional
+    repository, or a preservation archive — and will keep working for as long
+    as those files remain reachable. That long-term, low-maintenance
+    durability is the point: published research data should outlive the
+    project that produced it.
+</p>
+
+<h2>Customising this page</h2>
+
+<p>
+    This is the default About page shipped with Pihka. A dataset can replace
+    it — and add its own menu entries — by providing an
+    <code>app/menu.json</code> that points to its own HTML pages. See the
+    project documentation for the footer and menu configuration.
+</p>

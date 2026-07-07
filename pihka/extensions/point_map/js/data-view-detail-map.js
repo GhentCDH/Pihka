@@ -28,6 +28,9 @@ export default function DataViewDetailMap({ tableName, columns, row, fkResolved,
         );
     }
 
+    // Fill the detail-view flex column (see #app > main > .detail-view) so
+    // the map uses exactly the space left below the view toggles, without
+    // overshooting into a page scrollbar.
     return h(MapView, {
         points: [point],
         columns,
@@ -35,6 +38,6 @@ export default function DataViewDetailMap({ tableName, columns, row, fkResolved,
         tableName,
         lang,
         perspectiveId,
-        height: "calc(100vh - 12rem)",
+        fill: true,
     });
 }

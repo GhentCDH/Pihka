@@ -64,6 +64,7 @@ export default function MapView({
     lang,
     perspectiveId,
     height = "480px",
+    fill = false,
     popupComponent: PopupComponent = MapPopup,
 }) {
     const containerRef = useRef(null);
@@ -100,6 +101,12 @@ export default function MapView({
                 });
                 resizeObserverRef.current.observe(containerRef.current);
             }
+            // Belt-and-braces: in a flex-fill container MapLibre can render
+            // its first frame before the flex height resolves and then never
+            // get a size change to observe. Force a resize once loaded.
+            map.on("load", () => {
+                if (mapRef.current) mapRef.current.resize();
+            });
 
             map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
 
@@ -149,9 +156,15 @@ export default function MapView({
         return h("p", { style: "color:var(--text-muted)" }, "No location data to display.");
     }
 
+    // `fill` mode: grow to fill a flex-column parent (the map's
+    // ResizeObserver calls map.resize() once layout settles). Otherwise use
+    // the explicit `height`. Either way MapLibre needs a definite box.
+    const sizing = fill
+        ? "flex:1 1 auto;min-height:0"
+        : `height:${height}`;
     return h("div", {
         ref: containerRef,
-        style: `width:100%;height:${height};border-radius:var(--border-radius,4px);overflow:hidden`,
+        style: `width:100%;${sizing};border-radius:var(--border-radius,4px);overflow:hidden`,
     });
 }
 

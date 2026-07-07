@@ -41,7 +41,7 @@ export default function DetailView({ tableName, columns, row, fkResolved, relate
         navigate(`/${effectiveLang}/${perspectiveId}/${rowId}/${newView}`);
     };
 
-    return h("div", null,
+    return h("div", { class: "detail-view" },
         // View toggles
         availableViews.length > 1 && h("div", { class: "view-toggles", style: "margin:.25rem 0 .75rem" },
             availableViews.map(d =>

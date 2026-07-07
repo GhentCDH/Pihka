@@ -1,0 +1,13 @@
+{
+    "provenance": {
+        "en": "<p>This site publishes a research dataset as a self-contained, static SQLite website — no server, no tracking. All queries run in your browser.</p>",
+        "nl": "<p>Deze site publiceert een onderzoeksdataset als een op zichzelf staande, statische SQLite-website — geen server, geen tracking. Alle zoekopdrachten draaien in je browser.</p>"
+    },
+    "credits": {
+        "en": "<p>Published with <a href=\"https://github.com\" target=\"_blank\" rel=\"noopener noreferrer\">Pihka</a>, a sustainable data-publishing platform for digital humanities research.</p>",
+        "nl": "<p>Gepubliceerd met <a href=\"https://github.com\" target=\"_blank\" rel=\"noopener noreferrer\">Pihka</a>, een duurzaam dataplatform voor digital-humanities-onderzoek.</p>"
+    },
+    "logos": [
+        { "src": "core/assets/logo/pihka.svg", "alt": "Pihka" }
+    ]
+}
