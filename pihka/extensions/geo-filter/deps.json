@@ -1,0 +1,5 @@
+{
+    "maplibre-gl": { "version": "^5.19.0", "include": ["LICENSE.txt"] },
+    "pmtiles": { "version": "^4.3.0", "include": ["README.md"] },
+    "fflate": { "version": "^0.8.2", "include": ["LICENSE"] }
+}

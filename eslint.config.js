@@ -6,6 +6,7 @@ export default [
         ignores: [
             "node_modules/**",
             "pihka/core/vendor/**",
+            "pihka/extensions/*/vendor/**",
             "pihka/core/stylesheets/**",
             "test-results/**",
             "playwright-report/**",

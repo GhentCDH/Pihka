@@ -2,6 +2,7 @@ import { h } from "preact";
 import { useState } from "preact/hooks";
 import { isImagePath } from "./render-helpers.js";
 import { buildPath } from "../../utilities-ui/router.js";
+import { getCellRenderer } from "../../utilities-ui/cell-renderers.js";
 import { assetUrl } from "../../utilities-data/paths.js";
 import { formatValue } from "../../utilities-data/table-config.js";
 
@@ -15,20 +16,25 @@ const LIST_LIMIT = 3;
  * Priority:
  *   1. FK columns: resolved display name + 🔍 link to the referenced row
  *      (link suppressed when the referenced table is hidden)
- *   2. Configured display type: url → external link, asset → image,
+ *   2. Registered cell renderer for the column's type (see
+ *      utilities-ui/cell-renderers.js — extensions plug in here)
+ *   3. Configured display type: url → external link, asset → image,
  *      number/date → Intl-formatted text
- *   3. Image-extension heuristic (for unconfigured apps)
- *   4. Plain text
+ *   4. Image-extension heuristic (for unconfigured apps)
+ *   5. Plain text
  *
  * Props:
- *   col         - column metadata (references, displayType, format, ...)
- *   value       - raw cell value
- *   fkResolved  - FK display maps for the row's table
- *   lang        - current language (Intl locale + not used for FK links,
- *                 which ride the legacy redirect)
- *   imageHeight - CSS max-height for image rendering (context-dependent)
+ *   col           - column metadata (references, displayType, format, ...)
+ *   value         - raw cell value
+ *   fkResolved    - FK display maps for the row's table
+ *   lang          - current language (Intl locale + not used for FK links,
+ *                   which ride the legacy redirect)
+ *   imageHeight   - CSS max-height for image rendering (context-dependent)
+ *   row           - (optional) full row object, for registered renderers
+ *   columns       - (optional) row's column schema, for registered renderers
+ *   perspectiveId - (optional) current perspective, for registered renderers
  */
-export default function CellValue({ col, value, fkResolved, lang, imageHeight = "4rem" }) {
+export default function CellValue({ col, value, fkResolved, lang, imageHeight = "4rem", row = null, columns = null, perspectiveId = null }) {
     const raw = value ?? "";
 
     // Foreign key → resolved display name + link to referenced entity
@@ -54,6 +60,13 @@ export default function CellValue({ col, value, fkResolved, lang, imageHeight = 
     if (col.linkTo) {
         const href = lang ? `/${lang}/${col.linkTo}/${raw}/table` : `/${col.linkTo}/${raw}`;
         return h("a", { href: buildPath(href) }, String(raw));
+    }
+
+    // Registered renderer for this column type; registering a builtin type
+    // name overrides the builtin rendering below.
+    const custom = getCellRenderer(col.displayType);
+    if (custom) {
+        return h(custom, { col, value: raw, row, columns, fkResolved, lang, perspectiveId, imageHeight });
     }
 
     if (col.displayType === "list") {

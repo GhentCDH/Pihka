@@ -1,73 +1,42 @@
 import { useMemo } from "preact/hooks";
 import { useRouter, updateParams } from "./router.js";
 import { usePref, setPref } from "./prefs.js";
+import { listFilterTypes, getFilterType, allReservedParams, preservedParams } from "../utilities-data/filter-registry.js";
 
 /**
  * Decode URL query params into filter/sort/page state.
  *
- * Param encoding:
+ * Core param encoding:
  *   sort=title            → sort by column ASC
  *   sort_dir=desc         → sort direction
  *   page=2                → page number (1-indexed in URL)
  *   pageSize=25           → rows per page
- *   {col}_min=100         → range filter min
- *   {col}_max=200         → range filter max
- *   {col}=1,3,7           → multi-select filter (comma-separated)
- *   bbox=w,s,e,n          → map viewport filter (minLon,minLat,maxLon,maxLat)
+ *
+ * Everything else is delegated to the registered filter types (see
+ * utilities-data/filter-registry.js): each type decodes the params it
+ * understands, e.g. {col}_min/{col}_max (range), {col}=1,3,7 (multi), or
+ * whatever params extension filter types reserve for themselves. Params
+ * reserved by a filter type never reach the generic decoders.
  */
+const CORE_PARAMS = new Set(["sort", "sort_dir", "page", "pageSize"]);
+
 function decodeParams(params, filterMeta, facets) {
     const filters = {};
-    const { rangeColumns, multiColumns, geoMeta } = filterMeta;
-
-    const rangeNames = new Set(rangeColumns.map(c => c.name));
-    const multiNames = new Set(multiColumns.map(c => c.name));
-    // Configured dropdown/checkbox facets filter on plain (non-FK) columns
-    // too — e.g. on perspective views, which have no FK metadata at all.
-    for (const facet of facets || []) {
-        if (facet.type === "dropdown" || facet.type === "checkbox") {
-            multiNames.add(facet.field);
+    const ctx = { filterMeta, facets };
+    const reserved = allReservedParams();
+    for (const def of listFilterTypes()) {
+        if (!def.decode) continue;
+        // Each type sees its own reserved params, but never the core
+        // params or those another type claimed.
+        const own = new Set(def.reservedParams);
+        const visible = {};
+        for (const [key, value] of Object.entries(params)) {
+            if (CORE_PARAMS.has(key)) continue;
+            if (reserved.has(key) && !own.has(key)) continue;
+            visible[key] = value;
         }
-    }
-
-    for (const [key, value] of Object.entries(params)) {
-        if (key === "sort" || key === "sort_dir" || key === "page" || key === "pageSize" || key === "q" || key === "bbox") continue;
-
-        // Range filter: {col}_min or {col}_max
-        const minMatch = key.match(/^(.+)_min$/);
-        if (minMatch && rangeNames.has(minMatch[1])) {
-            const col = minMatch[1];
-            if (!filters[col]) filters[col] = { type: "range", min: null, max: null };
-            filters[col].min = Number(value);
-            continue;
-        }
-        const maxMatch = key.match(/^(.+)_max$/);
-        if (maxMatch && rangeNames.has(maxMatch[1])) {
-            const col = maxMatch[1];
-            if (!filters[col]) filters[col] = { type: "range", min: null, max: null };
-            filters[col].max = Number(value);
-            continue;
-        }
-
-        // Multi-select filter: {col}=1,3,7
-        if (multiNames.has(key) && value) {
-            const values = value.split(",").map(v => {
-                const n = Number(v);
-                return Number.isFinite(n) ? n : v;
-            });
-            filters[key] = { type: "multi", selected: new Set(values) };
-        }
-    }
-
-    // Map viewport filter: only meaningful when the table has geo columns.
-    if (params.bbox && geoMeta) {
-        const [minLon, minLat, maxLon, maxLat] = params.bbox.split(",").map(Number);
-        if ([minLon, minLat, maxLon, maxLat].every(Number.isFinite)) {
-            filters._viewport = {
-                type: "bounds",
-                latCol: geoMeta.latCol, lonCol: geoMeta.lonCol,
-                minLat, maxLat, minLon, maxLon,
-            };
-        }
+        const contributed = def.decode(visible, ctx);
+        if (contributed && typeof contributed === "object") Object.assign(filters, contributed);
     }
 
     const sort = params.sort
@@ -84,22 +53,28 @@ function decodeParams(params, filterMeta, facets) {
 /**
  * Stable string key for a filter state object, usable as a useMemo
  * dependency (the decoded filters object is rebuilt every render, so
- * identity comparison would never hit).
+ * identity comparison would never hit). Derived from each filter's URL
+ * encoding, which every type keeps stable by contract.
  */
 export function serializeFilters(filters) {
     return Object.entries(filters)
         .sort(([a], [b]) => a.localeCompare(b))
-        .map(([col, f]) => {
-            if (f.type === "range") return `${col}:r:${f.min}:${f.max}`;
-            if (f.type === "bounds") return `${col}:b:${f.minLat}:${f.maxLat}:${f.minLon}:${f.maxLon}`;
-            return `${col}:m:${Array.from(f.selected).sort().join(",")}`;
+        .map(([key, f]) => {
+            try {
+                return `${key}:${JSON.stringify(getFilterType(f.type)?.encode?.(key, f) ?? null)}`;
+            } catch {
+                return `${key}:!error`;
+            }
         })
         .join("|");
 }
 
 // Params that are NOT filter encodings and must be preserved when a
-// filter toggles (sort, pagination, page size, full-text query).
-const PRESERVED_PARAMS = new Set(["sort", "sort_dir", "pageSize", "q"]);
+// filter toggles: sort/pagination plus params of filter types that mark
+// theirs preserved (e.g. the full-text query "q").
+function isPreservedParam(key) {
+    return key === "sort" || key === "sort_dir" || key === "pageSize" || preservedParams().has(key);
+}
 
 /**
  * Build an updates object that clears every URL param except the
@@ -109,28 +84,20 @@ const PRESERVED_PARAMS = new Set(["sort", "sort_dir", "pageSize", "q"]);
 function clearFilterParams(currentParams) {
     const updates = {};
     for (const key of Object.keys(currentParams)) {
-        if (!PRESERVED_PARAMS.has(key)) updates[key] = null;
+        if (!isPreservedParam(key)) updates[key] = null;
     }
     return updates;
 }
 
 /**
- * Encode filter state back into URL param updates.
+ * Encode filter state back into URL param updates, delegating each entry
+ * to its registered filter type.
  */
 function encodeFilters(filters) {
     const params = {};
-    for (const [col, filter] of Object.entries(filters)) {
-        if (filter.type === "range") {
-            params[`${col}_min`] = filter.min != null ? String(filter.min) : null;
-            params[`${col}_max`] = filter.max != null ? String(filter.max) : null;
-        } else if (filter.type === "multi" && filter.selected.size > 0) {
-            params[col] = Array.from(filter.selected).join(",");
-        } else if (filter.type === "bounds") {
-            // ~1m precision keeps URLs short and the filter key stable.
-            const round = (v) => String(Math.round(v * 1e5) / 1e5);
-            params.bbox = [filter.minLon, filter.minLat, filter.maxLon, filter.maxLat]
-                .map(round).join(",");
-        }
+    for (const [key, filter] of Object.entries(filters)) {
+        const patch = getFilterType(filter.type)?.encode?.(key, filter);
+        if (patch && typeof patch === "object") Object.assign(params, patch);
     }
     return params;
 }
@@ -204,21 +171,15 @@ export function useUrlState(store, table, { defaultPageSize = 25, defaultSort = 
         updateParams({ ...clearFilterParams(params), ...encodeFilters(newFilters), page: null });
     };
 
-    // bounds = { minLat, maxLat, minLon, maxLon } from the viewport facet,
-    // or null to clear. The facet knows nothing about columns or SQL; the
-    // geo column names are attached here from filterMeta.
-    const onBoundsChange = (bounds) => {
-        if (!filterMeta.geoMeta) return;
+    // Generic filter mutation for registered filter types (extensions):
+    // set or replace filters[key] with a typed filter object, or clear it
+    // with null. The object's `type` must name a registered filter type.
+    const onFilterChange = (key, filter) => {
         const newFilters = { ...filters };
-        if (!bounds) {
-            delete newFilters._viewport;
+        if (!filter) {
+            delete newFilters[key];
         } else {
-            newFilters._viewport = {
-                type: "bounds",
-                latCol: filterMeta.geoMeta.latCol,
-                lonCol: filterMeta.geoMeta.lonCol,
-                ...bounds,
-            };
+            newFilters[key] = filter;
         }
         updateParams({ ...clearFilterParams(params), ...encodeFilters(newFilters), page: null });
     };
@@ -257,7 +218,7 @@ export function useUrlState(store, table, { defaultPageSize = 25, defaultSort = 
             onSort,
             onRangeChange,
             onMultiChange,
-            onBoundsChange,
+            onFilterChange,
             onPageChange,
             onPageSizeChange,
             onSearchChange,

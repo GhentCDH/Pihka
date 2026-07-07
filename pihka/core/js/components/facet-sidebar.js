@@ -2,7 +2,7 @@ import { h, Fragment } from "preact";
 import { useState } from "preact/hooks";
 import RangeSelector from "./range-selector.js";
 import FtsSearchInput from "./fts-search-input.js";
-import MapBoundsFilter from "./map/map-bounds-filter.js";
+import { listFacetRenderers } from "../utilities-ui/facet-renderers.js";
 import { localize } from "../utilities-data/table-config.js";
 
 /**
@@ -53,16 +53,15 @@ export default function FacetSidebar({
             ? renderConfiguredFacets(facetMeta, filters, actions, lang)
             : renderAutoFacets(autoFilterMeta, filters, actions, lang),
 
-        // Location facet: rendered for any table with geo columns, on both
-        // the configured and auto paths.
-        autoFilterMeta?.geoMeta && h(Fragment, { key: "_viewport" },
-            divider("_viewport"),
-            h(MapBoundsFilter, {
-                geoMeta: autoFilterMeta.geoMeta,
-                activeBounds: filters._viewport ?? null,
-                onBoundsChange: actions.onBoundsChange,
-            }),
-        ),
+        // Registered facet renderers (extensions/app): rendered for any
+        // table they declare themselves available for, on both the
+        // configured and auto paths.
+        ...listFacetRenderers()
+            .filter(r => !r.availableFor || r.availableFor(autoFilterMeta))
+            .map(r => h(Fragment, { key: r.id },
+                divider(r.id),
+                h(r.component, { autoFilterMeta, filters, actions, lang }),
+            )),
     );
 }
 

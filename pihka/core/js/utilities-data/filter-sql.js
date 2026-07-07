@@ -1,14 +1,18 @@
+import { getFilterType } from "./filter-registry.js";
+
 /**
  * Build a WHERE clause from active filters.
  *
- * @param {Object} filters - Map of columnName → filter descriptor
- *   Range:  { type: "range", min: number|null, max: number|null }
- *   Multi:  { type: "multi", selected: Set<any> }
- *   Bounds: { type: "bounds", latCol, lonCol, minLat, maxLat, minLon, maxLon }
- *           (keyed under a reserved name like "_viewport"; the key itself is
- *           not a column — the lat/lon column names live inside the descriptor)
+ * Each filter object carries a `type` naming a registered filter type
+ * (see filter-registry.js); its `buildSql` produces the conditions.
+ * Filters of unregistered types are skipped — an extension filter's URL
+ * params are inert when that extension is not loaded.
+ *
+ * @param {Object} filters - Map of key → filter descriptor. The key is
+ *   usually a column name; types may use reserved keys (e.g. "_viewport")
+ *   with the real column names inside the descriptor.
  * @param {Object} [options]
- * @param {string|null} [options.exclude] - Column name to exclude from the WHERE clause.
+ * @param {string|null} [options.exclude] - Filter key to exclude.
  *   Used for facet counts: when computing counts for column X, exclude X's own filter
  *   so the user sees counts as if their selection on X weren't applied.
  * @returns {{ whereClause: string, bindParams: any[] }}
@@ -17,40 +21,20 @@ export function buildWhereClause(filters, { exclude = null } = {}) {
     const conditions = [];
     const params = [];
 
-    for (const [colName, filter] of Object.entries(filters)) {
-        if (exclude && colName === exclude) continue;
+    for (const [key, filter] of Object.entries(filters)) {
+        if (exclude && key === exclude) continue;
 
-        if (filter.type === "bounds") {
-            const qLat = `"${filter.latCol.replace(/"/g, '""')}"`;
-            const qLon = `"${filter.lonCol.replace(/"/g, '""')}"`;
-            conditions.push(`${qLat} BETWEEN ? AND ?`);
-            params.push(filter.minLat, filter.maxLat);
-            if (filter.minLon > filter.maxLon) {
-                // Viewport crosses the antimeridian: two half-ranges.
-                conditions.push(`(${qLon} >= ? OR ${qLon} <= ?)`);
-            } else {
-                conditions.push(`${qLon} BETWEEN ? AND ?`);
-            }
-            params.push(filter.minLon, filter.maxLon);
+        const built = getFilterType(filter.type)?.buildSql?.(key, filter);
+        if (!built) continue;
+        // Shape check before splicing into SQL — a malformed fragment from
+        // an untrusted filter type is skipped, not executed.
+        if (!Array.isArray(built.conditions) || !built.conditions.every(c => typeof c === "string")
+            || !Array.isArray(built.params)) {
+            console.warn(`[pihka] filter type "${filter.type}" buildSql() returned a malformed fragment — skipped`);
             continue;
         }
-
-        const quoted = `"${colName.replace(/"/g, '""')}"`;
-
-        if (filter.type === "range") {
-            if (filter.min != null) {
-                conditions.push(`${quoted} >= ?`);
-                params.push(filter.min);
-            }
-            if (filter.max != null) {
-                conditions.push(`${quoted} <= ?`);
-                params.push(filter.max);
-            }
-        } else if (filter.type === "multi" && filter.selected.size > 0) {
-            const placeholders = Array.from(filter.selected).map(() => "?").join(", ");
-            conditions.push(`${quoted} IN (${placeholders})`);
-            params.push(...filter.selected);
-        }
+        conditions.push(...built.conditions);
+        params.push(...built.params);
     }
 
     return {

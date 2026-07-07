@@ -5,6 +5,11 @@
         "nl"
     ],
     "database": "app/database/sample.db",
+    "components": [
+        "extensions/iiif-viewer/iiif-viewer-component.js",
+        "extensions/point_map/point-map-component.js",
+        "extensions/geo-filter/geo-filter-component.js"
+    ],
     "perspectives": [
         {
             "id": "author-overview",
@@ -47,6 +52,13 @@
                         "nl": "Categorie"
                     }
                 },
+                "manifest": {
+                    "type": "iiif",
+                    "label": {
+                        "en": "IIIF",
+                        "nl": "IIIF"
+                    }
+                },
                 "author_id": {
                     "label": {
                         "en": "Author",
@@ -58,7 +70,7 @@
         "categories": {
             "label": {
                 "en": "Categories",
-                "nl": "Categorie\u00ebn"
+                "nl": "Categorieën"
             }
         },
         "authors": {

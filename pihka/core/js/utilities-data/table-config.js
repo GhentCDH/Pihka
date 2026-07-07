@@ -25,6 +25,18 @@
 const DISPLAY_TYPES = new Set(["text", "number", "date", "url", "asset", "list"]);
 
 /**
+ * Accept an additional column `type` value in config. Component modules
+ * (extensions, app) call this — usually indirectly via registerCellRenderer —
+ * before applyTableConfig() runs, so configured columns of that type get
+ * their displayType annotated instead of warned about.
+ *
+ * @param {string} name
+ */
+export function registerDisplayType(name) {
+    DISPLAY_TYPES.add(name);
+}
+
+/**
  * Annotate schema metadata in place with display configuration.
  * Tables gain `hidden` and `label`; columns gain `hidden`, `label`,
  * `displayType`, and `format`.

@@ -41,9 +41,14 @@ async function createSampleDatabase() {
       category_id INTEGER REFERENCES categories(id),
       year INTEGER,
       description TEXT,
-      cover TEXT
+      cover TEXT,
+      manifest TEXT
     );
   `);
+
+  // A public IIIF manifest on a few rows, demoing the iiif-viewer extension.
+  const SAMPLE_MANIFEST = 'https://objects.library.uu.nl/manifest/iiif/v3/20.500.14918-326815';
+  const MANIFEST_ROWS = 3;
 
   const authors    = JSON.parse(readFileSync(join(DATA_DIR, 'authors.json'),    'utf8'));
   const categories = JSON.parse(readFileSync(join(DATA_DIR, 'categories.json'), 'utf8'));
@@ -64,15 +69,17 @@ async function createSampleDatabase() {
   }
   insC.free();
 
-  const insW = db.prepare('INSERT INTO works VALUES (?, ?, ?, ?, ?, ?, ?)');
-  for (const w of works) {
-    insW.run([w.id, w.title, w.author_id, w.category_id, w.year, w.description, w.cover]);
+  const insW = db.prepare('INSERT INTO works VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+  for (const [i, w] of works.entries()) {
+    const manifest = i < MANIFEST_ROWS ? SAMPLE_MANIFEST : null;
+    insW.run([w.id, w.title, w.author_id, w.category_id, w.year, w.description, w.cover, manifest]);
   }
   insW.free();
 
   db.run('COMMIT');
 
-  const outputPath = join(__dirname, '..', 'pihka', 'app', 'database', 'sample.sqlite');
+  // config.json's "database" key points here.
+  const outputPath = join(__dirname, '..', 'pihka', 'app', 'database', 'sample.db');
   mkdirSync(dirname(outputPath), { recursive: true });
   writeFileSync(outputPath, Buffer.from(db.export()));
 

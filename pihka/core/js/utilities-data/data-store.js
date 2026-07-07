@@ -1,5 +1,8 @@
+// Side effect: registers the builtin filter types (search/range/multi) so
+// the data engine carries its filters wherever it is used.
+import "./builtin-filters.js";
 import { buildWhereClause } from "./filter-sql.js";
-import { findGeoColumns } from "./geo.js";
+import { listFilterTypes } from "./filter-registry.js";
 
 function quote(s) {
     return `"${s.replace(/"/g, '""')}"`;
@@ -18,13 +21,10 @@ function literalizeFtsQuery(search) {
 function classifyColumns(columns) {
     const rangeColumns = [];
     const multiColumns = [];
-    // Coordinate columns get a map viewport filter instead of range sliders.
-    const geo = findGeoColumns(columns);
 
     for (const col of columns) {
         // linkTo columns are identifiers (views have no PK metadata).
         if (col.primaryKey || col.hidden || col.linkTo) continue;
-        if (geo && (col === geo.latCol || col === geo.lonCol)) continue;
         if (col.references) {
             multiColumns.push(col);
         } else if (col.type === "INTEGER" || col.type === "REAL" || col.displayType === "number") {
@@ -34,7 +34,7 @@ function classifyColumns(columns) {
         }
     }
 
-    return { rangeColumns, multiColumns, geo };
+    return { rangeColumns, multiColumns };
 }
 
 /**
@@ -66,16 +66,18 @@ export class DataStore {
     }
 
     /**
-     * Returns filter metadata (range bounds + FK options + geo columns) for a table.
-     * `geoMeta` is null unless the table has lat/lon columns; its `bounds` is
-     * the data extent, so a map viewport filter can start fitted to the data.
-     * @returns {{ rangeMeta: Object, multiMeta: Object, rangeColumns: Array, multiColumns: Array, geoMeta: Object|null }}
+     * Returns filter metadata (range bounds + FK options) for a table.
+     * After the base classification, every registered filter type's
+     * `filterMeta` hook runs and may extend or reshape the result — e.g.
+     * the geo-filter extension replaces the lat/lon range facets with a
+     * `geoMeta` entry carrying the data extent.
+     * @returns {{ rangeMeta: Object, multiMeta: Object, rangeColumns: Array, multiColumns: Array }}
      */
     getFilterMeta(table) {
         const tableMeta = this.#meta.tables[table];
-        if (!tableMeta) return { rangeMeta: {}, multiMeta: {}, rangeColumns: [], multiColumns: [], geoMeta: null };
+        if (!tableMeta) return { rangeMeta: {}, multiMeta: {}, rangeColumns: [], multiColumns: [] };
 
-        const { rangeColumns, multiColumns, geo } = classifyColumns(tableMeta.columns);
+        const { rangeColumns, multiColumns } = classifyColumns(tableMeta.columns);
 
         const rangeMeta = {};
         for (const col of rangeColumns) {
@@ -90,21 +92,14 @@ export class DataStore {
             };
         }
 
-        let geoMeta = null;
-        if (geo) {
-            const latBounds = this.#loadRangeBounds(table, geo.latCol.name);
-            const lonBounds = this.#loadRangeBounds(table, geo.lonCol.name);
-            geoMeta = {
-                latCol: geo.latCol.name,
-                lonCol: geo.lonCol.name,
-                bounds: {
-                    minLat: latBounds.min, maxLat: latBounds.max,
-                    minLon: lonBounds.min, maxLon: lonBounds.max,
-                },
-            };
+        const meta = { rangeMeta, multiMeta, rangeColumns, multiColumns };
+
+        const loadRangeBounds = (colName) => this.#loadRangeBounds(table, colName);
+        for (const def of listFilterTypes()) {
+            def.filterMeta?.({ table, columns: tableMeta.columns, meta, loadRangeBounds });
         }
 
-        return { rangeMeta, multiMeta, rangeColumns, multiColumns, geoMeta };
+        return meta;
     }
 
     /**
@@ -122,7 +117,7 @@ export class DataStore {
      *
      * @param {string} table
      * @param {Object} [options]
-     * @param {Object} [options.filters] - { colName: { type: "range"|"multi"|"bounds", ... } }
+     * @param {Object} [options.filters] - { key: { type: "<registered filter type>", ... } }
      * @param {{ column: string, direction: string }|null} [options.sort]
      * @param {number} [options.page]
      * @param {number|null} [options.pageSize] - null disables pagination (all rows)

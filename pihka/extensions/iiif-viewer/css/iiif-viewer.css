@@ -1,0 +1,36 @@
+/* TIFY needs a container with an explicit height. */
+.iiif-detail-view {
+    height: min(75vh, 50rem);
+    border-radius: 6px;
+    overflow: hidden;
+
+    /* Map TIFY's palette onto the app's black/white Pico theme. TIFY
+       derives its greys from these via light-dark(), so following the
+       theme only needs the base colors and the color-scheme below. */
+    --tify-base-color: var(--pico-color);
+    --tify-base-color-dark: var(--pico-color);
+    --tify-bg-color: var(--pico-background-color);
+    --tify-text-color: var(--pico-color);
+    --tify-link-color: var(--pico-primary);
+    --tify-link-hover-color: var(--pico-primary-hover);
+    --tify-border-radius: var(--pico-border-radius);
+}
+
+/* TIFY defaults to `color-scheme: light dark` (OS preference); pin it to
+   the app's theme toggle instead, mirroring Pico's data-theme handling. */
+:root:not([data-theme=dark]) .iiif-detail-view .tify {
+    color-scheme: light;
+}
+[data-theme=dark] .iiif-detail-view .tify {
+    color-scheme: dark;
+}
+
+.iiif-badge {
+    display: inline-block;
+    padding: 0.1em 0.5em;
+    border: 1px solid var(--pico-muted-border-color, #ccc);
+    border-radius: 999px;
+    font-size: 0.8em;
+    text-decoration: none;
+    white-space: nowrap;
+}

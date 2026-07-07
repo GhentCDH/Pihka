@@ -9,10 +9,11 @@ import { localize, visibleColumns } from "../../utilities-data/table-config.js";
  *   tableName   - display name of the table
  *   columns     - column schema array (hidden ones filtered out)
  *   row         - row data object, or null if not found
- *   fkResolved  - (optional) { colName: { displayMap, referencedTable } }
- *   lang        - (optional) current language code
+ *   fkResolved    - (optional) { colName: { displayMap, referencedTable } }
+ *   lang          - (optional) current language code
+ *   perspectiveId - (optional) perspective id, for registered cell renderers
  */
-export default function DataViewDetailTable({ tableName, columns, row, fkResolved, lang = null }) {
+export default function DataViewDetailTable({ tableName, columns, row, fkResolved, lang = null, perspectiveId = null }) {
     return h("div", null,
         h("h2", null, tableName),
         !row
@@ -24,7 +25,7 @@ export default function DataViewDetailTable({ tableName, columns, row, fkResolve
                             h("th", { style: "text-align:left;white-space:nowrap;width:1%;padding-right:1.5rem" },
                                 localize(col.label, lang, col.name)),
                             h("td", null,
-                                h(CellValue, { col, value: row[col.name], fkResolved, lang, imageHeight: "8rem" })),
+                                h(CellValue, { col, value: row[col.name], row, columns, fkResolved, lang, perspectiveId, imageHeight: "8rem" })),
                         ),
                     ),
                 ),

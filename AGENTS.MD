@@ -9,10 +9,10 @@ npm run dev          # Start dev server at http://localhost:3000 (browser-sync)
 npm test             # Run Playwright tests
 npm run test:ui      # Run Playwright tests with interactive UI
 
-npm run vendorize                # Re-download vendored dependencies to pihka/core/vendor/
-npm run create-sample-db         # Recreate pihka/app/database/sample.sqlite
+npm run vendorize                # Re-download vendored dependencies (core + per-extension vendor/ dirs)
+npm run create-sample-db         # Recreate pihka/app/database/sample.db
 npm run download-zenodo-dbs      # Download real-world Zenodo databases to pihka/app/database/
-npm run download-world-pmtiles   # Download world PMTiles to pihka/app/assets/
+npm run download-world-pmtiles   # Download world PMTiles basemap to pihka/extensions/point_map/assets/
 ```
 
 `just start` is an alias for `npm run dev`.
@@ -23,9 +23,9 @@ Pihka is a **zero-backend, static-hosting web app** that serves SQLite databases
 
 The UI should use only preact and Javascript. There is a clear separation in interaction with the database and the UI components which only react to formatted JSON and respond to new data from the data layer.
 
-### Two-layer layout
+### Three-layer layout
 
-The application specific assets, data, css, configuration ends up in the app directory. The core contains all reusable components.
+The application specific assets, data, css, configuration ends up in the app directory. The core contains all reusable components. Extensions are optional reusable components that live in their own directory and vendor their own JS dependencies (see "Extensions" below).
 
 The reusable code is split along the data/UI seam so the data engine can be lifted out and driven by a different UI: `core/js/utilities-data/` is everything needed to open a SQLite database and query it as JSON — SQLite access, SQL generation, schema annotation, config loading, asset-path resolution — and contains **no preact import**. `core/js/utilities-ui/` holds the Preact-dependent reactive plumbing (router, signals, prefs, the view registry, perspective normalization). Keep this boundary: never add a preact import under `utilities-data/`.
 
@@ -39,11 +39,22 @@ pihka/
     js/
       components/     # Preact components using h() hyperscript (no JSX)
       utilities-data/ # Reusable data layer — SQLite access, SQL, schema, config, asset paths (no preact)
-      utilities-ui/   # Preact-dependent plumbing (router, signal, prefs, view-registry, perspectives)
+      utilities-ui/   # Preact-dependent plumbing (router, signal, prefs, view-registry, cell-renderers, perspectives)
     stylesheets/      # PicoCSS base framework
     assets/stylesheets/base.css  # Custom CSS variables and overrides
     vendor/           # Vendored npm packages (downloaded by vendorize-deps.js)
       importmap.json  # Generated import map for vendored packages
+  extensions/         # Optional reusable components, each with its own vendored deps
+    iiif-viewer/      # IIIF manifest viewer based on TIFY (see its README.md)
+      iiif-viewer-component.js  # Entry module: registers views/cell renderers
+      js/  css/       # Extension code and styles
+      deps.json       # The extension's npm deps, consumed by vendorize
+      vendor/         # The extension's vendored deps (imported by relative path)
+    point_map/        # MapLibre+PMTiles map views + location facet (see its README.md)
+      point-map-component.js    # Entry module: registers map views + facet renderer
+      js/  css/       # Map components (map-view, popup, bounds filter, shims)
+      assets/         # world.pmtiles basemap, served statically
+      deps.json  vendor/
 ```
 
 ### Routing
@@ -56,11 +67,13 @@ The app fetches a `.sqlite` file over HTTP, then deserializes it into an in-memo
 
 ### Dependencies
 
-Runtime dependencies (`preact`, `@sqlite.org/sqlite-wasm`) are vendored into `pihka/core/vendor/` rather than loaded from a CDN, ensuring long-term offline/archival availability. The import map in `index.html` resolves bare specifiers (e.g. `"preact"`) to these local paths.
+Core's only runtime dependencies are **`preact` and `@sqlite.org/sqlite-wasm`**, vendored into `pihka/core/vendor/` rather than loaded from a CDN, ensuring long-term offline/archival availability. The import map in `index.html` resolves bare specifiers (e.g. `"preact"`) to these local paths. Everything else (maplibre-gl, pmtiles, tify, ...) belongs to extensions.
 
-To update vendored deps: edit `package.json` dependencies, then run `npm run vendorize`. This regenerates `pihka/core/vendor/` and outputs an updated import map snippet.
+To update vendored deps: edit `package.json` dependencies, then run `npm run vendorize`. This regenerates `pihka/core/vendor/` and outputs an updated import map snippet. Use `npm run vendorize -- --extensions-only` to re-vendor extensions without touching (and version-bumping) core's vendor dir.
 
-**Never add additional dependencies**. The whole point of this software is to keep running and introducting additional dependencies is not acceptable. Javascript, SQLite and plain SQL should be used at to interact with the database. preact to build a reactive UI. No dependencies on build tools.
+Extensions vendor their own dependencies separately: each `pihka/extensions/<name>/deps.json` maps a package name to a semver range, or to `{ "version": range, "include": ["extra/file-or-dir", ...] }` for files beyond the auto-detected entry point (CSS, translations, licenses). `npm run vendorize` downloads those into `pihka/extensions/<name>/vendor/<pkg>/`, wiping only that extension's `vendor/` dir. Extension code imports its deps by **relative path** (`./vendor/tify/dist/tify.js`), so the page import map never changes; bare imports *between* an extension's own deps (e.g. pmtiles importing `"fflate"`) are rewritten to relative paths by vendorize. Vendored extension deps are committed, same as core's.
+
+**Never add additional dependencies to core**. The whole point of this software is to keep running and introducting additional dependencies is not acceptable. Javascript, SQLite and plain SQL should be used at to interact with the database. preact to build a reactive UI. No dependencies on build tools. Extensions are the one sanctioned place for extra runtime deps — optional, self-contained, vendored.
 
 ### Components
 
@@ -145,9 +158,9 @@ At startup each query becomes `CREATE VIEW "<table>" AS <query>` on the in-memor
 
 ### Views and the view registry
 
-All view types (list: `table`, `cards`, `map`; detail: `table`, `card`, `map`) are defined in one place: `core/js/utilities-ui/view-registry.js`. The router, perspective normalization, and the view-toggle UIs all consult it — adding a view means one `registerView()` call, nothing else. Builtin views are registered by `core/js/components/data-views/builtin-views.js` (imported by `index.html`).
+All view types are defined in one place: `core/js/utilities-ui/view-registry.js`. The router, perspective normalization, and the view-toggle UIs all consult it — adding a view means one `registerView()` call, nothing else. Builtin views (list: `table`, `cards`; detail: `table`, `card`) are registered by `core/js/components/data-views/builtin-views.js` (imported by `main.js`); the `map` list/detail views come from the `point_map` extension when enabled.
 
-Apps can register custom views (the platform's extension point for research-specific renderers — text annotations, IIIF, custom maps):
+Component modules can register custom views (the platform's extension point for research-specific renderers — text annotations, IIIF, custom maps):
 
 1. Create e.g. `app/views.js`:
    ```js
@@ -164,9 +177,49 @@ Apps can register custom views (the platform's extension point for research-spec
            h("div", null, /* ... */),
    });
    ```
-2. Point config at it: `"views": "app/views.js"` in `app/config.json`. A failing module logs a warning and the site boots with builtin views only.
+2. List it in config: `"components": ["app/views.js"]` in `app/config.json` (the legacy `"views": "app/views.js"` string still works). A failing module logs a warning and the site boots with builtin views only.
 
 List components receive `{ id, name, perspectiveId, columns, rows, sort, onSort, fkResolved, lang }`; detail components receive `{ tableName, columns, row, fkResolved, lang, perspectiveId }` (see typedefs in `view-registry.js`). Re-registering an existing `context`+`id` overrides the builtin renderer. Caveat: view ids share the URL segment namespace with row ids — registering a new view id changes how legacy `/{perspective}/{id}` URLs with that exact id are parsed.
+
+### Extensions and the component registries
+
+Extensions are the third layer: optional reusable components under `pihka/extensions/<name>/`, enabled per app via the `components` config key. **The design makes no distinction between components registered from core, extensions, or app** — one loading mechanism (`main.js` imports every module listed in `components`, fail-soft, before the schema is annotated), the same registries, referenced by name in config.
+
+A component module can register into four registries:
+
+- **Views** — `registerView()` in `core/js/utilities-ui/view-registry.js` (above).
+- **Cell renderers** — `registerCellRenderer(type, component)` in `core/js/utilities-ui/cell-renderers.js` registers a Preact component for a column `type` name, and registers the type with the config validator (`registerDisplayType()` in `utilities-data/table-config.js`) so `"type": "<name>"` in a column config is accepted. `CellValue` renders such columns through the registered component in every builtin view; FK/`linkTo` columns still win, and registering a builtin type name (`url`, `asset`, ...) overrides the builtin rendering. Renderers receive `{ col, value, row, columns, fkResolved, lang, perspectiveId, imageHeight }`.
+- **Facet renderers** — `registerFacetRenderer(id, { component, availableFor })` in `core/js/utilities-ui/facet-renderers.js` adds a facet block to the filter sidebar for tables where `availableFor(autoFilterMeta)` passes. Components receive `{ autoFilterMeta, filters, actions, lang }` (e.g. geo-filter's location facet reads `autoFilterMeta.geoMeta`, `filters._viewport`, and mutates via `actions.onFilterChange`).
+- **Filter types** — `registerFilterType(type, def)` in `core/js/utilities-data/filter-registry.js` (no preact — data layer). Every filter kind is registered: core registers `search` (claims the `q` param; the FTS5 MATCH lives in `DataStore#queryTable`), `range` (`{col}_min`/`{col}_max`), and `multi` (`{col}=v1,v2`) in `utilities-data/builtin-filters.js`; the geo-filter extension registers `bounds` (`bbox=w,s,e,n`). A definition provides any of: `reservedParams`/`preservesParams` (URL param ownership), `decode(params, {filterMeta, facets})` / `encode(key, filter)` (URL codec), `buildSql(key, filter)` (WHERE fragment), and a `filterMeta(ctx)` hook run by `DataStore#getFilterMeta` that may reshape the facet metadata (geo-filter uses it to swap lat/lon range facets for `geoMeta`). `use-url-state.js` and `filter-sql.js` dispatch entirely through this registry; extensions mutate filters via the generic `actions.onFilterChange(key, typedFilter|null)`. Filters of unregistered types are inert — a `bbox` param without geo-filter does nothing.
+
+Extension CSS is self-wired: the entry module calls `ensureStylesheet(href)` (`core/js/utilities-ui/stylesheets.js`, idempotent) with URLs built from its own `import.meta.url` — enabling the module in config is all the wiring needed.
+
+If a config uses a type whose extension is **not** loaded, `applyTableConfig` warns "unknown type" and the column renders as plain text — nothing breaks. A table with lat/lon columns but no point_map extension simply has no map views or location facet.
+
+The bundled extensions (each with its own README.md):
+
+- `extensions/iiif-viewer/` — IIIF manifests via TIFY (AGPL-3.0). Configure a column as `{ "type": "iiif" }`; cells render as a badge linking to the row's detail page in the registered `iiif` detail view.
+- `extensions/point_map/` — MapLibre + PMTiles (BSD-3) 🌍 map views for any table with numeric `lat`/`latitude` + `lon`/`lng`/`longitude` columns. Serves its own basemap from `assets/world.pmtiles`.
+- `extensions/geo-filter/` — the `bounds` filter type + the location (viewport) facet for geo tables, with its **own** basemap copy in `assets/world.pmtiles` (per-extension basemaps are swappable). Independent of point_map: without geo-filter, `bbox` params are inert and lat/lon columns fall back to plain numeric range facets.
+
+```json
+"components": [
+    "extensions/iiif-viewer/iiif-viewer-component.js",
+    "extensions/point_map/point-map-component.js",
+    "extensions/geo-filter/geo-filter-component.js"
+],
+"tables": { "works": { "columns": { "manifest": { "type": "iiif" } } } }
+```
+
+Extensions that vendor the same heavyweight dependency load it once per page: the maplibre UMD shim and the pmtiles protocol registration are guarded through globals (`js/maplibre-shim.js`, `js/pmtiles-protocol.js` in both map extensions), and identical vendored CSS is deduped via `ensureStylesheet`'s `key` option.
+
+**Fault tolerance — core does not trust extensions or app modules.** The guarantees, enforced at the registration choke points (keep them intact when adding registry dispatch sites):
+
+- **Load failures**: a component module that 404s, throws while loading, or hangs (`componentLoadTimeoutMs` config key, default 10000 ms) is warned about and skipped; boot continues with builtins.
+- **Runtime throws**: every registered `component` is wrapped in an error boundary at registration (`core/js/utilities-ui/error-boundary.js`) — a crashing view/facet renders an inline `⚠ ... failed to render` fallback (cell renderers fall back to the raw value) and retries on new props; every `availableFor` predicate is guarded (throw → not offered); every filter-type callback (`decode`/`encode`/`buildSql`/`filterMeta`) is guarded (throw → that filter is skipped/inert, warned once per call). `buildWhereClause` additionally shape-checks SQL fragments before splicing them in.
+- The net effect: basic viewing, paging, full-text search, and builtin range/multi filtering keep working whatever an extension does. Regression-tested by the `fault:` Playwright tests (route-interception fault injection — no repo file is broken).
+
+Layer boundaries (audited, keep them): `utilities-data/` never imports preact or UI; core never imports from or names `extensions/` (not even in comments); extensions import core but never `app/` specifics. Core carries no geo knowledge — geographic filtering lives entirely in `extensions/geo-filter/` via the filter-type and facet-renderer registries.
 
 ### Scripts
 

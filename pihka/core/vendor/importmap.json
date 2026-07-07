@@ -2,12 +2,6 @@
   "imports": {
     "@sqlite.org/sqlite-wasm": "./pihka/core/vendor/@sqlite.org/sqlite-wasm/dist/index.mjs",
     "@sqlite.org/sqlite-wasm/package.json": "./pihka/core/vendor/@sqlite.org/sqlite-wasm/package.json",
-    "fflate": "./pihka/core/vendor/fflate/esm/browser.js",
-    "fflate/node": "./pihka/core/vendor/fflate/esm/index.mjs",
-    "fflate/browser": "./pihka/core/vendor/fflate/esm/browser.js",
-    "maplibre-gl": "./pihka/core/vendor/maplibre-gl/dist/maplibre-gl.js",
-    "pmtiles": "./pihka/core/vendor/pmtiles/dist/esm/index.js",
-    "pmtiles/package.json": "./pihka/core/vendor/pmtiles/package.json",
     "preact": "./pihka/core/vendor/preact/dist/preact.module.js",
     "preact/compat": "./pihka/core/vendor/preact/compat/dist/compat.module.js",
     "preact/debug": "./pihka/core/vendor/preact/debug/dist/debug.module.js",

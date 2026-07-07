@@ -294,3 +294,148 @@ test("range facet on aggregate column filters the perspective", async ({ page })
   await gotoRoute(page, "/en/author-overview/table?work_count_min=3");
   await expect(page.locator(".faceted-count")).toContainText("of 214");
 });
+
+test("iiif extension: cells render badges linking to the iiif detail view", async ({ page }) => {
+  await gotoRoute(page, "/en/works/table");
+  // 3 sample rows carry a manifest; badge links into the registered detail view
+  await expect(page.locator(".iiif-badge")).toHaveCount(3);
+  await expect(page.locator(".iiif-badge").first()).toHaveAttribute("href", "#/en/works/1/iiif");
+  // extension CSS was injected by the component module itself
+  await expect(page.locator('link[href*="iiif-viewer/css/iiif-viewer.css"]')).toHaveCount(1);
+});
+
+test("iiif extension: detail page offers the iiif view toggle", async ({ page }) => {
+  await gotoRoute(page, "/en/works/1/table");
+  // registered view shows up in the view toggle like any builtin
+  const toggle = page.locator("a, button", { hasText: "📖" }).first();
+  await expect(toggle).toBeVisible();
+  await toggle.click();
+  await expect(page).toHaveURL(/\/en\/works\/1\/iiif/);
+  // TIFY mounts in the extension's container (manifest itself loads from the
+  // network; the mounted shell is enough to assert wiring without flakiness)
+  await expect(page.locator(".iiif-detail-view .tify")).toHaveCount(1, { timeout: 10000 });
+});
+
+test("point_map extension: geo tables get map views and the location facet", async ({ page }) => {
+  await gotoRoute(page, "/en/authors/table");
+  // registered map view appears in the toggle; the location facet mounts
+  // its mini map in the sidebar
+  const mapToggle = page.locator("button, a", { hasText: "🌍" }).first();
+  await expect(mapToggle).toBeVisible();
+  await expect(page.locator(".facet-sidebar canvas")).toHaveCount(1);
+  // extension CSS was injected by the component module itself
+  await expect(page.locator('link[href*="point_map/css/point-map.css"]')).toHaveCount(1);
+  // full map view renders markers from the extension-served basemap
+  await mapToggle.click();
+  await expect(page).toHaveURL(/\/en\/authors\/map/);
+  await expect(page.locator(".maplibregl-marker").first()).toBeVisible({ timeout: 10000 });
+  // non-geo tables offer no map view
+  await gotoRoute(page, "/en/works/table");
+  await expect(page.locator("button, a", { hasText: "🌍" })).toHaveCount(0);
+});
+
+test("geo-filter extension: bounds filter type + location facet", async ({ page }) => {
+  // bbox URL param decodes through the registered "bounds" filter type
+  await gotoRoute(page, "/en/authors/table?bbox=-10,35,30,60");
+  await expect(page.locator(".facet-sidebar")).toContainText("360 Authors");
+  // the location facet mini map mounts in the sidebar
+  await expect(page.locator(".facet-sidebar canvas")).toHaveCount(1);
+  // lat/lon columns are NOT offered as numeric range facets
+  await expect(page.locator(".facet-sidebar")).not.toContainText("latitude");
+  // clearing the filter restores the full count
+  await page.locator(".facet-sidebar button", { hasText: "Clear all" }).click();
+  await expect(page.locator(".facet-sidebar")).toContainText("1010 Authors");
+});
+
+// --- Fault tolerance: core must survive broken extensions -----------------
+// Failures are injected via route interception so no repo file is broken.
+
+// Core still works: table renders, search input present, a builtin range
+// facet works. Shared by the fault-injection tests below.
+async function expectCoreWorks(page) {
+  await page.waitForSelector("#app header", { timeout: 10000 });
+  await page.locator("header a", { hasText: "Pihka" }).click();
+  await page.locator("a.perspective-card", { hasText: /Authors/ }).click();
+  await expect(page.locator("tbody tr")).toHaveCount(25);
+  await expect(page.locator(".facet-sidebar")).toContainText("1010 Authors");
+  await expect(page.locator(".facet-sidebar")).toContainText("birth_year");
+  // builtin range filter still queries correctly
+  await page.goto("/#/en/authors/table?birth_year_min=1990");
+  await expect(page.locator(".facet-sidebar")).toContainText("16 Authors");
+}
+
+test("fault: extension module that fails to load leaves core working", async ({ page }) => {
+  await page.route("**/extensions/iiif-viewer/iiif-viewer-component.js", r => r.abort());
+  await page.goto("/");
+  await expectCoreWorks(page);
+});
+
+test("fault: extension module that throws on load leaves core working", async ({ page }) => {
+  await page.route("**/extensions/iiif-viewer/iiif-viewer-component.js", r => r.fulfill({
+    contentType: "text/javascript",
+    body: 'throw new Error("deliberate test error");',
+  }));
+  const warnings = [];
+  page.on("console", m => m.type() === "warning" && warnings.push(m.text()));
+  await page.goto("/");
+  await expectCoreWorks(page);
+  expect(warnings.some(w => w.includes("failed to load component module"))).toBe(true);
+});
+
+test("fault: runtime throws in registered callbacks degrade to fallbacks", async ({ page }) => {
+  // Replace geo-filter with a hostile module: every registered callback throws.
+  await page.route("**/extensions/geo-filter/geo-filter-component.js", r => r.fulfill({
+    contentType: "text/javascript",
+    body: `
+      import { registerFilterType } from "/core/js/utilities-data/filter-registry.js";
+      import { registerFacetRenderer } from "/core/js/utilities-ui/facet-renderers.js";
+      import { registerView } from "/core/js/utilities-ui/view-registry.js";
+      registerFilterType("hostile", {
+        reservedParams: ["bbox"],
+        decode() { throw new Error("hostile decode"); },
+        buildSql() { throw new Error("hostile sql"); },
+        filterMeta() { throw new Error("hostile meta"); },
+      });
+      registerFacetRenderer("hostile-hidden", {
+        availableFor() { throw new Error("hostile availableFor"); },
+        component: () => "should never render",
+      });
+      registerFacetRenderer("hostile-facet", {
+        component: () => { throw new Error("hostile facet render"); },
+      });
+      registerView({
+        id: "hostileview", context: "list", icon: "☠",
+        component: () => { throw new Error("hostile view render"); },
+      });
+    `,
+  }));
+  // bbox param now belongs to the throwing decode — must be inert, not fatal.
+  await page.goto("/#/en/authors/table?bbox=-10,35,30,60");
+  await page.waitForSelector("#app header", { timeout: 10000 });
+  await expect(page.locator("tbody tr")).toHaveCount(25);
+  await expect(page.locator(".facet-sidebar")).toContainText("1010 Authors");
+  // throwing facet component shows the boundary fallback instead of crashing
+  await expect(page.locator(".facet-sidebar .component-error")).toContainText("facet hostile-facet failed to render");
+  // facet with throwing availableFor is simply not offered
+  await expect(page.locator(".facet-sidebar")).not.toContainText("should never render");
+  // the hostile view renders its fallback, then navigating back recovers
+  await page.goto("/#/en/authors/hostileview");
+  await expect(page.locator(".component-error", { hasText: "view list:hostileview" })).toBeVisible();
+  await page.goto("/#/en/authors/table?birth_year_min=1990");
+  await expect(page.locator(".facet-sidebar")).toContainText("16 Authors");
+});
+
+test("fault: hanging extension load times out and boot continues", async ({ page }) => {
+  // Shrink the timeout via config, then never answer the module request.
+  await page.route("**/app/config.json", async r => {
+    const response = await r.fetch();
+    const config = await response.json();
+    config.componentLoadTimeoutMs = 500;
+    await r.fulfill({ json: config });
+  });
+  await page.route("**/extensions/geo-filter/geo-filter-component.js", () => {
+    /* never respond */
+  });
+  await page.goto("/");
+  await expectCoreWorks(page);
+});

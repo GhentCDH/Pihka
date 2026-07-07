@@ -29,15 +29,41 @@ async function main() {
     try {
         const config = await loadConfig();
 
-        // Optional app extension: a module registering custom views
-        // (config key "views", e.g. "app/views.js"). A broken module must
-        // not take the site down — builtin views still work, so warn and
-        // continue.
-        if (typeof config.views === "string") {
+        // Optional component modules: each registers views, cell renderers,
+        // facet renderers, and/or filter types, whether it lives in
+        // extensions/ or app/ — the loading mechanism makes no distinction.
+        // "components" is an array of module paths (a bare string also
+        // works); the legacy "views" string is still honored.
+        //
+        // Core does not trust these modules: a module that fails to load,
+        // throws while loading, or hangs (config key componentLoadTimeoutMs,
+        // default 10s) is warned about and skipped — builtin viewing and
+        // filtering keep working. A timed-out module that finishes later
+        // may still register itself; its views then appear on the next
+        // navigation, which is harmless.
+        const componentModules = [
+            ...(Array.isArray(config.components) ? config.components : []),
+            ...(typeof config.components === "string" ? [config.components] : []),
+            ...(typeof config.views === "string" ? [config.views] : []),
+        ];
+        const loadTimeoutMs = Number(config.componentLoadTimeoutMs) > 0
+            ? Number(config.componentLoadTimeoutMs)
+            : 10000;
+        for (const path of componentModules) {
+            if (typeof path !== "string" || !path) {
+                console.warn(`[pihka] ignoring non-string "components" entry:`, path);
+                continue;
+            }
             try {
-                await import(assetUrl(config.views));
+                await Promise.race([
+                    import(assetUrl(path)),
+                    new Promise((_, reject) => setTimeout(
+                        () => reject(new Error(`timed out after ${loadTimeoutMs}ms`)),
+                        loadTimeoutMs,
+                    )),
+                ]);
             } catch (err) {
-                console.warn("[pihka] failed to load custom views module:", err);
+                console.warn(`[pihka] failed to load component module "${path}" — continuing without it:`, err);
             }
         }
 

@@ -44,7 +44,7 @@ function ColumnHeader({ col, lang, sort, onSort }) {
  * Render a table cell. PK columns link to the detail page; everything else
  * goes through the shared CellValue renderer.
  */
-function Cell({ col, value, fkResolved, lang, perspectiveId }) {
+function Cell({ col, value, row, columns, fkResolved, lang, perspectiveId }) {
     const raw = value ?? "";
 
     // Primary key → link to detail page
@@ -54,7 +54,7 @@ function Cell({ col, value, fkResolved, lang, perspectiveId }) {
         );
     }
 
-    return h("td", null, h(CellValue, { col, value, fkResolved, lang, imageHeight: "4rem" }));
+    return h("td", null, h(CellValue, { col, value, row, columns, fkResolved, lang, perspectiveId, imageHeight: "4rem" }));
 }
 
 /**
@@ -89,6 +89,7 @@ export default function DataViewListTable({ columns, rows, sort = null, onSort =
                                 h(Cell, {
                                     key: col.name, col,
                                     value: row[col.name],
+                                    row, columns,
                                     fkResolved, lang, perspectiveId,
                                 }),
                             ),

@@ -6,8 +6,10 @@
  * renderers (see "Custom views" in AGENTS.md) or override a builtin one by
  * re-registering its id.
  *
- * This module is pure and imports nothing, so the data layer and router can
- * depend on it without touching UI code. Components are stored opaquely.
+ * Components are stored opaquely. Core does not trust what is registered:
+ * components are wrapped in an error boundary and availableFor predicates
+ * in a try/catch at registration time, so a crashing extension degrades to
+ * a warning + fallback instead of taking the app down.
  *
  * Props passed to registered components:
  *
@@ -45,6 +47,8 @@
  *   its column schema (e.g. map views require lat/lon columns)
  */
 
+import { withErrorBoundary, guardPredicate } from "./error-boundary.js";
+
 const ID_RE = /^[a-z][a-z0-9_-]*$/;
 const CONTEXTS = new Set(["list", "detail"]);
 
@@ -72,7 +76,12 @@ export function registerView({ id, context, component, icon = "", paginated = tr
     if (typeof component !== "function") {
         throw new Error(`registerView: "${context}:${id}" needs a component function`);
     }
-    views.set(`${context}:${id}`, { id, context, component, icon, paginated, availableFor });
+    const label = `view ${context}:${id}`;
+    views.set(`${context}:${id}`, {
+        id, context, icon, paginated,
+        component: withErrorBoundary(component, label),
+        availableFor: guardPredicate(availableFor, label),
+    });
 }
 
 /**

@@ -15,16 +15,25 @@
  * The vendor/ directory is wiped before each run so that removed or
  * updated dependencies don't leave stale files behind.
  *
+ * Extensions vendor their own dependencies: each pihka/extensions/<name>/
+ * may ship a deps.json mapping package name → semver range, or
+ * → { "version": range, "include": ["extra/path", ...] } for files or
+ * directories beyond the auto-detected entry point (e.g. translations).
+ * Those are downloaded into pihka/extensions/<name>/vendor/<pkg>/ — the
+ * extension imports them by relative path, so the page import map never
+ * changes. Only that extension's vendor/ dir is wiped, never core's.
+ *
  * Run with: node scripts/vendorize-deps.js
  */
 
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, "..");
 const VENDOR_DIR = join(ROOT, "pihka/core/vendor");
+const EXTENSIONS_DIR = join(ROOT, "pihka/extensions");
 const UNPKG = "https://unpkg.com";
 
 // ---------------------------------------------------------------------------
@@ -76,7 +85,23 @@ function resolveExportEntry(value) {
   return null;
 }
 
-async function vendorPackage(name, range) {
+/**
+ * Resolve an `include` path (file or directory) to concrete file paths.
+ * unpkg's ?meta endpoint treats every path as a directory prefix and
+ * answers { prefix, files: [{ path, ... }] } — empty for a file path,
+ * which we then take as a literal file to download.
+ */
+async function resolveIncludePaths(name, version, includePath) {
+  let normalized = includePath.startsWith("./") ? includePath.slice(1) : includePath;
+  if (!normalized.startsWith("/")) normalized = "/" + normalized;
+  const meta = await fetchJson(`${UNPKG}/${name}@${version}${normalized}?meta`);
+  if (Array.isArray(meta.files) && meta.files.length > 0) {
+    return meta.files.map((f) => f.path);
+  }
+  return [normalized];
+}
+
+async function vendorPackage(name, range, { vendorDir = VENDOR_DIR, mapPrefix = "./pihka/core/vendor", include = [] } = {}) {
   // 1. Resolve version via unpkg package.json redirect
   console.log(`  Resolving ${name}@${range} ...`);
   const pkgJson = await fetchJson(`${UNPKG}/${name}@${range}/package.json`);
@@ -120,10 +145,15 @@ async function vendorPackage(name, range) {
     if (!cssPath.startsWith("/")) cssPath = "/" + cssPath;
   }
 
+  // Extra files/directories requested by an extension's deps.json
+  for (const includePath of include) {
+    filesToDownload.push(...await resolveIncludePaths(name, version, includePath));
+  }
+
   console.log(`  Downloading ${filesToDownload.length} file${filesToDownload.length > 1 ? "s" : ""} ...`);
 
   // 4. Download each file
-  const pkgDir = join(VENDOR_DIR, name);
+  const pkgDir = join(vendorDir, name);
   for (const filePath of filesToDownload) {
     const fileUrl = `${UNPKG}/${name}@${version}${filePath}`;
     const dest = join(pkgDir, filePath);
@@ -147,7 +177,7 @@ async function vendorPackage(name, range) {
       writeFileSync(cssDest, cssData);
       const kb = (cssData.length / 1024).toFixed(1);
       console.log(`    ${cssPath}  (${kb} KB)`);
-      vendorCssPath = `./pihka/core/vendor/${name}${cssPath}`;
+      vendorCssPath = `${mapPrefix}/${name}${cssPath}`;
     }
   }
 
@@ -173,11 +203,105 @@ async function vendorPackage(name, range) {
       const kb = (subData.length / 1024).toFixed(1);
       const specifier = `${name}${key.slice(1)}`; // "./hooks" → "preact/hooks"
       console.log(`    ${key}  →  ${subPath}  (${kb} KB)`);
-      subExports[specifier] = `./pihka/core/vendor/${name}${subPath}`;
+      subExports[specifier] = `${mapPrefix}/${name}${subPath}`;
     }
   }
 
-  return { name, version, importPath: `./pihka/core/vendor/${name}${entryPath}`, cssPath: vendorCssPath, subExports };
+  return { name, version, entryPath, importPath: `${mapPrefix}/${name}${entryPath}`, cssPath: vendorCssPath, subExports };
+}
+
+// ---------------------------------------------------------------------------
+// Extensions: pihka/extensions/<name>/deps.json → <name>/vendor/
+// ---------------------------------------------------------------------------
+
+/**
+ * Normalise a deps.json entry — either "semver-range" or
+ * { "version": "semver-range", "include": ["extra/path", ...] }.
+ */
+function parseDepEntry(entry) {
+  if (typeof entry === "string") return { range: entry, include: [] };
+  return { range: entry.version, include: entry.include ?? [] };
+}
+
+/**
+ * Rewrite bare import specifiers inside an extension's vendored files to
+ * relative paths. Extensions import their deps by relative path — the page
+ * import map never sees them — so a vendored package importing a sibling
+ * dependency by bare name (e.g. pmtiles importing "fflate") would fail to
+ * resolve. Any bare specifier naming another dep in the same deps.json is
+ * rewritten to the relative path of that dep's vendored entry point.
+ */
+function rewriteBareImports(vendorDir, entryFileByDep) {
+  const files = [];
+  (function walk(dir) {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (/\.(js|mjs)$/.test(e.name)) files.push(p);
+    }
+  })(vendorDir);
+
+  for (const file of files) {
+    let src = readFileSync(file, "utf-8");
+    let changed = false;
+    for (const [dep, entryFile] of entryFileByDep) {
+      if (file === entryFile) continue;
+      const escaped = dep.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+      // Covers `from "dep"`, `import "dep"`, and dynamic `import("dep")`,
+      // with either quote style and minified spacing.
+      const pattern = new RegExp(`(\\bfrom\\s*|\\bimport\\s*\\(\\s*|\\bimport\\s+)(["'])${escaped}\\2`, "g");
+      if (!pattern.test(src)) continue;
+      let rel = relative(dirname(file), entryFile);
+      if (!rel.startsWith(".")) rel = "./" + rel;
+      src = src.replace(pattern, `$1$2${rel}$2`);
+      changed = true;
+      console.log(`    rewrote "${dep}" → "${rel}" in ${relative(vendorDir, file)}`);
+    }
+    if (changed) writeFileSync(file, src);
+  }
+}
+
+async function vendorExtensions() {
+  if (!existsSync(EXTENSIONS_DIR)) return;
+
+  const extensions = readdirSync(EXTENSIONS_DIR, { withFileTypes: true })
+    .filter((e) => e.isDirectory() && existsSync(join(EXTENSIONS_DIR, e.name, "deps.json")))
+    .map((e) => e.name);
+  if (extensions.length === 0) return;
+
+  for (const ext of extensions) {
+    const deps = JSON.parse(readFileSync(join(EXTENSIONS_DIR, ext, "deps.json"), "utf-8"));
+    const names = Object.keys(deps);
+    console.log(`Extension ${ext}: ${names.length} dependenc${names.length === 1 ? "y" : "ies"} to vendorize\n`);
+
+    // Scoped clean: only this extension's vendor dir.
+    const vendorDir = join(EXTENSIONS_DIR, ext, "vendor");
+    if (existsSync(vendorDir)) {
+      rmSync(vendorDir, { recursive: true });
+      console.log(`  Cleaned existing extensions/${ext}/vendor/ directory.\n`);
+    }
+    mkdirSync(vendorDir, { recursive: true });
+
+    const entryFileByDep = new Map();
+    for (const name of names) {
+      const { range, include } = parseDepEntry(deps[name]);
+      // No import map involvement: extensions import their vendored deps
+      // by relative path (./vendor/<pkg>/...).
+      const result = await vendorPackage(name, range, {
+        vendorDir,
+        mapPrefix: `./pihka/extensions/${ext}/vendor`,
+        include,
+      });
+      if (result.entryPath) {
+        entryFileByDep.set(name, join(vendorDir, name, result.entryPath));
+      }
+      console.log();
+    }
+
+    // Vendored packages may import each other by bare specifier — make
+    // those imports resolvable without the page import map.
+    rewriteBareImports(vendorDir, entryFileByDep);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -185,10 +309,15 @@ async function vendorPackage(name, range) {
 // ---------------------------------------------------------------------------
 
 async function main() {
+  // --extensions-only: leave pihka/core/vendor untouched and vendor only
+  // the extensions' deps.json dirs.
+  if (process.argv.includes("--extensions-only")) {
+    await vendorExtensions();
+    return;
+  }
+
   const pkgPath = join(ROOT, "package.json");
-  const pkg = JSON.parse(
-    (await import("node:fs")).readFileSync(pkgPath, "utf-8")
-  );
+  const pkg = JSON.parse(readFileSync(pkgPath, "utf-8"));
 
   const deps = pkg.dependencies || {};
   const names = Object.keys(deps);
@@ -245,6 +374,8 @@ async function main() {
     }
   }
   console.log();
+
+  await vendorExtensions();
 }
 
 main().catch((err) => {

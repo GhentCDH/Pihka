@@ -23,7 +23,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = join(__dirname, "..", "pihka", "app", "assets", "tilesets");
+// The point_map extension serves this file as its basemap.
+const DATA_DIR = join(__dirname, "..", "pihka", "extensions", "point_map", "assets");
 
 const BUILDS_API = "https://build-metadata.protomaps.dev/builds.json";
 const BUILD_BASE = "https://build.protomaps.com";
@@ -84,10 +85,9 @@ async function main() {
 
   console.log("\nFetching latest build info from Protomaps...");
   const latest = await fetchLatestBuild();
-  const date = latest.key.replace(".pmtiles", "");
   const sourceUrl = `${BUILD_BASE}/${latest.key}`;
-  const outName = `${date}-maxzoom${maxzoom}.pmtiles`;
-  const outPath = join(DATA_DIR, outName);
+  // Fixed name: map-view.js references assets/world.pmtiles directly.
+  const outPath = join(DATA_DIR, "world.pmtiles");
 
   console.log(`  Latest build:  ${latest.key}`);
   console.log(`  Uploaded:      ${latest.uploaded}`);

@@ -5,7 +5,7 @@ import { basePath } from "../utilities-data/paths.js";
 
 /**
  * Hash-based router. Routes live entirely in the URL fragment —
- * `/#/en/works/table?bbox=...` — so deep links work on any static host
+ * `/#/en/works/table?year_min=1990` — so deep links work on any static host
  * (GitHub Pages, S3, university servers) without rewrite rules: the server
  * only ever sees a request for the app's index.html.
  */
