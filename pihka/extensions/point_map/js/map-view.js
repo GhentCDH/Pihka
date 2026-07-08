@@ -1,4 +1,4 @@
-import { h, render } from "preact";
+import { h, Fragment, render } from "preact";
 import { useEffect, useRef } from "preact/hooks";
 import { loadMaplibre } from "./maplibre-shim.js";
 import { ensurePmtilesProtocol } from "./pmtiles-protocol.js";
@@ -69,105 +69,191 @@ export default function MapView({
 }) {
     const containerRef = useRef(null);
     const mapRef = useRef(null);
+    const maplibreRef = useRef(null);
+    const mapPromiseRef = useRef(null);
+    const markersRef = useRef(new Map()); // key -> { marker, point }
     const popupNodesRef = useRef(new Set());
+    const popupsRef = useRef(new Set()); // open maplibre Popup instances
     const resizeObserverRef = useRef(null);
+    const unmountedRef = useRef(false);
 
-    useEffect(() => {
-        if (!containerRef.current || !points || points.length === 0) return;
+    // Marker click handlers read the popup props through this ref at click
+    // time, so they never go stale and prop changes never force a marker —
+    // let alone a map — rebuild.
+    const popupPropsRef = useRef(null);
+    popupPropsRef.current = { PopupComponent, tableName, columns, fkResolved, lang, perspectiveId };
+    const pointsRef = useRef(points);
+    pointsRef.current = points;
 
-        let cancelled = false;
-        let map = null;
+    // Create the map lazily, at most once per component life. The map must
+    // survive every prop change — tearing down the WebGL context on each
+    // filter tweak is exactly the white flicker this component had. Called
+    // from the marker effect so a component that mounts with zero points
+    // still gets its map the first time points arrive.
+    const ensureMap = () => {
+        if (!mapPromiseRef.current && containerRef.current) {
+            mapPromiseRef.current = (async () => {
+                const maplibregl = await loadMaplibre();
+                await ensurePmtilesProtocol();
+                if (unmountedRef.current) return null;
 
-        (async () => {
-            const maplibregl = await loadMaplibre();
-            await ensurePmtilesProtocol();
-            if (cancelled) return;
+                const first = (pointsRef.current ?? [])[0];
+                const map = new maplibregl.Map({
+                    container: containerRef.current,
+                    style: buildStyle(),
+                    center: first ? [first.lon, first.lat] : [0, 20],
+                    zoom: first ? 4 : 1.5,
+                    attributionControl: { compact: true },
+                });
+                maplibreRef.current = maplibregl;
+                mapRef.current = map;
 
-            map = new maplibregl.Map({
-                container: containerRef.current,
-                style: buildStyle(),
-                center: [points[0].lon, points[0].lat],
-                zoom: 4,
-                attributionControl: { compact: true },
-            });
-            mapRef.current = map;
-
-            // The container's final size may not be known when Map() runs
-            // (Preact layout, flex parents). Observe size changes and call
-            // resize() so the map fills the container once layout settles.
-            if (typeof ResizeObserver !== "undefined") {
-                resizeObserverRef.current = new ResizeObserver(() => {
+                // The container's final size may not be known when Map() runs
+                // (Preact layout, flex parents). Observe size changes and call
+                // resize() so the map fills the container once layout settles.
+                if (typeof ResizeObserver !== "undefined") {
+                    resizeObserverRef.current = new ResizeObserver(() => {
+                        if (mapRef.current) mapRef.current.resize();
+                    });
+                    resizeObserverRef.current.observe(containerRef.current);
+                }
+                // Belt-and-braces: in a flex-fill container MapLibre can render
+                // its first frame before the flex height resolves and then never
+                // get a size change to observe. Force a resize once loaded.
+                map.on("load", () => {
                     if (mapRef.current) mapRef.current.resize();
                 });
-                resizeObserverRef.current.observe(containerRef.current);
-            }
-            // Belt-and-braces: in a flex-fill container MapLibre can render
-            // its first frame before the flex height resolves and then never
-            // get a size change to observe. Force a resize once loaded.
-            map.on("load", () => {
-                if (mapRef.current) mapRef.current.resize();
+
+                map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+                return map;
+            })().catch((err) => {
+                console.error("[MapView] failed to initialise:", err);
+                return null;
+            });
+        }
+        return mapPromiseRef.current;
+    };
+
+    // Destroy the map only on real unmount.
+    useEffect(() => () => {
+        unmountedRef.current = true;
+        if (resizeObserverRef.current) {
+            resizeObserverRef.current.disconnect();
+            resizeObserverRef.current = null;
+        }
+        // Unmount any open popup Preact trees so they don't leak.
+        for (const node of popupNodesRef.current) {
+            render(null, node);
+        }
+        popupNodesRef.current.clear();
+        popupsRef.current.clear();
+        markersRef.current.clear();
+        if (mapRef.current) {
+            mapRef.current.remove(); // takes markers and popups with it
+            mapRef.current = null;
+        }
+    }, []);
+
+    // Update markers in place whenever the point set changes: diff against
+    // the live registry so surviving markers stay untouched in the DOM and
+    // the basemap never reloads.
+    useEffect(() => {
+        // Nothing rendered yet and nothing to clear — don't create a map
+        // just to show zero points.
+        if ((!points || points.length === 0) && !mapPromiseRef.current) return;
+
+        let stale = false;
+        (async () => {
+            const map = await ensureMap();
+            if (stale || !map || unmountedRef.current) return;
+            const maplibregl = maplibreRef.current;
+            const { tableName: table, columns: cols } = popupPropsRef.current;
+
+            // Key markers by table + row PK when available (stable across
+            // filter changes); rows without a PK fall back to coordinates,
+            // with a suffix disambiguating exact duplicates.
+            const pkCol = cols?.find(c => c.primaryKey)?.name ?? null;
+            const seen = new Set();
+            const keyed = (points ?? []).map(p => {
+                let key = pkCol && p.row?.[pkCol] != null
+                    ? `${table}:pk:${p.row[pkCol]}`
+                    : `${table}:${p.lon},${p.lat}`;
+                while (seen.has(key)) key += "+";
+                seen.add(key);
+                return [key, p];
             });
 
-            map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+            // Open popups may belong to rows the new filter removed.
+            for (const popup of [...popupsRef.current]) popup.remove();
 
-            for (const p of points) {
-                const marker = new maplibregl.Marker({ color: "#c33" })
-                    .setLngLat([p.lon, p.lat])
-                    .addTo(map);
-
-                marker.getElement().style.cursor = "pointer";
-                marker.getElement().addEventListener("click", (e) => {
+            const markers = markersRef.current;
+            const nextKeys = new Set(keyed.map(([key]) => key));
+            for (const [key, entry] of markers) {
+                if (!nextKeys.has(key)) {
+                    entry.marker.remove();
+                    markers.delete(key);
+                }
+            }
+            for (const [key, p] of keyed) {
+                const existing = markers.get(key);
+                if (existing) {
+                    existing.point = p;
+                    const at = existing.marker.getLngLat();
+                    if (at.lng !== p.lon || at.lat !== p.lat) {
+                        existing.marker.setLngLat([p.lon, p.lat]);
+                    }
+                    continue;
+                }
+                const entry = {
+                    point: p,
+                    marker: new maplibregl.Marker({ color: "#c33" })
+                        .setLngLat([p.lon, p.lat])
+                        .addTo(map),
+                };
+                const el = entry.marker.getElement();
+                el.style.cursor = "pointer";
+                el.addEventListener("click", (e) => {
                     e.stopPropagation();
-                    openPopup(maplibregl, map, p, popupNodesRef, {
-                        PopupComponent, tableName, columns, fkResolved, lang, perspectiveId,
-                    });
+                    openPopup(maplibregl, map, entry.point, popupNodesRef, popupsRef, popupPropsRef.current);
                 });
+                markers.set(key, entry);
             }
 
-            // Fit bounds for multi-point sets; single point keeps the initial zoom.
-            if (points.length > 1) {
+            // Same viewport behavior as the old full rebuild: refit to the
+            // new point set (instantly), single point gets a close-up.
+            if (keyed.length > 1) {
                 const bounds = new maplibregl.LngLatBounds();
-                for (const p of points) bounds.extend([p.lon, p.lat]);
+                for (const [, p] of keyed) bounds.extend([p.lon, p.lat]);
                 map.fitBounds(bounds, { padding: 40, maxZoom: 10, duration: 0 });
-            } else {
+            } else if (keyed.length === 1) {
+                map.setCenter([keyed[0][1].lon, keyed[0][1].lat]);
                 map.setZoom(10);
             }
-        })().catch((err) => {
-            console.error("[MapView] failed to initialise:", err);
-        });
+        })();
 
         return () => {
-            cancelled = true;
-            if (resizeObserverRef.current) {
-                resizeObserverRef.current.disconnect();
-                resizeObserverRef.current = null;
-            }
-            // Unmount any open popup Preact trees so they don't leak.
-            for (const node of popupNodesRef.current) {
-                render(null, node);
-            }
-            popupNodesRef.current.clear();
-            if (map) map.remove();
-            mapRef.current = null;
+            stale = true;
         };
-    }, [points, tableName, lang, perspectiveId, PopupComponent]);
+    }, [points]);
 
-    if (!points || points.length === 0) {
-        return h("p", { style: "color:var(--text-muted)" }, "No location data to display.");
-    }
+    const empty = !points || points.length === 0;
 
     // `fill` mode: grow to fill a flex-column parent via core's
     // .fill-height (the map's ResizeObserver calls map.resize() once
     // layout settles). Otherwise use the explicit `height`. Either way
-    // MapLibre needs a definite box.
-    return h("div", {
-        ref: containerRef,
-        class: fill ? "map-canvas fill-height" : "map-canvas",
-        style: fill ? undefined : `height:${height}`,
-    });
+    // MapLibre needs a definite box. The container stays mounted (hidden)
+    // through empty states so the live map survives a zero-point filter.
+    return h(Fragment, null,
+        empty && h("p", { style: "color:var(--text-muted)" }, "No location data to display."),
+        h("div", {
+            ref: containerRef,
+            class: fill ? "map-canvas fill-height" : "map-canvas",
+            style: (fill ? "" : `height:${height};`) + (empty ? "display:none" : ""),
+        }),
+    );
 }
 
-function openPopup(maplibregl, map, point, popupNodesRef, popupProps) {
+function openPopup(maplibregl, map, point, popupNodesRef, popupsRef, popupProps) {
     const { PopupComponent, tableName, columns, fkResolved, lang, perspectiveId } = popupProps;
     const node = document.createElement("div");
     popupNodesRef.current.add(node);
@@ -183,9 +269,11 @@ function openPopup(maplibregl, map, point, popupNodesRef, popupProps) {
         .setLngLat([point.lon, point.lat])
         .setDOMContent(node)
         .addTo(map);
+    popupsRef.current.add(popup);
 
     popup.on("close", () => {
         render(null, node);
         popupNodesRef.current.delete(node);
+        popupsRef.current.delete(popup);
     });
 }

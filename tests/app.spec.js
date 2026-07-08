@@ -468,6 +468,24 @@ test("point_map extension: geo tables get map views and the location facet", asy
   await expect(page.locator("button, a", { hasText: "🌍" })).toHaveCount(0);
 });
 
+test("point_map extension: filtering updates markers without rebuilding the map", async ({ page }) => {
+  await gotoRoute(page, "/en/authors/map");
+  await expect(page.locator(".maplibregl-marker").first()).toBeVisible({ timeout: 10000 });
+  const before = await page.locator("section .maplibregl-marker").count();
+  // Tag the live canvas, then filter via an in-page hash change (a page.goto
+  // would reload and trivially rebuild everything).
+  await page.evaluate(() => {
+    document.querySelector("section .maplibregl-canvas").dataset.probe = "kept";
+    window.location.hash = "#/en/authors/map?birth_year_min=1800";
+  });
+  // Markers track the filter...
+  await expect(async () => {
+    expect(await page.locator("section .maplibregl-marker").count()).toBeLessThan(before);
+  }).toPass({ timeout: 5000 });
+  // ...but the map itself was never torn down: the same canvas is still live.
+  await expect(page.locator('section .maplibregl-canvas[data-probe="kept"]')).toHaveCount(1);
+});
+
 test("geo-filter extension: bounds filter type + location facet", async ({ page }) => {
   // bbox URL param decodes through the registered "bounds" filter type
   await gotoRoute(page, "/en/authors/table?bbox=-10,35,30,60");

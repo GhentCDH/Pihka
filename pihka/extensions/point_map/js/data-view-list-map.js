@@ -25,17 +25,18 @@ export default function DataViewListMap({ name, id, columns, rows, fkResolved, l
 
     const points = rowsToPoints(rows, geo.latCol, geo.lonCol);
 
+    // MapView stays mounted through empty point sets (it renders its own
+    // "no location data" note) so the live map survives a filter that
+    // momentarily matches no mappable rows — no teardown, no flicker.
     return h("section", { class: "map-list-section fill-height", id: id ?? name },
-        points.length === 0
-            ? h("p", null, "No rows with coordinates.")
-            : h(MapView, {
-                points,
-                columns,
-                fkResolved,
-                tableName: name,
-                lang,
-                perspectiveId,
-                fill: true,
-            }),
+        h(MapView, {
+            points,
+            columns,
+            fkResolved,
+            tableName: name,
+            lang,
+            perspectiveId,
+            fill: true,
+        }),
     );
 }
