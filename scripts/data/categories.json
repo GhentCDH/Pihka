@@ -18,5 +18,65 @@
   {
     "id": 5,
     "name": "Drama"
+  },
+  {
+    "id": 6,
+    "name": "Modernism"
+  },
+  {
+    "id": 7,
+    "name": "Satire"
+  },
+  {
+    "id": 8,
+    "name": "War"
+  },
+  {
+    "id": 9,
+    "name": "Romance"
+  },
+  {
+    "id": 10,
+    "name": "Historical Fiction"
+  },
+  {
+    "id": 11,
+    "name": "Philosophy"
+  },
+  {
+    "id": 12,
+    "name": "Adventure"
+  },
+  {
+    "id": 13,
+    "name": "Gothic"
+  },
+  {
+    "id": 14,
+    "name": "Autobiography"
+  },
+  {
+    "id": 15,
+    "name": "Science Fiction"
+  },
+  {
+    "id": 16,
+    "name": "Mystery"
+  },
+  {
+    "id": 17,
+    "name": "Tragedy"
+  },
+  {
+    "id": 18,
+    "name": "Comedy"
+  },
+  {
+    "id": 19,
+    "name": "Epic"
+  },
+  {
+    "id": 20,
+    "name": "Coming of Age"
   }
 ]

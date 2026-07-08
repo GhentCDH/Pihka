@@ -43,7 +43,7 @@ export default function DetailView({ tableName, columns, row, fkResolved, relate
 
     return h("div", { class: "detail-view" },
         // View toggles
-        availableViews.length > 1 && h("div", { class: "view-toggles", style: "margin:.25rem 0 .75rem" },
+        availableViews.length > 1 && h("div", { class: "view-toggles" },
             availableViews.map(d =>
                 h("button", {
                     key: d.id,

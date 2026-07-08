@@ -21,6 +21,7 @@ import DataViewListMap from "./js/data-view-list-map.js";
 import DataViewDetailMap from "./js/data-view-detail-map.js";
 
 ensureStylesheet(new URL("./vendor/maplibre-gl/dist/maplibre-gl.css", import.meta.url).href, { key: "maplibre-gl-css" });
+ensureStylesheet(new URL("./css/maplibre-pico-reset.css", import.meta.url).href, { key: "maplibre-pico-reset" });
 ensureStylesheet(new URL("./css/point-map.css", import.meta.url).href);
 
 const hasGeo = (columns) => !!findGeoColumns(columns);

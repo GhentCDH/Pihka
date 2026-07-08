@@ -24,23 +24,25 @@ test("authors/1 contains Virginia", async ({ page }) => {
 });
 
 test("detail page lists related objects in a paginated table", async ({ page }) => {
+  // categories/1 (Novel) → related works_categories junction rows, with the
+  // work_id FK cells resolved to work titles.
   await gotoRoute(page, "/en/categories/1/table");
   const related = page.locator(".detail-related");
-  await expect(related.locator("h3")).toContainText(/works/i);
+  await expect(related.locator("h3")).toContainText(/work categories/i);
   await expect(related.locator("tbody tr")).toHaveCount(10);
-  await expect(related.locator(".faceted-count")).toContainText("Showing 1 to 10 of 1733");
+  await expect(related.locator(".faceted-count")).toContainText("Showing 1 to 10 of 1734");
 
   // Page through with the shared pagination controls
   const firstTitle = await related.locator("tbody tr td:nth-child(2)").first().textContent();
   await related.locator("nav[aria-label='Pagination'] button", { hasText: "›" }).click();
-  await expect(related.locator(".faceted-count")).toContainText("Showing 11 to 20 of 1733");
+  await expect(related.locator(".faceted-count")).toContainText("Showing 11 to 20 of 1734");
   const secondPageTitle = await related.locator("tbody tr td:nth-child(2)").first().textContent();
   expect(secondPageTitle).not.toBe(firstTitle);
 
   // View-all link jumps to the filtered list view
   await related.locator("a", { hasText: "View all" }).click();
-  await expect(page).toHaveURL(/works\/table\?category_id=1/);
-  await expect(page.locator(".faceted-count")).toContainText("of 1733");
+  await expect(page).toHaveURL(/works_categories\/table\?category_id=1/);
+  await expect(page.locator(".faceted-count")).toContainText("of 1734");
 });
 
 test("configured column labels and types render in the works table", async ({ page }) => {
@@ -163,8 +165,9 @@ test("works view shows sidebar with facet filters", async ({ page }) => {
   await expect(sidebar).toContainText("Filters");
   // Year range slider in sidebar
   await expect(sidebar.locator("input[type='range']")).toHaveCount(2);
-  // Category and Author dropdown facets
-  await expect(sidebar.locator(".facet-dropdown")).not.toHaveCount(0);
+  // Author dropdown facet only: categories are m2m via works_categories,
+  // and junction-table facets are not auto-generated (yet).
+  await expect(sidebar.locator(".facet-dropdown")).toHaveCount(1);
 });
 
 test("year range filter narrows works rows", async ({ page }) => {
@@ -181,16 +184,45 @@ test("year range filter narrows works rows", async ({ page }) => {
   expect(rowCount).toBeLessThan(25);
 });
 
-test("category dropdown facet filters works rows", async ({ page }) => {
-  await gotoRoute(page, "/en/works/table");
+test("category dropdown facet filters junction rows", async ({ page }) => {
+  // Both junction columns are FKs, so the works_categories list view gets
+  // auto dropdown facets: work (nth 0) and category (nth 1).
+  await gotoRoute(page, "/en/works_categories/table");
   const content = page.locator(".faceted-content");
-  await expect(content).toContainText("of 1743");
-  // Open category dropdown and click Short Story checkbox
+  await expect(content).toContainText("of 4363");
   const sidebar = page.locator("aside.facet-sidebar");
   await sidebar.locator(".facet-dropdown-trigger").nth(1).click();
   await sidebar.locator(".facet-option", { hasText: "Short Story" }).click();
-  // Should filter to 4 short stories
-  await expect(content).toContainText("of 4");
+  await expect(content).toContainText("of 155");
+});
+
+test("m2m demo: junction table current behavior", async ({ page }) => {
+  // The works↔categories relation is many-to-many via works_categories.
+  // This test pins down how Pihka treats a junction table TODAY: as an
+  // ordinary table with two FK columns. Automated m2m handling (a category
+  // facet on works, collapsed related sections) does not exist yet.
+
+  // Homepage: the junction table gets its own card like any table.
+  await gotoRoute(page, "/");
+  await expect(page.locator("a.perspective-card", { hasText: "Work categories" })).toBeVisible();
+
+  // Works detail: a related section of junction rows, category resolved.
+  await gotoRoute(page, "/en/works/1/table");
+  const related = page.locator(".detail-related", { hasText: "Work categories" });
+  await expect(related.locator("h3")).toContainText("Work categories");
+  await expect(related).toContainText("Novel"); // Mrs Dalloway's curated category
+
+  // Junction list view: FK cells resolve to work titles / category names.
+  await gotoRoute(page, "/en/works_categories/table");
+  await expect(page.locator("tbody tr").first()).toContainText("Mrs Dalloway");
+  await expect(page.locator("tbody tr").first()).toContainText("Novel");
+
+  // The gap this data demonstrates: works itself has no category facet
+  // anymore (facets are only auto-generated from direct FK columns).
+  await gotoRoute(page, "/en/works/table");
+  const sidebar = page.locator("aside.facet-sidebar");
+  await expect(sidebar.locator(".facet-dropdown-trigger")).toHaveCount(1);
+  await expect(sidebar).not.toContainText("Categories");
 });
 
 test("authors view has birth_year range filter in sidebar", async ({ page }) => {
@@ -199,7 +231,7 @@ test("authors view has birth_year range filter in sidebar", async ({ page }) => 
   await expect(sidebar).toBeVisible();
   // birth_year configured as range facet
   await expect(sidebar.locator("input[type='range']")).not.toHaveCount(0);
-  await expect(sidebar.locator(".range-label", { hasText: "birth_year" })).toBeVisible();
+  await expect(sidebar.locator(".facet-label", { hasText: "birth_year" })).toBeVisible();
 });
 
 test("categories view has no filter controls", async ({ page }) => {
@@ -236,33 +268,34 @@ test("filtering resets page to 1", async ({ page }) => {
   // Go to page 2
   await content.locator("nav[aria-label='Pagination'] button", { hasText: "›" }).click();
   await expect(content).toContainText("Showing 4 to 6");
-  // Apply a category filter via sidebar dropdown
+  // Apply an author filter via sidebar dropdown
   const sidebar = page.locator("aside.facet-sidebar");
-  await sidebar.locator(".facet-dropdown-trigger").nth(1).click();
-  await sidebar.locator(".facet-option", { hasText: "Short Story" }).click();
+  await sidebar.locator(".facet-dropdown-trigger").first().click();
+  await sidebar.locator(".facet-dropdown-panel .facet-search").fill("Woolf");
+  await sidebar.locator(".facet-option", { hasText: "Virginia Woolf" }).click();
   // Should reset to page 1
   await expect(content).toContainText("Showing 1 to");
 });
 
 test("URL query params are bookmarkable", async ({ page }) => {
-  await gotoRoute(page, "/en/works/table?category_id=1&sort=year&sort_dir=desc");
+  await gotoRoute(page, "/en/works/table?author_id=1&sort=year&sort_dir=desc");
   const content = page.locator(".faceted-content");
   await expect(content).toBeVisible();
-  // Should show only novels (1733), sorted by year descending
-  await expect(content).toContainText("of 1733");
-  // First row should be the most recent novel
-  const firstYear = await content.locator("section tbody tr").first().locator("td").nth(4).textContent();
+  // Should show only Virginia Woolf's works, sorted by year descending
+  await expect(content).toContainText("of 5");
+  // First row should be her most recent work (The Waves, 1931)
+  const firstYear = await content.locator("section tbody tr").first().locator("td").nth(3).textContent();
   expect(parseInt(firstYear)).toBeGreaterThan(1930);
 });
 
 test("view toggle switches between table and cards", async ({ page }) => {
-  await gotoRoute(page, "/en/works/table?category_id=1");
+  await gotoRoute(page, "/en/works/table?author_id=1");
   // Click the cards toggle
   await page.locator(".view-toggles button", { hasText: "cards" }).click();
   // URL should change to cards view
   await expect(page).toHaveURL(/\/en\/works\/cards/);
   // Filter should be preserved
-  await expect(page).toHaveURL(/category_id=1/);
+  await expect(page).toHaveURL(/author_id=1/);
 });
 
 test("home page shows perspectives and tables sections", async ({ page }) => {
@@ -270,8 +303,8 @@ test("home page shows perspectives and tables sections", async ({ page }) => {
   await expect(page.locator(".perspective-section-title", { hasText: "Perspectives" })).toBeVisible();
   await expect(page.locator(".perspective-section-title", { hasText: "Tables" })).toBeVisible();
   await expect(page.locator(".perspective-grid").first()).toBeVisible();
-  // 1 configured perspective + 3 tables, the perspective view not double-listed
-  await expect(page.locator("a.perspective-card")).toHaveCount(4);
+  // 1 configured perspective + 4 tables, the perspective view not double-listed
+  await expect(page.locator("a.perspective-card")).toHaveCount(5);
 });
 
 test("multi-table perspective aggregates rows with expandable list cells", async ({ page }) => {

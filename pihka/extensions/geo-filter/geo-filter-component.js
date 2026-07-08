@@ -23,6 +23,7 @@ import { boundsFilterType, VIEWPORT_KEY } from "./js/bounds-filter-type.js";
 import MapBoundsFilter from "./js/map-bounds-filter.js";
 
 ensureStylesheet(new URL("./vendor/maplibre-gl/dist/maplibre-gl.css", import.meta.url).href, { key: "maplibre-gl-css" });
+ensureStylesheet(new URL("./css/maplibre-pico-reset.css", import.meta.url).href, { key: "maplibre-pico-reset" });
 ensureStylesheet(new URL("./css/geo-filter.css", import.meta.url).href);
 
 registerFilterType("bounds", boundsFilterType);

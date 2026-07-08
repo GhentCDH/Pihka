@@ -10,6 +10,9 @@ node_modules/
 pihka/app/database/*.db
 !pihka/app/database/sample.db
 
+*plan.md
+
+
 pihka/app/database/*.sqlite
 pihka/app/database/*.pmtiles
 pihka/app/assets/*

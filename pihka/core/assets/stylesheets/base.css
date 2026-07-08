@@ -6,51 +6,40 @@
  *   1. Re-tints Pico's primary color to resin amber (pihka).
  *   2. Aliases a handful of shorthand variables to Pico's theme variables
  *      so custom components follow light/dark mode automatically.
- *   3. Styles the custom components (facets, toolbar, cards, maps).
+ *   3. Styles the core components (layout, facets, toolbar, tables, cards).
+ *
+ * Public contract — extensions and app modules may rely on exactly this,
+ * everything else in the file is private:
+ *   - .fill-height on a view's root element (list or detail context):
+ *     the view grows to exactly the viewport space left by the header,
+ *     toolbar and footer, and the page never scrolls. Put `overflow` on
+ *     your own content inside it.
+ *   - Facet primitives for registered facet renderers: .facet-header,
+ *     .facet-label, .facet-divider.
+ *   - Variables: all --pico-* (Pico's public API, follows the active
+ *     theme) plus the aliases --text, --text-muted, --border, --bg,
+ *     --bg-subtle, --accent.
  */
 
-/* 1. Resin accent — burnt amber, like resin capturing data in time */
+/* 1. Resin accent — burnt amber, like resin capturing data in time.
+   One block for all three theme states: Pico sets color-scheme per state
+   (light default, [data-theme=dark], and prefers-color-scheme when
+   data-theme is absent = "auto"), so light-dark() resolves against the
+   active theme. The selector list mirrors Pico's own specificity so these
+   overrides always win. */
 
 :root:not([data-theme=dark]),
-[data-theme=light] {
-  --pico-primary: #b35309;
-  --pico-primary-background: #b35309;
-  --pico-primary-border: var(--pico-primary-background);
-  --pico-primary-underline: rgba(179, 83, 9, 0.5);
-  --pico-primary-hover: #8c3f06;
-  --pico-primary-hover-background: #9a4607;
-  --pico-primary-hover-border: var(--pico-primary-hover-background);
-  --pico-primary-hover-underline: var(--pico-primary-hover);
-  --pico-primary-focus: rgba(179, 83, 9, 0.375);
-  --pico-primary-inverse: #fff;
-}
-
 [data-theme=dark] {
-  --pico-primary: #e8962f;
+  --pico-primary: light-dark(#b35309, #e8962f);
   --pico-primary-background: #b35309;
   --pico-primary-border: var(--pico-primary-background);
-  --pico-primary-underline: rgba(232, 150, 47, 0.5);
-  --pico-primary-hover: #f0a847;
-  --pico-primary-hover-background: #c75d0b;
+  --pico-primary-underline: light-dark(rgba(179, 83, 9, 0.5), rgba(232, 150, 47, 0.5));
+  --pico-primary-hover: light-dark(#8c3f06, #f0a847);
+  --pico-primary-hover-background: light-dark(#9a4607, #c75d0b);
   --pico-primary-hover-border: var(--pico-primary-hover-background);
   --pico-primary-hover-underline: var(--pico-primary-hover);
-  --pico-primary-focus: rgba(232, 150, 47, 0.375);
+  --pico-primary-focus: light-dark(rgba(179, 83, 9, 0.375), rgba(232, 150, 47, 0.375));
   --pico-primary-inverse: #fff;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) {
-    --pico-primary: #e8962f;
-    --pico-primary-background: #b35309;
-    --pico-primary-border: var(--pico-primary-background);
-    --pico-primary-underline: rgba(232, 150, 47, 0.5);
-    --pico-primary-hover: #f0a847;
-    --pico-primary-hover-background: #c75d0b;
-    --pico-primary-hover-border: var(--pico-primary-hover-background);
-    --pico-primary-hover-underline: var(--pico-primary-hover);
-    --pico-primary-focus: rgba(232, 150, 47, 0.375);
-    --pico-primary-inverse: #fff;
-  }
 }
 
 /* 2. Shorthand aliases for custom components — track Pico's active theme */
@@ -79,24 +68,75 @@ html, body {
 }
 #app > main {
   flex: 1 1 auto;
-  /* Let flex children (e.g. a full-height viewer) size against main. */
+  /* Let flex children (e.g. a .fill-height view) size against main. */
   min-height: 0;
   display: flex;
   flex-direction: column;
+  padding-block: 0.75rem 1.5rem;
 }
 
-/* Detail view fills main as a flex column so a full-height view (e.g. the
-   IIIF viewer) can grow into exactly the space left below the toggles —
-   no magic offsets, no scrollbar. When related sections follow, the page
-   simply scrolls as normal content. */
-#app > main > .detail-view {
+/* Full-viewport-height content. Put .fill-height on a view's root element
+   and it grows to exactly the viewport space left by the header, toolbars
+   and footer — the page itself never scrolls; scroll inside the element
+   instead. Views without the class keep natural flow and page scrolling.
+   Nestable: a .fill-height child of a .fill-height parent fills it. */
+.fill-height {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
 }
-#app > main > .detail-view > .view-toggles {
+
+/* Context chain, list route: pass main's height down through the faceted
+   grid to the active view, only when that view opted in. flex-basis 0 and
+   the minmax(0, 1fr) row are what break the content→height feedback loop:
+   with `auto` in either spot the view's intrinsic content height would
+   grow the page and the fill view would never be clamped to the viewport. */
+.faceted-view:has(.fill-height) {
+  flex: 1 1 0;
+  min-height: 0;
+  align-items: stretch;
+  grid-template-rows: minmax(0, 1fr);
+}
+/* Stacked single-column layout (small screens): rows size naturally and
+   the page scrolls; the views' own min-heights keep them usable. */
+@media (max-width: 768px) {
+  .faceted-view:has(.fill-height) {
+    flex-basis: auto;
+    grid-template-rows: none;
+  }
+}
+.faceted-view:has(.fill-height) .faceted-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.faceted-view:has(.fill-height) .faceted-toolbar {
   flex: 0 0 auto;
+}
+/* The wrapper <section id={table}> between .faceted-content and the view
+   must also grow and pass the height down. */
+.faceted-view:has(.fill-height) .faceted-content > section {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Context chain, detail route: same idea below the view toggles. When
+   related sections follow a fill view, the page scrolls as before. */
+#app > main > .detail-view:has(> .fill-height) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+#app > main > .detail-view:has(> .fill-height) > .view-toggles {
+  flex: 0 0 auto;
+}
+
+.detail-view > .view-toggles {
+  margin: .25rem 0 .75rem;
 }
 
 #app > header {
@@ -225,10 +265,6 @@ html, body {
   font-size: 0.9em;
 }
 
-#app > main {
-  padding-block: 0.75rem 1.5rem;
-}
-
 /* Keep links clean in dense data views; underline on hover only */
 
 a {
@@ -259,14 +295,30 @@ tbody tr:hover {
   background: var(--bg-subtle);
 }
 
-/* Range selector */
-
-.range-selector {
-  margin-bottom: .4rem;
+/* Table scroll wrapper (list, related and search tables). In fill mode the
+   wrapper is the single scroll container and the header sticks to it. */
+.table-scroll {
+  overflow-x: auto;
+}
+.table-scroll.fill-height {
+  overflow-y: auto;
+  /* Very short viewports: keep a usable table and let the page scroll. */
+  min-height: 12rem;
+}
+.table-scroll.fill-height thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg);
+  /* border-collapse makes the th border scroll away; repaint it. */
+  box-shadow: inset 0 -1px 0 var(--border);
 }
 
-/* One row: label left, current values right */
-.range-header {
+/* Facet primitives: one place for label/header alignment in the filter
+   sidebar. Used by core facets and available to registered facet
+   renderers (see the public contract at the top of this file). */
+
+.facet-header {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -274,9 +326,22 @@ tbody tr:hover {
   margin-bottom: .15rem;
 }
 
-.range-label {
+.facet-header button {
+  padding: .1em .5em;
+  font-size: .75em;
+  margin-left: auto;
+  margin-bottom: 0;
+}
+
+.facet-label {
   font-size: .8em;
   font-weight: 600;
+}
+
+/* Range selector */
+
+.range-selector {
+  margin-bottom: .4rem;
 }
 
 .range-values {
@@ -410,63 +475,25 @@ tbody tr:hover {
 .facet-sidebar {
   position: sticky;
   top: 0.5rem;
-  max-height: calc(100vh - 4rem);
+  max-height: calc(100dvh - 4rem);
   overflow-y: auto;
   padding-right: .5rem;
 }
 
+/* Sidebar title row: a .facet-header with centered alignment. */
 .facet-sidebar-header {
-  display: flex;
   align-items: center;
-  gap: .5rem;
-  margin-bottom: .25rem;
   font-size: .95rem;
+  margin-bottom: .25rem;
 }
 
 .faceted-content {
   min-width: 0; /* prevent grid blowout */
 }
 
-/* When the active list view is the (non-paginated) map, make the whole
-   faceted layout fill main's height as a flex chain so the map uses
-   exactly the space left below the toolbar — no fixed offsets, no page
-   scrollbar. Table/cards views are unaffected and keep their natural,
-   scrollable height. */
-.faceted-view:has(.map-list-section) {
-  flex: 1 1 auto;
-  min-height: 0;
-  align-items: stretch;
-}
-.faceted-view:has(.map-list-section) .faceted-content {
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-.faceted-view:has(.map-list-section) .faceted-toolbar {
-  flex: 0 0 auto;
-}
-/* The wrapper <section id={table}> between .faceted-content and the map
-   section must also grow and pass the height down. */
-.faceted-view:has(.map-list-section) .faceted-content > section {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-.faceted-view:has(.map-list-section) .map-list-section {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
 .faceted-content table {
   width: max-content;
   min-width: 100%;
-}
-
-.faceted-content th {
-  white-space: nowrap;
 }
 
 /* Toolbar: view toggles + pagination + count + page size in one row */
@@ -497,6 +524,11 @@ tbody tr:hover {
 
 .facet-dropdown {
   margin-bottom: .4rem;
+}
+
+.facet-dropdown .facet-label {
+  display: block;
+  margin-bottom: .25rem;
 }
 
 /* Divider above each filter in the sidebar */
@@ -765,89 +797,89 @@ article {
 /* FTS search input */
 
 .fts-search {
-    margin-bottom: .25rem;
+  margin-bottom: .25rem;
 }
 
 .fts-search-form {
-    display: flex;
-    align-items: center;
-    margin: 0;
+  display: flex;
+  align-items: center;
+  margin: 0;
 }
 
 /* Carries the Pico data-tooltip for the input; neutralise Pico's
    dashed-underline/help-cursor styling for tooltip hosts. */
 .fts-search-box[data-tooltip] {
-    border-bottom: none;
-    cursor: text;
+  border-bottom: none;
+  cursor: text;
 }
 
 /* Pico tooltips are single-line; the syntax help is long, so wrap it and
    keep it within the sidebar instead of clipping at the viewport edge. */
 .fts-search-box[data-tooltip]::before {
-    white-space: normal;
-    width: 100%;
-    text-align: left;
-    line-height: 1.4;
+  white-space: normal;
+  width: 100%;
+  text-align: left;
+  line-height: 1.4;
 }
 
 .fts-search-box {
-    position: relative;
-    display: flex;
-    align-items: center;
-    flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
 }
 
 .fts-search-input {
-    flex: 1;
-    width: 100%;
-    padding: .3rem .5rem;
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    background: var(--bg);
-    font-size: .8em;
+  flex: 1;
+  width: 100%;
+  padding: .3rem .5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  font-size: .8em;
 }
 
 /* The component renders its own clear button; hide the native WebKit one
    so the input doesn't show two ×'s. */
 .fts-search-input::-webkit-search-cancel-button {
-    -webkit-appearance: none;
-    appearance: none;
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .fts-search-input:focus {
-    border-color: var(--accent);
-    outline: none;
+  border-color: var(--accent);
+  outline: none;
 }
 
 .fts-search-input:disabled {
-    background: var(--bg-subtle);
-    color: var(--text-muted);
-    cursor: not-allowed;
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  cursor: not-allowed;
 }
 
 .fts-search-clear {
-    position: absolute;
-    right: .25rem;
-    top: 0;
-    bottom: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: transparent;
-    border: none;
-    color: var(--text-muted);
-    cursor: pointer;
-    font-size: 1.1em;
-    line-height: 1;
-    padding: 0 .3rem;
+  position: absolute;
+  right: .25rem;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 1.1em;
+  line-height: 1;
+  padding: 0 .3rem;
 }
 
 .fts-search-clear:hover {
-    color: var(--text);
+  color: var(--text);
 }
 
 .fts-error {
-    margin: .35rem 0 0;
-    font-size: .75em;
-    color: var(--pico-del-color);
+  margin: .35rem 0 0;
+  font-size: .75em;
+  color: var(--pico-del-color);
 }

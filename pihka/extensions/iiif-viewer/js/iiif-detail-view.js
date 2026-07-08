@@ -37,5 +37,5 @@ export function IiifDetailView({ columns, row, lang }) {
     if (!row) return h("p", null, "Row not found.");
     if (!manifestUrl) return h("p", null, "No IIIF manifest for this row.");
 
-    return h("div", { class: "iiif-detail-view", ref: container });
+    return h("div", { class: "iiif-detail-view fill-height", ref: container });
 }

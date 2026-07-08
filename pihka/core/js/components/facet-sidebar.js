@@ -29,11 +29,10 @@ export default function FacetSidebar({
     const hasFacetMeta = facetMeta && Object.keys(facetMeta).length > 0;
 
     return h("aside", { class: "facet-sidebar" },
-        h("div", { class: "facet-sidebar-header" },
+        h("div", { class: "facet-header facet-sidebar-header" },
             h("strong", null, "Filters"),
             hasActiveFilters && h("button", {
                 class: "outline",
-                style: "padding:.2em .6em;font-size:.75em;margin-left:auto",
                 onClick: actions.onClearAll,
             }, "Clear all"),
         ),
@@ -168,7 +167,7 @@ function DropdownFacet({ label, options, selected, onChange }) {
         : "";
 
     return h("div", { class: "facet-dropdown" },
-        h("label", { style: "font-size:.8em;font-weight:600;display:block;margin-bottom:.25rem" }, label),
+        h("label", { class: "facet-label" }, label),
         h("div", { class: "facet-dropdown-trigger", onClick: () => setOpen(!open) },
             h("span", { class: hasSelection ? "" : "facet-placeholder" },
                 hasSelection ? selectedDisplay : `Select ${label.toLowerCase()}`,

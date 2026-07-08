@@ -46,12 +46,6 @@
                         "nl": "Jaar"
                     }
                 },
-                "category_id": {
-                    "label": {
-                        "en": "Category",
-                        "nl": "Categorie"
-                    }
-                },
                 "manifest": {
                     "type": "iiif",
                     "label": {
@@ -71,6 +65,26 @@
             "label": {
                 "en": "Categories",
                 "nl": "Categorieën"
+            }
+        },
+        "works_categories": {
+            "label": {
+                "en": "Work categories",
+                "nl": "Werkcategorieën"
+            },
+            "columns": {
+                "work_id": {
+                    "label": {
+                        "en": "Work",
+                        "nl": "Werk"
+                    }
+                },
+                "category_id": {
+                    "label": {
+                        "en": "Category",
+                        "nl": "Categorie"
+                    }
+                }
             }
         },
         "authors": {

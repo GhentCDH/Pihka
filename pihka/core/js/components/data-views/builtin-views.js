@@ -21,7 +21,14 @@ function DetailCardView(props) {
     );
 }
 
-registerView({ id: "table", context: "list", component: DataViewListTable, icon: "☰" });
+// DataViewListTable is also reused by related sections and search results
+// (natural height, page scrolling), so only the top-level list view opts
+// into filling the viewport with internal scrolling.
+function ListTableView(props) {
+    return h(DataViewListTable, { ...props, fill: true });
+}
+
+registerView({ id: "table", context: "list", component: ListTableView, icon: "☰" });
 registerView({ id: "cards", context: "list", component: DataViewListCards, icon: "⬚" });
 
 registerView({ id: "table", context: "detail", component: DataViewDetailTable, icon: "☰" });

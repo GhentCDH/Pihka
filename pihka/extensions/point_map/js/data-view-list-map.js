@@ -25,7 +25,7 @@ export default function DataViewListMap({ name, id, columns, rows, fkResolved, l
 
     const points = rowsToPoints(rows, geo.latCol, geo.lonCol);
 
-    return h("section", { class: "map-list-section", id: id ?? name },
+    return h("section", { class: "map-list-section fill-height", id: id ?? name },
         points.length === 0
             ? h("p", null, "No rows with coordinates.")
             : h(MapView, {

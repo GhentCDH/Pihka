@@ -44,7 +44,11 @@ several map extensions may be enabled at once: `js/maplibre-shim.js` and
 `js/pmtiles-protocol.js` guard through globals so the maplibre UMD bundle
 loads and the `pmtiles://` protocol registers only once per page,
 whichever extension gets there first. The maplibre CSS is deduped via
-`ensureStylesheet`'s `key` option.
+`ensureStylesheet`'s `key` option; the same goes for
+`css/maplibre-pico-reset.css` (key `maplibre-pico-reset`), the shared
+Pico reset for MapLibre controls that each map extension carries a
+byte-identical copy of. Never add extension-specific rules to that file —
+those belong in the extension's own stylesheet (here `css/geo-filter.css`).
 
 ## Licenses
 

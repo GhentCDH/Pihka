@@ -23,8 +23,8 @@ export default function RangeSelector({
 
     return h("div", { class: "range-selector" },
         // Single row: label left, current values right (saves vertical space)
-        h("div", { class: "range-header" },
-            h("span", { class: "range-label" }, label),
+        h("div", { class: "facet-header" },
+            h("span", { class: "facet-label" }, label),
             h("span", { class: "range-values" },
                 h("span", { class: "range-value-box" }, lo),
                 h("span", { class: "range-value-sep" }, "-"),

@@ -1,16 +1,11 @@
-/* TIFY needs a container with a definite height. Inside the detail-view
-   flex column it grows to fill exactly the space left below the toggles
-   (see #app > main > .detail-view), so the viewer uses the available
-   height without overflowing into a page scrollbar. A min-height keeps it
-   usable if the window is very short. */
+/* TIFY needs a container with a definite height. The component adds
+   core's .fill-height, so the viewer grows to exactly the space left
+   below the view toggles without overflowing into a page scrollbar. A
+   min-height keeps it usable if the window is very short. */
 .iiif-detail-view {
-    flex: 1 1 auto;
     min-height: 24rem;
     border-radius: 6px;
     overflow: hidden;
-    /* Flex container so TIFY's own root fills the resolved height. */
-    display: flex;
-    flex-direction: column;
 
     /* Map TIFY's palette onto the app's black/white Pico theme. TIFY
        derives its greys from these via light-dark(), so following the
@@ -32,12 +27,17 @@
 }
 
 /* TIFY defaults to `color-scheme: light dark` (OS preference); pin it to
-   the app's theme toggle instead, mirroring Pico's data-theme handling. */
+   the app's theme toggle instead, mirroring Pico's data-theme handling.
+   With no data-theme ("auto") the OS preference is exactly right, so
+   restore TIFY's default there. */
 :root:not([data-theme=dark]) .iiif-detail-view .tify {
     color-scheme: light;
 }
 [data-theme=dark] .iiif-detail-view .tify {
     color-scheme: dark;
+}
+:root:not([data-theme]) .iiif-detail-view .tify {
+    color-scheme: light dark;
 }
 
 .iiif-badge {

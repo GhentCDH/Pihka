@@ -1,21 +1,8 @@
-/* MapLibre controls — strip Pico's [role="button"] / button styling so the
-   library's own SVG markers and zoom controls render unobscured. */
-
-.maplibregl-marker,
-.maplibregl-ctrl button {
-    background: transparent;
-    border: none;
-    box-shadow: none;
-    padding: 0;
-    color: inherit;
-}
-
-.maplibregl-ctrl-group {
-    background: var(--bg);
-    border-radius: 4px;
-}
-
-.maplibregl-ctrl-group button {
-    width: 29px;
-    height: 29px;
+/* Mini map for the location (viewport) facet: fixed height, it lives in
+   the filter sidebar. MapLibre needs a definite box. */
+.map-bounds-canvas {
+    width: 100%;
+    height: 200px;
+    border-radius: var(--pico-border-radius, 4px);
+    overflow: hidden;
 }

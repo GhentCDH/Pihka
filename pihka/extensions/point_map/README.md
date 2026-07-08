@@ -39,6 +39,14 @@ schema layers.
 and the two registered views. The shared plumbing is deliberately importable
 — future map extensions (e.g. a heat map) can build on it.
 
+Both map views fill the remaining viewport height via core's `.fill-height`
+class (see the public-contract comment in `core/assets/stylesheets/base.css`);
+all map-specific styling lives in `css/point-map.css`.
+`css/maplibre-pico-reset.css` (the Pico reset for MapLibre controls) is
+byte-identical across the map extensions and loaded once per page via
+`ensureStylesheet`'s `maplibre-pico-reset` key — never add
+extension-specific rules to it.
+
 ## Dependencies
 
 Vendored under `vendor/` (declared in `deps.json`, downloaded by

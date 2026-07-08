@@ -38,12 +38,22 @@ async function createSampleDatabase() {
       id INTEGER PRIMARY KEY,
       title TEXT NOT NULL,
       author_id INTEGER REFERENCES authors(id),
-      category_id INTEGER REFERENCES categories(id),
       year INTEGER,
       description TEXT,
       cover TEXT,
       manifest TEXT
     );
+
+    -- Many-to-many: a work carries several categories, a category applies
+    -- to several works. The junction table is deliberately plain
+    -- (id + two FKs) — it demos how Pihka handles associative tables.
+    CREATE TABLE works_categories (
+      id INTEGER PRIMARY KEY,
+      work_id INTEGER NOT NULL REFERENCES works(id),
+      category_id INTEGER NOT NULL REFERENCES categories(id),
+      UNIQUE (work_id, category_id)
+    );
+    CREATE INDEX idx_works_categories_category ON works_categories(category_id);
   `);
 
   // A public IIIF manifest on a few rows, demoing the iiif-viewer extension.
@@ -69,12 +79,30 @@ async function createSampleDatabase() {
   }
   insC.free();
 
-  const insW = db.prepare('INSERT INTO works VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+  const insW = db.prepare('INSERT INTO works VALUES (?, ?, ?, ?, ?, ?, ?)');
   for (const [i, w] of works.entries()) {
     const manifest = i < MANIFEST_ROWS ? SAMPLE_MANIFEST : null;
-    insW.run([w.id, w.title, w.author_id, w.category_id, w.year, w.description, w.cover, manifest]);
+    insW.run([w.id, w.title, w.author_id, w.year, w.description, w.cover, manifest]);
   }
   insW.free();
+
+  // Category assignments: each work keeps its curated category from
+  // works.json and gains 1-2 extra ones, drawn from a seeded PRNG so the
+  // database is byte-stable across runs (tests assert exact counts).
+  const rand = mulberry32(0x9e3779b9);
+  const insWC = db.prepare('INSERT INTO works_categories VALUES (?, ?, ?)');
+  let junctionId = 0;
+  for (const w of works) {
+    const assigned = new Set([w.category_id]);
+    const extras = 1 + Math.floor(rand() * 2); // 1 or 2 extras
+    while (assigned.size < 1 + extras) {
+      assigned.add(categories[Math.floor(rand() * categories.length)].id);
+    }
+    for (const categoryId of assigned) {
+      insWC.run([++junctionId, w.id, categoryId]);
+    }
+  }
+  insWC.free();
 
   db.run('COMMIT');
 
@@ -84,11 +112,24 @@ async function createSampleDatabase() {
   writeFileSync(outputPath, Buffer.from(db.export()));
 
   console.log(`Created sample database at ${outputPath}`);
-  console.log(`  Authors:    ${authors.length}`);
-  console.log(`  Categories: ${categories.length}`);
-  console.log(`  Works:      ${works.length}`);
+  console.log(`  Authors:          ${authors.length}`);
+  console.log(`  Categories:       ${categories.length}`);
+  console.log(`  Works:            ${works.length}`);
+  console.log(`  Work categories:  ${junctionId}`);
 
   db.close();
+}
+
+/** Tiny seeded PRNG (mulberry32) — keeps the generated DB deterministic. */
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
 createSampleDatabase().catch((err) => {

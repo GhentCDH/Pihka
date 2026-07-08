@@ -156,15 +156,14 @@ export default function MapView({
         return h("p", { style: "color:var(--text-muted)" }, "No location data to display.");
     }
 
-    // `fill` mode: grow to fill a flex-column parent (the map's
-    // ResizeObserver calls map.resize() once layout settles). Otherwise use
-    // the explicit `height`. Either way MapLibre needs a definite box.
-    const sizing = fill
-        ? "flex:1 1 auto;min-height:0"
-        : `height:${height}`;
+    // `fill` mode: grow to fill a flex-column parent via core's
+    // .fill-height (the map's ResizeObserver calls map.resize() once
+    // layout settles). Otherwise use the explicit `height`. Either way
+    // MapLibre needs a definite box.
     return h("div", {
         ref: containerRef,
-        style: `width:100%;${sizing};border-radius:var(--border-radius,4px);overflow:hidden`,
+        class: fill ? "map-canvas fill-height" : "map-canvas",
+        style: fill ? undefined : `height:${height}`,
     });
 }
 
