@@ -49,6 +49,7 @@ export class DataStore {
     #fkResolvedCache = new Map();
     #rangeBoundsCache = new Map();
     #fkOptionsCache = new Map();
+    #m2mCache = new Map();
 
     constructor(ds, meta) {
         this.#ds = ds;
@@ -66,16 +67,19 @@ export class DataStore {
     }
 
     /**
-     * Returns filter metadata (range bounds + FK options) for a table.
-     * After the base classification, every registered filter type's
-     * `filterMeta` hook runs and may extend or reshape the result — e.g.
-     * the geo-filter extension replaces the lat/lon range facets with a
-     * `geoMeta` entry carrying the data extent.
-     * @returns {{ rangeMeta: Object, multiMeta: Object, rangeColumns: Array, multiColumns: Array }}
+     * Returns filter metadata (range bounds + FK options + many-to-many
+     * relations) for a table. After the base classification, every
+     * registered filter type's `filterMeta` hook runs and may extend or
+     * reshape the result — e.g. the geo-filter extension replaces the
+     * lat/lon range facets with a `geoMeta` entry carrying the data extent.
+     * @returns {{ rangeMeta: Object, multiMeta: Object, m2mMeta: Object,
+     *   rangeColumns: Array, multiColumns: Array, m2mColumns: Array }}
      */
     getFilterMeta(table) {
         const tableMeta = this.#meta.tables[table];
-        if (!tableMeta) return { rangeMeta: {}, multiMeta: {}, rangeColumns: [], multiColumns: [] };
+        if (!tableMeta) {
+            return { rangeMeta: {}, multiMeta: {}, m2mMeta: {}, rangeColumns: [], multiColumns: [], m2mColumns: [] };
+        }
 
         const { rangeColumns, multiColumns } = classifyColumns(tableMeta.columns);
 
@@ -92,7 +96,39 @@ export class DataStore {
             };
         }
 
-        const meta = { rangeMeta, multiMeta, rangeColumns, multiColumns };
+        // Many-to-many facets: one dropdown per detected junction relation,
+        // keyed by the junction's far-side FK column name (e.g. works gets
+        // "category_id" through works_categories). The `filter` descriptor
+        // carries everything the "m2m" filter type's buildSql needs; the UI
+        // passes it through opaquely.
+        const m2mColumns = [];
+        const m2mMeta = {};
+        const realNames = new Set(tableMeta.columns.map(c => c.name));
+        const rangeNames = new Set(rangeColumns.map(c => c.name));
+        for (const rel of this.#m2mRelations(table)) {
+            const key = rel.farColumn;
+            const rangeStem = key.match(/^(.+)_(min|max)$/)?.[1];
+            if (realNames.has(key) || m2mMeta[key] || (rangeStem && rangeNames.has(rangeStem))) {
+                console.warn(`[pihka] m2m facet for "${table}" via "${rel.junction}" skipped: key "${key}" collides with an existing column or facet`);
+                continue;
+            }
+            const label = this.#meta.tables[rel.farTable]?.label ?? rel.farTable;
+            m2mColumns.push({ name: key, label });
+            m2mMeta[key] = {
+                options: this.#loadFkOptions(rel.farTable, rel.farRefColumn),
+                label,
+                filter: {
+                    type: "m2m",
+                    table,
+                    refColumn: rel.refColumn,
+                    junction: rel.junction,
+                    viaColumn: rel.viaColumn,
+                    targetColumn: rel.farColumn,
+                },
+            };
+        }
+
+        const meta = { rangeMeta, multiMeta, m2mMeta, rangeColumns, multiColumns, m2mColumns };
 
         const loadRangeBounds = (colName) => this.#loadRangeBounds(table, colName);
         for (const def of listFilterTypes()) {
@@ -386,6 +422,62 @@ export class DataStore {
     }
 
     // --- Private helpers ---
+
+    /**
+     * Many-to-many relations reaching `table` through junction tables.
+     *
+     * A junction is detected purely from schema structure: a real table
+     * whose columns are exactly two FK columns to two *different* tables,
+     * plus at most one non-FK column which must be the PK. Both the
+     * `id INTEGER PRIMARY KEY + two FKs` and the composite-PK
+     * `PRIMARY KEY (a_id, b_id)` idioms qualify; junction tables carrying
+     * extra property columns do not. `hidden` config is deliberately not
+     * consulted — hiding a junction table removes its homepage card and
+     * related sections, but keeps the m2m facet (same rule as hidden
+     * lookup tables still resolving FK display names).
+     *
+     * @returns {Array<{ junction: string, viaColumn: string, refColumn: string,
+     *   farTable: string, farColumn: string, farRefColumn: string }>}
+     */
+    #m2mRelations(table) {
+        if (this.#m2mCache.has(table)) return this.#m2mCache.get(table);
+
+        // PRAGMA foreign_key_list reports `to` as null for "REFERENCES t"
+        // without a column name; that means the referenced table's PK.
+        const resolveRefColumn = (ref) => {
+            if (ref.column != null) return ref.column;
+            return this.#meta.tables[ref.table]?.columns.find(c => c.primaryKey)?.name ?? null;
+        };
+
+        const relations = [];
+        for (const [name, meta] of Object.entries(this.#meta.tables)) {
+            if (meta.type !== "table") continue;
+            const fks = meta.columns.filter(c => c.references);
+            const rest = meta.columns.filter(c => !c.references);
+            if (fks.length !== 2) continue;
+            if (rest.length > 1 || (rest.length === 1 && !rest[0].primaryKey)) continue;
+            if (fks[0].references.table === fks[1].references.table) continue;
+            if (!fks.every(c => this.#meta.tables[c.references.table])) continue;
+
+            const near = fks.find(c => c.references.table === table);
+            if (!near) continue;
+            const far = fks.find(c => c !== near);
+            const refColumn = resolveRefColumn(near.references);
+            const farRefColumn = resolveRefColumn(far.references);
+            if (!refColumn || !farRefColumn) continue;
+
+            relations.push({
+                junction: name,
+                viaColumn: near.name,
+                refColumn,
+                farTable: far.references.table,
+                farColumn: far.name,
+                farRefColumn,
+            });
+        }
+        this.#m2mCache.set(table, relations);
+        return relations;
+    }
 
     #loadRangeBounds(table, colName) {
         const cacheKey = `${table} ${colName}`;

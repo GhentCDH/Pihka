@@ -14,7 +14,8 @@ const RELATED_PAGE_SIZE = 10;
  * other tables referencing this one are listed per relation.
  *
  * Props:
- *   tableName     - name of the table
+ *   tableName     - localized display name of the table (headings)
+ *   table         - real (SQL) table name, for store queries
  *   columns       - column schema array
  *   row           - row data object, or null
  *   fkResolved    - FK display name map
@@ -26,7 +27,7 @@ const RELATED_PAGE_SIZE = 10;
  *   perspectiveId - perspective id for URL building
  *   rowId         - row id for URL building
  */
-export default function DetailView({ tableName, columns, row, fkResolved, related = [], store, view, lang, perspectiveId, rowId }) {
+export default function DetailView({ tableName, table, columns, row, fkResolved, related = [], store, view, lang, perspectiveId, rowId }) {
     const activeView = view || "table";
     const effectiveLang = lang || "en";
 
@@ -56,7 +57,7 @@ export default function DetailView({ tableName, columns, row, fkResolved, relate
         // Render active view
         !row
             ? h("p", null, "Row not found.")
-            : h(viewDef.component, { tableName, columns, row, fkResolved, lang: effectiveLang, perspectiveId }),
+            : h(viewDef.component, { tableName, table, columns, row, fkResolved, lang: effectiveLang, perspectiveId, store }),
 
         // Related objects: rows from other tables referencing this one.
         row && related.length > 0 && related.map(rel =>

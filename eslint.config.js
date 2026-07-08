@@ -75,6 +75,7 @@ export default [
                 URL: "readonly",
                 fetch: "readonly",
                 TransformStream: "readonly",
+                setTimeout: "readonly",
             },
         },
     },

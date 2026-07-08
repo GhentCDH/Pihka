@@ -15,6 +15,7 @@
     "download-dbs": "node scripts/download-dbs.js",
     "download-world-pmtiles": "node scripts/download-world-pmtiles.js",
     "download-covers": "node scripts/download-covers.js",
+    "download-full-text": "node scripts/download-full-text.js",
     "vendorize": "node scripts/vendorize-deps.js"
   },
   "devDependencies": {

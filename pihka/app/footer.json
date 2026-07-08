@@ -1,7 +1,7 @@
 {
     "credits": {
-        "en": "<p><a href=\"https://www.ghentcdh.ugent.be\" target=\"_blank\" rel=\"noopener noreferrer\">Ghent Centre for Digital Humanities</a></p>",
-        "nl": "<p><a href=\"https://www.ghentcdh.ugent.be\" target=\"_blank\" rel=\"noopener noreferrer\">Ghent Centre for Digital Humanities</a></p>"
+        "en": "<p><a href=\"https://www.ghentcdh.ugent.be\" target=\"_blank\" rel=\"noopener noreferrer\">Ghent Centre for Digital Humanities</a></p><p>Full texts from <a href=\"https://www.gutenberg.org\" target=\"_blank\" rel=\"noopener noreferrer\">Project Gutenberg</a></p>",
+        "nl": "<p><a href=\"https://www.ghentcdh.ugent.be\" target=\"_blank\" rel=\"noopener noreferrer\">Ghent Centre for Digital Humanities</a></p><p>Volledige teksten van <a href=\"https://www.gutenberg.org\" target=\"_blank\" rel=\"noopener noreferrer\">Project Gutenberg</a></p>"
     },
     "links": [
         { "label": { "en": "Contact", "nl": "Contact" }, "href": "mailto:ghentcdh@ugent.be" }

@@ -92,3 +92,41 @@ registerFilterType("multi", {
         };
     },
 });
+
+// Many-to-many filter through a junction table: {farFkCol}=v1,v2,... on
+// relations detected by DataStore#getFilterMeta (see m2mMeta there). The
+// filter descriptor carries the junction/column names; decode only ever
+// copies them from the trusted metadata, so URL params cannot inject
+// identifiers into the SQL.
+registerFilterType("m2m", {
+    decode(params, { filterMeta }) {
+        const m2mMeta = filterMeta?.m2mMeta;
+        if (!m2mMeta) return null;
+        const filters = {};
+        for (const [key, value] of Object.entries(params)) {
+            if (!m2mMeta[key] || !value) continue;
+            const values = value.split(",").map(v => {
+                const n = Number(v);
+                return Number.isFinite(n) ? n : v;
+            });
+            filters[key] = { ...m2mMeta[key].filter, selected: new Set(values) };
+        }
+        return filters;
+    },
+    encode(key, filter) {
+        if (filter.selected.size === 0) return null;
+        return { [key]: Array.from(filter.selected).join(",") };
+    },
+    buildSql(key, filter) {
+        if (filter.selected.size === 0) return null;
+        const placeholders = Array.from(filter.selected).map(() => "?").join(", ");
+        return {
+            // Qualified with the base table: queryTable joins the FTS table
+            // during a search, which could make a bare column ambiguous.
+            conditions: [
+                `${quote(filter.table)}.${quote(filter.refColumn)} IN (SELECT ${quote(filter.viaColumn)} FROM ${quote(filter.junction)} WHERE ${quote(filter.targetColumn)} IN (${placeholders}))`,
+            ],
+            params: [...filter.selected],
+        };
+    },
+});

@@ -24,14 +24,20 @@
  * @property {Function|null} onSort - callback(columnName) to request sort
  * @property {Object|null} fkResolved - FK display maps
  * @property {string|null} lang - current language code
+ * @property {Object|null} store - DataStore facade for requesting more data
+ *   as plain JSON (queryTable/queryRelated/getSchema/resolveForeignKeys).
+ *   Views never see or build SQL — they ask for data and render the result.
  *
  * @typedef {Object} DetailViewProps
- * @property {string} tableName
+ * @property {string} tableName - localized display name (for headings)
+ * @property {string|null} table - real (SQL) table name, the one store
+ *   methods expect
  * @property {Array} columns
  * @property {Object} row
  * @property {Object|null} fkResolved
  * @property {string|null} lang
  * @property {string|null} perspectiveId
+ * @property {Object|null} store - same DataStore facade as ListViewProps.store
  *
  * @typedef {Object} ViewDefinition
  * @property {string} id - URL segment, e.g. "table", "cards", "map"

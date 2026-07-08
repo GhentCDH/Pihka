@@ -101,7 +101,7 @@ test("global search from the header shows grouped results", async ({ page }) => 
   await box.fill("novel");
   await box.press("Enter");
   await expect(page).toHaveURL(/\/en\/search\?q=novel/);
-  await expect(page.locator(".search-results-summary")).toContainText("in 2 of 3 searchable tables");
+  await expect(page.locator(".search-results-summary")).toContainText("in 2 of 5 searchable tables");
   // One section per matching entity, capped at 5 rows each
   const groups = page.locator(".search-results-group");
   await expect(groups).toHaveCount(2);
@@ -165,9 +165,9 @@ test("works view shows sidebar with facet filters", async ({ page }) => {
   await expect(sidebar).toContainText("Filters");
   // Year range slider in sidebar
   await expect(sidebar.locator("input[type='range']")).toHaveCount(2);
-  // Author dropdown facet only: categories are m2m via works_categories,
-  // and junction-table facets are not auto-generated (yet).
-  await expect(sidebar.locator(".facet-dropdown")).toHaveCount(1);
+  // Author dropdown (direct FK) + Categories dropdown (m2m through the
+  // works_categories junction table).
+  await expect(sidebar.locator(".facet-dropdown")).toHaveCount(2);
 });
 
 test("year range filter narrows works rows", async ({ page }) => {
@@ -196,11 +196,11 @@ test("category dropdown facet filters junction rows", async ({ page }) => {
   await expect(content).toContainText("of 155");
 });
 
-test("m2m demo: junction table current behavior", async ({ page }) => {
+test("m2m demo: junction table behavior", async ({ page }) => {
   // The works↔categories relation is many-to-many via works_categories.
-  // This test pins down how Pihka treats a junction table TODAY: as an
-  // ordinary table with two FK columns. Automated m2m handling (a category
-  // facet on works, collapsed related sections) does not exist yet.
+  // The junction table itself behaves like any table (homepage card,
+  // related sections of raw junction rows), while the detected relation
+  // additionally yields automatic m2m facets on both sides.
 
   // Homepage: the junction table gets its own card like any table.
   await gotoRoute(page, "/");
@@ -216,13 +216,92 @@ test("m2m demo: junction table current behavior", async ({ page }) => {
   await gotoRoute(page, "/en/works_categories/table");
   await expect(page.locator("tbody tr").first()).toContainText("Mrs Dalloway");
   await expect(page.locator("tbody tr").first()).toContainText("Novel");
+});
 
-  // The gap this data demonstrates: works itself has no category facet
-  // anymore (facets are only auto-generated from direct FK columns).
+test("full text: matched work shows an expandable preview; unmatched is empty", async ({ page }) => {
+  // Mrs Dalloway (id 1) is public domain and has a Gutenberg full text; the
+  // famous opening line sits past the 300-char preview cut-off, so it only
+  // appears once expanded.
+  const OPENING = "Mrs. Dalloway said she would buy the flowers";
+  await gotoRoute(page, "/en/works/1/table");
+  const cell = page.locator(".cell-text");
+  await expect(cell).toBeVisible();
+  await expect(cell.locator("button.cell-text-toggle")).toHaveText("Show more");
+  await expect(page.locator("body")).not.toContainText(OPENING);
+
+  await cell.locator("button.cell-text-toggle").click();
+  await expect(cell.locator("button.cell-text-toggle")).toHaveText("Show less");
+  await expect(cell).toContainText(OPENING);
+
+  // full_text is stored but NOT keyword-indexed: a phrase found only in a
+  // novel body returns nothing, while title search still works.
+  await gotoRoute(page, "/en/works/table");
+  await page.locator(".fts-search-input").fill("buy the flowers herself");
+  await expect(page).toHaveURL(/q=buy/);
+  await expect(page.locator(".faceted-count")).toContainText("No results");
+
+  // A modern (in-copyright) work has no full text: no preview cell.
+  await gotoRoute(page, "/en/works/26/table"); // A. Scott Berg — Kate Remembered (2003)
+  await expect(page.locator(".detail-view")).toBeVisible();
+  await expect(page.locator(".cell-text")).toHaveCount(0);
+});
+
+test("m2m facet: works gets an automatic category facet from the junction", async ({ page }) => {
   await gotoRoute(page, "/en/works/table");
   const sidebar = page.locator("aside.facet-sidebar");
-  await expect(sidebar.locator(".facet-dropdown-trigger")).toHaveCount(1);
-  await expect(sidebar).not.toContainText("Categories");
+  await expect(sidebar.locator(".facet-dropdown-trigger")).toHaveCount(2);
+  await expect(sidebar).toContainText("Categories");
+
+  // Select Drama in the m2m dropdown: filters through the junction table.
+  await sidebar.locator(".facet-dropdown-trigger").nth(1).click();
+  await sidebar.locator(".facet-option", { hasText: "Drama" }).click();
+  await expect(page.locator(".faceted-content")).toContainText("of 152");
+  await expect(page).toHaveURL(/category_id=5/);
+});
+
+test("m2m facet: URLs are bookmarkable and compose with other filters", async ({ page }) => {
+  // Deep link decodes straight from the URL param.
+  await gotoRoute(page, "/en/works/table?category_id=1");
+  await expect(page.locator(".faceted-count")).toContainText("of 1734");
+
+  await gotoRoute(page, "/en/works/table?category_id=4");
+  const content = page.locator(".faceted-content");
+  await expect(content).toContainText("of 155");
+
+  // Full-text search composes on top (AND) and the m2m param survives
+  // the filter re-encoding round-trip.
+  await page.locator(".fts-search-input").fill("the");
+  await expect(page).toHaveURL(/q=the/);
+  await expect(page).toHaveURL(/category_id=4/);
+  await expect(content).not.toContainText("of 155");
+  await expect(content.locator("tbody tr").first()).toBeVisible();
+});
+
+test("m2m facet: symmetric side renders as a capped autocomplete", async ({ page }) => {
+  // categories gets the symmetric Works facet; 1743 options render as an
+  // autocomplete capped at 100 visible entries.
+  await gotoRoute(page, "/en/categories/table");
+  const sidebar = page.locator("aside.facet-sidebar");
+  await expect(sidebar.locator("input[type='range']")).toHaveCount(0);
+  await expect(sidebar.locator(".facet-dropdown")).toHaveCount(1);
+  await expect(sidebar).toContainText("Works");
+
+  await sidebar.locator(".facet-dropdown-trigger").click();
+  await expect(sidebar.locator(".facet-option")).toHaveCount(100);
+  await expect(sidebar.locator(".facet-options-truncated")).toContainText("Showing 100 of 1743");
+
+  // Typing narrows; selecting filters categories through the junction.
+  await sidebar.locator(".facet-dropdown-panel .facet-search").fill("Mrs Dalloway");
+  await sidebar.locator(".facet-option", { hasText: "Mrs Dalloway" }).click();
+  await expect(page.locator(".faceted-count")).toContainText("of 2"); // Novel + Poetry
+  await expect(page).toHaveURL(/work_id=1/);
+
+  // The selected option stays visible (and unticked-able) above the cap
+  // after the search is cleared.
+  await sidebar.locator(".facet-dropdown-panel .facet-search").fill("");
+  const first = sidebar.locator(".facet-option").first();
+  await expect(first).toContainText("Mrs Dalloway");
+  await expect(first.locator("input")).toBeChecked();
 });
 
 test("authors view has birth_year range filter in sidebar", async ({ page }) => {
@@ -232,14 +311,6 @@ test("authors view has birth_year range filter in sidebar", async ({ page }) => 
   // birth_year configured as range facet
   await expect(sidebar.locator("input[type='range']")).not.toHaveCount(0);
   await expect(sidebar.locator(".facet-label", { hasText: "birth_year" })).toBeVisible();
-});
-
-test("categories view has no filter controls", async ({ page }) => {
-  await gotoRoute(page, "/en/categories/table");
-  // Categories has no FK columns and no numeric columns → no sidebar or empty sidebar
-  const sidebar = page.locator("aside.facet-sidebar");
-  await expect(sidebar.locator("input[type='range']")).toHaveCount(0);
-  await expect(sidebar.locator(".facet-dropdown")).toHaveCount(0);
 });
 
 test("works table shows pagination with page size control", async ({ page }) => {
@@ -304,7 +375,7 @@ test("home page shows perspectives and tables sections", async ({ page }) => {
   await expect(page.locator(".perspective-section-title", { hasText: "Tables" })).toBeVisible();
   await expect(page.locator(".perspective-grid").first()).toBeVisible();
   // 1 configured perspective + 4 tables, the perspective view not double-listed
-  await expect(page.locator("a.perspective-card")).toHaveCount(5);
+  await expect(page.locator("a.perspective-card")).toHaveCount(7);
 });
 
 test("multi-table perspective aggregates rows with expandable list cells", async ({ page }) => {
@@ -347,6 +418,36 @@ test("iiif extension: detail page offers the iiif view toggle", async ({ page })
   // TIFY mounts in the extension's container (manifest itself loads from the
   // network; the mounted shell is enough to assert wiring without flakiness)
   await expect(page.locator(".iiif-detail-view .tify")).toHaveCount(1, { timeout: 10000 });
+});
+
+test("text-annotations extension: cells render badges linking to the annotated view", async ({ page }) => {
+  await gotoRoute(page, "/en/text_pages/table");
+  // all 3 sample pages carry a body; badge links into the registered detail view
+  await expect(page.locator(".annotated-text-badge")).toHaveCount(3);
+  await expect(page.locator(".annotated-text-badge").first())
+    .toHaveAttribute("href", "#/en/text_pages/1/annotated-text");
+  // extension CSS (own + vendored library) was injected by the component module itself
+  await expect(page.locator('link[href*="text-annotations/css/text-annotations.css"]')).toHaveCount(1);
+  await expect(page.locator('link[href*="annotated-text/index.css"]')).toHaveCount(1);
+});
+
+test("text-annotations extension: detail page renders the annotated text", async ({ page }) => {
+  await gotoRoute(page, "/en/text_pages/1/table");
+  // registered view shows up in the view toggle like any builtin
+  const toggle = page.locator("button", { hasText: "🖍" }).first();
+  await expect(toggle).toBeVisible();
+  await toggle.click();
+  await expect(page).toHaveURL(/\/en\/text_pages\/1\/annotated-text/);
+  // the library renders the text plus an SVG highlight layer
+  const view = page.locator(".annotated-text-detail-view");
+  await expect(view).toContainText("To Sherlock Holmes she is always");
+  await expect(view.locator("svg.ghent-cdh-annotation-svg")).toHaveCount(1);
+  // 9 annotations on page 1, auto-detected from the annotations table's
+  // FK + start/end columns; the type column drives the two-color legend
+  await expect(view.locator("svg path[fill^='rgba']")).toHaveCount(9);
+  await expect(view.locator(".annotated-text-legend-chip")).toHaveText(["person", "place"]);
+  // the annotations table also appears as a plain reverse-FK related section
+  await expect(page.locator(".detail-related", { hasText: "Annotations" })).toBeVisible();
 });
 
 test("point_map extension: geo tables get map views and the location facet", async ({ page }) => {

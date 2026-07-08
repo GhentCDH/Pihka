@@ -59,7 +59,7 @@ function buildIndex(ds, tableName, tableMeta, mode) {
     if (!pkCol) return; // FTS5 external content needs an integer rowid
 
     const textCols = findTextColumns(tableMeta.columns)
-        .filter(c => !RESERVED_FTS5_COLS.has(c.name.toLowerCase()));
+        .filter(c => !RESERVED_FTS5_COLS.has(c.name.toLowerCase()) && !c.noFts);
     if (textCols.length === 0) return;
 
     const ftsName = `${tableName}_fts`;

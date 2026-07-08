@@ -8,7 +8,8 @@
     "components": [
         "extensions/iiif-viewer/iiif-viewer-component.js",
         "extensions/point_map/point-map-component.js",
-        "extensions/geo-filter/geo-filter-component.js"
+        "extensions/geo-filter/geo-filter-component.js",
+        "extensions/text-annotations/text-annotations-component.js"
     ],
     "perspectives": [
         {
@@ -53,6 +54,14 @@
                         "nl": "IIIF"
                     }
                 },
+                "full_text": {
+                    "type": "text",
+                    "fts": false,
+                    "label": {
+                        "en": "Full text",
+                        "nl": "Volledige tekst"
+                    }
+                },
                 "author_id": {
                     "label": {
                         "en": "Author",
@@ -91,6 +100,86 @@
             "label": {
                 "en": "Authors",
                 "nl": "Auteurs"
+            }
+        },
+        "text_pages": {
+            "label": {
+                "en": "Text pages",
+                "nl": "Tekstpagina's"
+            },
+            "columns": {
+                "work_id": {
+                    "label": {
+                        "en": "Work",
+                        "nl": "Werk"
+                    }
+                },
+                "page_number": {
+                    "type": "number",
+                    "label": {
+                        "en": "Page",
+                        "nl": "Pagina"
+                    }
+                },
+                "title": {
+                    "label": {
+                        "en": "Title",
+                        "nl": "Titel"
+                    }
+                },
+                "body": {
+                    "type": "annotated-text",
+                    "label": {
+                        "en": "Text",
+                        "nl": "Tekst"
+                    }
+                }
+            }
+        },
+        "annotations": {
+            "label": {
+                "en": "Annotations",
+                "nl": "Annotaties"
+            },
+            "columns": {
+                "page_id": {
+                    "label": {
+                        "en": "Page",
+                        "nl": "Pagina"
+                    }
+                },
+                "start": {
+                    "type": "number",
+                    "format": {
+                        "useGrouping": false
+                    },
+                    "label": {
+                        "en": "Start",
+                        "nl": "Begin"
+                    }
+                },
+                "end": {
+                    "type": "number",
+                    "format": {
+                        "useGrouping": false
+                    },
+                    "label": {
+                        "en": "End",
+                        "nl": "Einde"
+                    }
+                },
+                "type": {
+                    "label": {
+                        "en": "Type",
+                        "nl": "Type"
+                    }
+                },
+                "label": {
+                    "label": {
+                        "en": "Label",
+                        "nl": "Label"
+                    }
+                }
             }
         },
         "author_overview": {

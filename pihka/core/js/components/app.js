@@ -159,7 +159,7 @@ export function App({ perspectives, store, defaultLang, languages = null, menu =
             ],
         },
             h(DetailView, {
-                tableName: displayName, columns, row, fkResolved, related, store,
+                tableName: displayName, table: tableName, columns, row, fkResolved, related, store,
                 view, lang: effectiveLang,
                 perspectiveId, rowId,
             }),

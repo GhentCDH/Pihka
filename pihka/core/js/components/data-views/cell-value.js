@@ -8,6 +8,7 @@ import { formatValue } from "../../utilities-data/table-config.js";
 
 const LIST_SEPARATOR = "|";
 const LIST_LIMIT = 3;
+const PREVIEW_CHARS = 300;
 
 /**
  * Render a single value according to its column metadata. The one shared
@@ -73,6 +74,10 @@ export default function CellValue({ col, value, fkResolved, lang, imageHeight = 
         return h(ListValue, { col, value: String(raw) });
     }
 
+    if (col.displayType === "text") {
+        return h(TextPreview, { value: String(raw) });
+    }
+
     if (col.displayType === "url") {
         return h("a", { href: String(raw), target: "_blank", rel: "noopener noreferrer" }, String(raw));
     }
@@ -124,5 +129,25 @@ function ListValue({ col, value }) {
             class: "cell-list-toggle",
             onClick: () => setExpanded(e => !e),
         }, expanded ? "Show less" : `+${hiddenCount} more`),
+    );
+}
+
+/**
+ * Long free text (e.g. a full document body): shown truncated to the first
+ * PREVIEW_CHARS with an inline "Show more/less" toggle. Same self-contained
+ * pattern as ListValue, so it works identically in list and detail views.
+ */
+function TextPreview({ value }) {
+    const [expanded, setExpanded] = useState(false);
+    if (value.length <= PREVIEW_CHARS) return value;
+
+    const preview = value.slice(0, PREVIEW_CHARS).trimEnd();
+    return h("span", { class: "cell-text" },
+        expanded ? value : preview + "… ",
+        h("button", {
+            type: "button",
+            class: "cell-text-toggle",
+            onClick: () => setExpanded(e => !e),
+        }, expanded ? "Show less" : "Show more"),
     );
 }

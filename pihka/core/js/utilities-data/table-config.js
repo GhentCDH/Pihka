@@ -68,6 +68,10 @@ export function applyTableConfig(meta, config) {
             col.hidden = c.hidden === true;
             col.label = c.label ?? null;
             col.format = c.format ?? null;
+            // Opt this column out of the FTS index (kept in the DB, just not
+            // searchable). Distinct from the global `enrichment.fts` config,
+            // which selects the tokenizer for the whole database.
+            col.noFts = c.fts === false;
             // "list" columns: separator the values were aggregated with
             // (e.g. GROUP_CONCAT(x, '|')) and how many to show collapsed.
             col.separator = typeof c.separator === "string" ? c.separator : null;

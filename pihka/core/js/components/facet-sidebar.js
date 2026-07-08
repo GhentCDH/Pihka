@@ -105,7 +105,12 @@ function renderConfiguredFacets(facetMeta, filters, actions, lang) {
 
 function renderAutoFacets(autoFilterMeta, filters, actions, lang) {
     if (!autoFilterMeta) return null;
-    const { rangeMeta, multiMeta, rangeColumns, multiColumns } = autoFilterMeta;
+    // Defaults guard against extension filterMeta hooks that reshape the
+    // metadata — a missing entry must not take the whole sidebar down.
+    const {
+        rangeMeta, multiMeta, rangeColumns, multiColumns,
+        m2mMeta = {}, m2mColumns = [],
+    } = autoFilterMeta;
 
     return [
         ...multiColumns.map(col =>
@@ -128,8 +133,25 @@ function renderAutoFacets(autoFilterMeta, filters, actions, lang) {
                 onChangeMax: (v) => actions.onRangeChange(col.name, "max", v),
             })),
         ),
+        // Many-to-many facets through detected junction tables. The meta's
+        // `filter` descriptor is opaque to the UI — it is passed through to
+        // the generic onFilterChange, like the geo-filter's bounds filter.
+        ...m2mColumns.map(col =>
+            facetBlock(col.name, h(DropdownFacet, {
+                label: localize(m2mMeta[col.name].label, lang, col.name),
+                options: (m2mMeta[col.name].options || []).map(o => ({ ...o, count: null })),
+                selected: filters[col.name]?.selected ?? new Set(),
+                onChange: (sel) => actions.onFilterChange(col.name,
+                    sel.size ? { ...m2mMeta[col.name].filter, selected: sel } : null),
+            })),
+        ),
     ];
 }
+
+// Long option lists render as an autocomplete: only this many options go
+// into the panel DOM; the search box narrows the list. Selected options are
+// always shown so they can be unticked without retyping the search.
+const MAX_VISIBLE_OPTIONS = 100;
 
 /**
  * A searchable dropdown facet with optional counts.
@@ -145,6 +167,16 @@ function DropdownFacet({ label, options, selected, onChange }) {
 
     const selectedValues = selected;
     const hasSelection = selectedValues.size > 0;
+
+    // Autocomplete cap: render at most MAX_VISIBLE_OPTIONS matches, with
+    // selected options prepended when they fall outside the visible slice.
+    const truncated = filtered.length > MAX_VISIBLE_OPTIONS;
+    let visible = truncated ? filtered.slice(0, MAX_VISIBLE_OPTIONS) : filtered;
+    if (truncated && hasSelection) {
+        const shown = new Set(visible.map(o => o.value));
+        const missingSelected = options.filter(o => selectedValues.has(o.value) && !shown.has(o.value));
+        visible = [...missingSelected, ...visible];
+    }
 
     const handleSelect = (value) => {
         const next = new Set(selectedValues);
@@ -190,7 +222,7 @@ function DropdownFacet({ label, options, selected, onChange }) {
             h("div", { class: "facet-options" },
                 filtered.length === 0
                     ? h("div", { style: "padding:.5rem;color:var(--text-muted);font-size:.8em" }, "No matches")
-                    : filtered.map(opt =>
+                    : visible.map(opt =>
                         h("label", {
                             key: opt.value,
                             class: `facet-option ${selectedValues.has(opt.value) ? "facet-option-selected" : ""}`,
@@ -204,6 +236,9 @@ function DropdownFacet({ label, options, selected, onChange }) {
                             opt.count != null && h("span", { class: "facet-option-count" }, opt.count),
                         ),
                     ),
+                truncated && h("div", { class: "facet-options-truncated" },
+                    `Showing ${MAX_VISIBLE_OPTIONS} of ${filtered.length} — type to narrow`,
+                ),
             ),
         ),
     );

@@ -8,12 +8,13 @@
  */
 
 import initSqlJs from 'sql.js';
-import { readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, 'data');
+const FULL_TEXT_DIR = join(DATA_DIR, 'full_text');
 
 async function createSampleDatabase() {
   const SQL = await initSqlJs();
@@ -41,7 +42,8 @@ async function createSampleDatabase() {
       year INTEGER,
       description TEXT,
       cover TEXT,
-      manifest TEXT
+      manifest TEXT,
+      full_text TEXT
     );
 
     -- Many-to-many: a work carries several categories, a category applies
@@ -54,6 +56,30 @@ async function createSampleDatabase() {
       UNIQUE (work_id, category_id)
     );
     CREATE INDEX idx_works_categories_category ON works_categories(category_id);
+
+    -- Pages of running text sliced from one novel's full text, demoing the
+    -- text-annotations extension. Created unconditionally so the schema is
+    -- stable; populated only when scripts/data/full_text/ is present.
+    CREATE TABLE text_pages (
+      id INTEGER PRIMARY KEY,
+      work_id INTEGER NOT NULL REFERENCES works(id),
+      page_number INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL
+    );
+
+    -- Stand-off annotations pointing into a page body by character offsets.
+    -- "end" is an SQL keyword, hence quoted; the data layer quotes all
+    -- identifiers anyway, so the name needs no special handling at query time.
+    CREATE TABLE annotations (
+      id INTEGER PRIMARY KEY,
+      page_id INTEGER NOT NULL REFERENCES text_pages(id),
+      "start" INTEGER NOT NULL,
+      "end" INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      label TEXT NOT NULL
+    );
+    CREATE INDEX idx_annotations_page ON annotations(page_id);
   `);
 
   // A public IIIF manifest on a few rows, demoing the iiif-viewer extension.
@@ -63,6 +89,18 @@ async function createSampleDatabase() {
   const authors    = JSON.parse(readFileSync(join(DATA_DIR, 'authors.json'),    'utf8'));
   const categories = JSON.parse(readFileSync(join(DATA_DIR, 'categories.json'), 'utf8'));
   const works      = JSON.parse(readFileSync(join(DATA_DIR, 'works.json'),      'utf8'));
+
+  // Full novel texts downloaded from Project Gutenberg (scripts/download-
+  // full-text.js). Keyed by the work_id embedded in each JSON, so we never
+  // depend on the filename slug. Directory is absent on a fresh clone.
+  const fullText = new Map();
+  if (existsSync(FULL_TEXT_DIR)) {
+    for (const file of readdirSync(FULL_TEXT_DIR)) {
+      if (!file.endsWith('.json')) continue;
+      const entry = JSON.parse(readFileSync(join(FULL_TEXT_DIR, file), 'utf8'));
+      if (entry.work_id != null && entry.text) fullText.set(entry.work_id, entry.text);
+    }
+  }
 
   // Single transaction — without this, sql.js commits per-INSERT and 1000+ rows take minutes.
   db.run('BEGIN');
@@ -79,10 +117,10 @@ async function createSampleDatabase() {
   }
   insC.free();
 
-  const insW = db.prepare('INSERT INTO works VALUES (?, ?, ?, ?, ?, ?, ?)');
+  const insW = db.prepare('INSERT INTO works VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
   for (const [i, w] of works.entries()) {
     const manifest = i < MANIFEST_ROWS ? SAMPLE_MANIFEST : null;
-    insW.run([w.id, w.title, w.author_id, w.year, w.description, w.cover, manifest]);
+    insW.run([w.id, w.title, w.author_id, w.year, w.description, w.cover, manifest, fullText.get(w.id) ?? null]);
   }
   insW.free();
 
@@ -104,6 +142,60 @@ async function createSampleDatabase() {
   }
   insWC.free();
 
+  // Text pages + annotations: three "pages" cut from the opening of
+  // "A Scandal in Bohemia" (The Adventures of Sherlock Holmes, work 89),
+  // each page ending at the first paragraph break after ~2400 characters.
+  // Annotation offsets are found with indexOf against each page body —
+  // fully deterministic, no PRNG involved. Longer names come first so
+  // "Sherlock Holmes" wins over a nested "Holmes".
+  const SHERLOCK_WORK_ID = 89;
+  const PAGE_TARGET = 2400;
+  const PAGE_COUNT = 3;
+  const ANNOTATION_NAMES = [
+    ['Sherlock Holmes', 'person'], ['Irene Adler', 'person'], ['Godfrey Norton', 'person'],
+    ['Holmes', 'person'], ['Watson', 'person'], ['Adler', 'person'], ['Boswell', 'person'],
+    ['Baker Street', 'place'], ['Briony Lodge', 'place'], ['Bohemia', 'place'],
+    ['London', 'place'], ['Europe', 'place'], ['Odessa', 'place'], ['Trincomalee', 'place'],
+    ['Warsaw', 'place'], ['La Scala', 'place'], ['Scandinavia', 'place'],
+    ['England', 'place'], ['Egria', 'place'], ['Carlsbad', 'place'],
+  ];
+
+  let pageCount = 0;
+  let annotationCount = 0;
+  const sherlock = fullText.get(SHERLOCK_WORK_ID);
+  if (sherlock) {
+    const text = sherlock.replace(/\r\n/g, '\n'); // normalize before slicing/offsets
+    let pos = text.indexOf('To Sherlock Holmes she is always'); // chapter I prose start
+    const insP = db.prepare('INSERT INTO text_pages VALUES (?, ?, ?, ?, ?)');
+    const insAnn = db.prepare('INSERT INTO annotations VALUES (?, ?, ?, ?, ?, ?)');
+    for (let p = 1; p <= PAGE_COUNT && pos !== -1 && pos < text.length; p++) {
+      let cut = text.indexOf('\n\n', pos + PAGE_TARGET);
+      if (cut === -1) cut = text.length;
+      const body = text.slice(pos, cut).trim();
+      insP.run([p, SHERLOCK_WORK_ID, p, `A Scandal in Bohemia — page ${p}`, body]);
+      pageCount++;
+
+      const taken = [];
+      const found = [];
+      for (const [name, type] of ANNOTATION_NAMES) {
+        let idx = body.indexOf(name);
+        while (idx !== -1) {
+          const s = idx, e = idx + name.length;
+          if (!taken.some(([a, b]) => s < b && e > a)) {
+            taken.push([s, e]);
+            found.push({ s, e, type, name });
+          }
+          idx = body.indexOf(name, idx + 1);
+        }
+      }
+      found.sort((a, b) => a.s - b.s);
+      for (const f of found) insAnn.run([++annotationCount, p, f.s, f.e, f.type, f.name]);
+      pos = cut + 2;
+    }
+    insP.free();
+    insAnn.free();
+  }
+
   db.run('COMMIT');
 
   // config.json's "database" key points here.
@@ -116,6 +208,9 @@ async function createSampleDatabase() {
   console.log(`  Categories:       ${categories.length}`);
   console.log(`  Works:            ${works.length}`);
   console.log(`  Work categories:  ${junctionId}`);
+  console.log(`  Full texts:       ${fullText.size}`);
+  console.log(`  Text pages:       ${pageCount}`);
+  console.log(`  Annotations:      ${annotationCount}`);
 
   db.close();
 }

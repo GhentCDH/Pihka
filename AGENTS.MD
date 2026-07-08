@@ -54,6 +54,9 @@ pihka/
       js/  css/       # Map components (map-view, popup, bounds filter, shims)
       assets/         # world.pmtiles basemap, served statically
       deps.json  vendor/
+    text-annotations/ # Stand-off char-offset annotations on a text column (see its README.md)
+      text-annotations-component.js  # Entry module: registers detail view + cell renderer
+      js/  css/  deps.json  vendor/
 ```
 
 ### Routing
@@ -101,8 +104,9 @@ The `tables` section of `app/config.json` configures how tables and columns disp
 
 - Labels are strings or `{lang: string}` objects, resolved against the current URL language (then `en`, then the first language, then the raw name) by `localize()` in `core/js/utilities-data/table-config.js`.
 - A top-level `"languages": ["en", "nl"]` config key enables the header language switcher; it rewrites the URL's lang segment and persists the choice in localStorage for routes without one.
-- Column `type` overrides rendering: `url` → external link, `asset` → image from `app/assets/`, `number`/`date` → `Intl` formatting with the column's `format` options, `text` → plain. Without a type, image-looking paths still render as images (heuristic).
+- Column `type` overrides rendering: `url` → external link, `asset` → image from `app/assets/`, `number`/`date` → `Intl` formatting with the column's `format` options, `text` → a truncated preview (first ~300 chars) with an inline "Show more/less" toggle, for long free-text columns like a document body. Without a type, image-looking paths still render as images (heuristic).
 - `hidden` on a column removes it from all views and filters; `hidden` on a table removes it from the home grid and from related-object sections. Hidden lookup tables still resolve FK display names and facets — hiding is a display concern, **not access control**: the data remains in the published `.sqlite` file.
+- `"fts": false` on a column keeps it in the database but excludes it from the FTS index (annotated as `col.noFts`, read by the enrichment plugin). Use it for large bodies (e.g. `works.full_text`) that would bloat the keyword index or drown title/description matches — distinct from the global `enrichment.fts` key, which picks the tokenizer for the whole database.
 - `applyTableConfig()` annotates the schema metadata once at startup (`core/js/main.js`); components only ever see the annotated plain-JSON columns.
 
 ### Enrichment (full-text search)
@@ -122,6 +126,14 @@ The chosen mode is annotated as `meta.tables[name].fts.mode` so the UI (search t
 Search input is passed to `MATCH` as a raw FTS5 query first; if FTS5 rejects it (its query grammar disallows punctuation like `.` in barewords), `queryTable` retries once with each term double-quoted as a literal phrase — punctuation just works, valid advanced syntax keeps full power.
 
 When any table has an FTS index, the header shows a global search box (`core/js/components/global-search-input.js`); Enter navigates to `/#/:lang/search?q=...`, where `SearchView` (`core/js/components/search-view.js`) queries every searchable perspective's table via `store.queryTable` and renders the top matches as one small table per entity with "view all" links into the filtered list view.
+
+### Automatic many-to-many facets
+
+Junction tables are detected purely from schema metadata (`DataStore#getFilterMeta` → `#m2mRelations`, `core/js/utilities-data/data-store.js`): a real table whose columns are **exactly two FK columns to two different tables**, plus at most one non-FK column which must be the PK. Both idioms qualify — `id INTEGER PRIMARY KEY` + two FKs, and composite `PRIMARY KEY (a_id, b_id)`. Junction tables carrying extra property columns are *not* detected (no m2m facet), and self-referencing junctions (both FKs to the same table) are skipped.
+
+Each detected junction yields a dropdown facet on **both** sides (works gets a Categories facet, categories gets a Works facet), keyed by the junction's far-side FK column name — URL form `{farFkCol}=v1,v2` (e.g. `/#/en/works/table?category_id=1,5`). The facet key is skipped with a warning when it collides with a real column of the base table, another junction's key, or a `{col}_min`/`{col}_max` range param. The filter compiles to an `IN` subquery (`"works"."id" IN (SELECT "work_id" FROM "works_categories" WHERE "category_id" IN (…))`, the `m2m` filter type in `utilities-data/builtin-filters.js`) and AND-composes with every other filter and full-text search.
+
+Interplay notes: detection is structural and ignores `hidden` — hiding the junction table removes its homepage card and related sections but **keeps** the m2m facets (same rule as hidden lookup tables still resolving FK names), which is the idiomatic way to tuck a junction table away; configured perspective `facets` replace *all* auto facets including m2m; views/perspectives never get m2m facets (no FK metadata). Dropdown facets with long option lists render as a capped autocomplete (first 100 matches + a "type to narrow" hint; selected options stay visible above the cap).
 
 ### State management
 
@@ -195,7 +207,7 @@ Component modules can register custom views (the platform's extension point for 
    ```
 2. List it in config: `"components": ["app/views.js"]` in `app/config.json` (the legacy `"views": "app/views.js"` string still works). A failing module logs a warning and the site boots with builtin views only.
 
-List components receive `{ id, name, perspectiveId, columns, rows, sort, onSort, fkResolved, lang }`; detail components receive `{ tableName, columns, row, fkResolved, lang, perspectiveId }` (see typedefs in `view-registry.js`). Re-registering an existing `context`+`id` overrides the builtin renderer. Caveat: view ids share the URL segment namespace with row ids — registering a new view id changes how legacy `/{perspective}/{id}` URLs with that exact id are parsed.
+List components receive `{ id, name, perspectiveId, columns, rows, sort, onSort, fkResolved, lang, store }`; detail components receive `{ tableName, table, columns, row, fkResolved, lang, perspectiveId, store }` (see typedefs in `view-registry.js`). `tableName` is the localized display name (headings), `table` the real SQL name that `store` methods expect; `store` is the DataStore facade through which a view can request more data as plain JSON (`queryTable`/`queryRelated`/`getSchema`) — views never see or build SQL. Re-registering an existing `context`+`id` overrides the builtin renderer. Caveat: view ids share the URL segment namespace with row ids — registering a new view id changes how legacy `/{perspective}/{id}` URLs with that exact id are parsed.
 
 ### Extensions and the component registries
 
@@ -206,7 +218,7 @@ A component module can register into four registries:
 - **Views** — `registerView()` in `core/js/utilities-ui/view-registry.js` (above).
 - **Cell renderers** — `registerCellRenderer(type, component)` in `core/js/utilities-ui/cell-renderers.js` registers a Preact component for a column `type` name, and registers the type with the config validator (`registerDisplayType()` in `utilities-data/table-config.js`) so `"type": "<name>"` in a column config is accepted. `CellValue` renders such columns through the registered component in every builtin view; FK/`linkTo` columns still win, and registering a builtin type name (`url`, `asset`, ...) overrides the builtin rendering. Renderers receive `{ col, value, row, columns, fkResolved, lang, perspectiveId, imageHeight }`.
 - **Facet renderers** — `registerFacetRenderer(id, { component, availableFor })` in `core/js/utilities-ui/facet-renderers.js` adds a facet block to the filter sidebar for tables where `availableFor(autoFilterMeta)` passes. Components receive `{ autoFilterMeta, filters, actions, lang }` (e.g. geo-filter's location facet reads `autoFilterMeta.geoMeta`, `filters._viewport`, and mutates via `actions.onFilterChange`).
-- **Filter types** — `registerFilterType(type, def)` in `core/js/utilities-data/filter-registry.js` (no preact — data layer). Every filter kind is registered: core registers `search` (claims the `q` param; the FTS5 MATCH lives in `DataStore#queryTable`), `range` (`{col}_min`/`{col}_max`), and `multi` (`{col}=v1,v2`) in `utilities-data/builtin-filters.js`; the geo-filter extension registers `bounds` (`bbox=w,s,e,n`). A definition provides any of: `reservedParams`/`preservesParams` (URL param ownership), `decode(params, {filterMeta, facets})` / `encode(key, filter)` (URL codec), `buildSql(key, filter)` (WHERE fragment), and a `filterMeta(ctx)` hook run by `DataStore#getFilterMeta` that may reshape the facet metadata (geo-filter uses it to swap lat/lon range facets for `geoMeta`). `use-url-state.js` and `filter-sql.js` dispatch entirely through this registry; extensions mutate filters via the generic `actions.onFilterChange(key, typedFilter|null)`. Filters of unregistered types are inert — a `bbox` param without geo-filter does nothing.
+- **Filter types** — `registerFilterType(type, def)` in `core/js/utilities-data/filter-registry.js` (no preact — data layer). Every filter kind is registered: core registers `search` (claims the `q` param; the FTS5 MATCH lives in `DataStore#queryTable`), `range` (`{col}_min`/`{col}_max`), `multi` (`{col}=v1,v2`), and `m2m` (`{farFkCol}=v1,v2` through a detected junction table — see "Automatic many-to-many facets") in `utilities-data/builtin-filters.js`; the geo-filter extension registers `bounds` (`bbox=w,s,e,n`). A definition provides any of: `reservedParams`/`preservesParams` (URL param ownership), `decode(params, {filterMeta, facets})` / `encode(key, filter)` (URL codec), `buildSql(key, filter)` (WHERE fragment), and a `filterMeta(ctx)` hook run by `DataStore#getFilterMeta` that may reshape the facet metadata (geo-filter uses it to swap lat/lon range facets for `geoMeta`). `use-url-state.js` and `filter-sql.js` dispatch entirely through this registry; extensions mutate filters via the generic `actions.onFilterChange(key, typedFilter|null)`. Filters of unregistered types are inert — a `bbox` param without geo-filter does nothing.
 
 Extension CSS is self-wired: the entry module calls `ensureStylesheet(href)` (`core/js/utilities-ui/stylesheets.js`, idempotent) with URLs built from its own `import.meta.url` — enabling the module in config is all the wiring needed.
 
@@ -217,14 +229,19 @@ The bundled extensions (each with its own README.md):
 - `extensions/iiif-viewer/` — IIIF manifests via TIFY (AGPL-3.0). Configure a column as `{ "type": "iiif" }`; cells render as a badge linking to the row's detail page in the registered `iiif` detail view.
 - `extensions/point_map/` — MapLibre + PMTiles (BSD-3) 🌍 map views for any table with numeric `lat`/`latitude` + `lon`/`lng`/`longitude` columns. Serves its own basemap from `assets/world.pmtiles`.
 - `extensions/geo-filter/` — the `bounds` filter type + the location (viewport) facet for geo tables, with its **own** basemap copy in `assets/world.pmtiles` (per-extension basemaps are swappable). Independent of point_map: without geo-filter, `bbox` params are inert and lat/lon columns fall back to plain numeric range facets.
+- `extensions/text-annotations/` — stand-off text annotations via `@ghentcdh/annotated-text` (MIT). Configure a text column as `{ "type": "annotated-text" }`; cells render as a badge linking to the registered `annotated-text` detail view, which highlights spans from an **auto-detected** annotations table: the first table FK-referencing the row's table whose schema also has non-PK integer `start`/`end` columns (character offsets relative to the text column's first character). An optional `type` column color-codes annotations with a legend; an optional `label` column captions them; anything missing degrades softly down to plain text.
 
 ```json
 "components": [
     "extensions/iiif-viewer/iiif-viewer-component.js",
     "extensions/point_map/point-map-component.js",
-    "extensions/geo-filter/geo-filter-component.js"
+    "extensions/geo-filter/geo-filter-component.js",
+    "extensions/text-annotations/text-annotations-component.js"
 ],
-"tables": { "works": { "columns": { "manifest": { "type": "iiif" } } } }
+"tables": {
+    "works": { "columns": { "manifest": { "type": "iiif" } } },
+    "text_pages": { "columns": { "body": { "type": "annotated-text" } } }
+}
 ```
 
 Extensions that vendor the same heavyweight dependency load it once per page: the maplibre UMD shim and the pmtiles protocol registration are guarded through globals (`js/maplibre-shim.js`, `js/pmtiles-protocol.js` in both map extensions), and identical vendored CSS is deduped via `ensureStylesheet`'s `key` option.
@@ -235,7 +252,14 @@ Extensions that vendor the same heavyweight dependency load it once per page: th
 - **Runtime throws**: every registered `component` is wrapped in an error boundary at registration (`core/js/utilities-ui/error-boundary.js`) — a crashing view/facet renders an inline `⚠ ... failed to render` fallback (cell renderers fall back to the raw value) and retries on new props; every `availableFor` predicate is guarded (throw → not offered); every filter-type callback (`decode`/`encode`/`buildSql`/`filterMeta`) is guarded (throw → that filter is skipped/inert, warned once per call). `buildWhereClause` additionally shape-checks SQL fragments before splicing them in.
 - The net effect: basic viewing, paging, full-text search, and builtin range/multi filtering keep working whatever an extension does. Regression-tested by the `fault:` Playwright tests (route-interception fault injection — no repo file is broken).
 
-Layer boundaries (audited, keep them): `utilities-data/` never imports preact or UI; core never imports from or names `extensions/` (not even in comments); extensions import core but never `app/` specifics. Core carries no geo knowledge — geographic filtering lives entirely in `extensions/geo-filter/` via the filter-type and facet-renderer registries.
+### Design principles — layer boundaries (audited, keep them)
+
+Respect the individual layer boundaries; every one below is load-bearing and enforced by the code layout:
+
+- **The UI knows nothing about SQL** and has no idea where data comes from. Components send requests for new data (through the `DataStore` facade) and receive formatted JSON to render — never SQL strings, never database handles. The data layer knows nothing about the UI: `utilities-data/` never imports preact or UI code.
+- **Core UI does not know about extensions**: core never imports from or names `extensions/` (not even in comments); all extension behavior enters through the registries. Extensions import core but never `app/` specifics. Extensions manage their own CSS, including overrides, via `ensureStylesheet` — core styles nothing extension-specific. Core carries no geo knowledge — geographic filtering lives entirely in `extensions/geo-filter/` via the filter-type and facet-renderer registries.
+- **Core and extensions know nothing about app-specific config.** Given a bare SQLite database, a usable best-estimate interface is presented automatically from FKs and schema metadata (FK display names, related sections, automatic m2m facets, the text-annotations `start`/`end` detection); `app/config.json` only polishes that UX — labels, types, ordering, curated perspectives. Configuration polishes, it never enables the basics.
+- **All JS is vendored** — no CDNs, no build step. Core's deps live in `core/vendor/` behind the import map; each extension's deps live in its own `vendor/` and are imported by relative path; the extension folder's own JS modules are loaded the same static way (listed in `components`, served as-is).
 
 ### Scripts
 

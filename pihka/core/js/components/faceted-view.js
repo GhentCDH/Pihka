@@ -130,7 +130,7 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
                     perspectiveId: p.id,
                     columns,
                     rows: paginatedView ? rows : (allRows ?? rows),
-                    sort, onSort: actions.onSort, fkResolved, lang,
+                    sort, onSort: actions.onSort, fkResolved, lang, store,
                 }, totalRows),
             ),
         ),

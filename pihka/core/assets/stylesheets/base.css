@@ -655,6 +655,14 @@ tbody tr:hover {
   content: ")";
 }
 
+/* Autocomplete hint when a long option list is render-capped */
+.facet-options-truncated {
+  padding: .3rem .6rem;
+  color: var(--text-muted);
+  font-size: .75em;
+  font-style: italic;
+}
+
 /* Compact inline pagination */
 
 .faceted-pagination {
@@ -753,6 +761,25 @@ article {
 }
 
 .cell-list-toggle:hover {
+  text-decoration: underline;
+}
+
+/* Truncated free-text cell (displayType "text") + inline expand toggle */
+.cell-text {
+  white-space: pre-wrap;
+}
+
+.cell-text-toggle {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font-size: .8em;
+  cursor: pointer;
+  padding: 0;
+  white-space: nowrap;
+}
+
+.cell-text-toggle:hover {
   text-decoration: underline;
 }
 
