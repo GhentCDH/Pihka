@@ -7,7 +7,7 @@
  *   "components": ["extensions/point_map/point-map-component.js"]
  *
  * Any table or perspective with numeric latitude/longitude columns
- * (lat/latitude + lon/lng/longitude) then gets 🌍 list and detail views.
+ * (lat/latitude + lon/lng/longitude) then gets ⌖ list and detail views.
  * Viewport *filtering* (the location facet + bbox URL param) is the
  * separate geo-filter extension. MapLibre and PMTiles are vendored under
  * vendor/ (see deps.json and `npm run vendorize`) and load only once per
@@ -30,7 +30,7 @@ registerView({
     id: "map",
     context: "list",
     component: DataViewListMap,
-    icon: "🌍",
+    icon: "⌖",
     paginated: false, // maps need every filtered row, not one page
     availableFor: hasGeo,
 });
@@ -39,6 +39,6 @@ registerView({
     id: "map",
     context: "detail",
     component: DataViewDetailMap,
-    icon: "🌍",
+    icon: "⌖",
     availableFor: hasGeo,
 });

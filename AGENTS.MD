@@ -186,7 +186,7 @@ At startup each query becomes `CREATE VIEW "<table>" AS <query>` on the in-memor
 
 ### Views and the view registry
 
-All view types are defined in one place: `core/js/utilities-ui/view-registry.js`. The router, perspective normalization, and the view-toggle UIs all consult it — adding a view means one `registerView()` call, nothing else. Builtin views (list: `table`, `cards`; detail: `table`, `card`) are registered by `core/js/components/data-views/builtin-views.js` (imported by `main.js`); the `map` list/detail views come from the `point_map` extension when enabled.
+All view types are defined in one place: `core/js/utilities-ui/view-registry.js`. The router, perspective normalization, and the view-toggle UIs all consult it — adding a view means one `registerView()` call, nothing else. Builtin views (list: `table`, `cards`, `export`; detail: `table`, `card`) are registered by `core/js/components/data-views/builtin-views.js` (imported by `main.js`); the `map` list/detail views come from the `point_map` extension when enabled. The `export` view (⤓, non-paginated, offered on every perspective) downloads the dataset in machine-readable form: the full SQLite file straight from its HTTP source (`store.databaseUrl`), the current filtered selection as JSON or CSV, and the full entity as CSV — visible columns, raw values (CSV serialization in `utilities-data/csv.js`).
 
 Component modules can register custom views (the platform's extension point for research-specific renderers — text annotations, IIIF, custom maps):
 
@@ -227,7 +227,7 @@ If a config uses a type whose extension is **not** loaded, `applyTableConfig` wa
 The bundled extensions (each with its own README.md):
 
 - `extensions/iiif-viewer/` — IIIF manifests via TIFY (AGPL-3.0). Configure a column as `{ "type": "iiif" }`; cells render as a badge linking to the row's detail page in the registered `iiif` detail view.
-- `extensions/point_map/` — MapLibre + PMTiles (BSD-3) 🌍 map views for any table with numeric `lat`/`latitude` + `lon`/`lng`/`longitude` columns. Serves its own basemap from `assets/world.pmtiles`.
+- `extensions/point_map/` — MapLibre + PMTiles (BSD-3) ⌖ map views for any table with numeric `lat`/`latitude` + `lon`/`lng`/`longitude` columns. Serves its own basemap from `assets/world.pmtiles`.
 - `extensions/geo-filter/` — the `bounds` filter type + the location (viewport) facet for geo tables, with its **own** basemap copy in `assets/world.pmtiles` (per-extension basemaps are swappable). Independent of point_map: without geo-filter, `bbox` params are inert and lat/lon columns fall back to plain numeric range facets.
 - `extensions/text-annotations/` — stand-off text annotations via `@ghentcdh/annotated-text` (MIT). Configure a text column as `{ "type": "annotated-text" }`; cells render as a badge linking to the registered `annotated-text` detail view, which highlights spans from an **auto-detected** annotations table: the first table FK-referencing the row's table whose schema also has non-PK integer `start`/`end` columns (character offsets relative to the text column's first character). An optional `type` column color-codes annotations with a legend; an optional `label` column captions them; anything missing degrades softly down to plain text.
 

@@ -4,6 +4,7 @@ import DataViewListTable from "./data-view-list-table.js";
 import DataViewListCards from "./data-view-list-cards.js";
 import DataViewDetailTable from "./data-view-detail-table.js";
 import DataViewDetailCard from "./data-view-detail-card.js";
+import DataViewExport from "./data-view-export.js";
 
 /**
  * Registers the builtin list and detail views. Imported once (for its side
@@ -30,6 +31,8 @@ function ListTableView(props) {
 
 registerView({ id: "table", context: "list", component: ListTableView, icon: "☰" });
 registerView({ id: "cards", context: "list", component: DataViewListCards, icon: "⬚" });
+// Non-paginated so the export receives the complete current selection.
+registerView({ id: "export", context: "list", component: DataViewExport, icon: "⤓", paginated: false });
 
 registerView({ id: "table", context: "detail", component: DataViewDetailTable, icon: "☰" });
 registerView({ id: "card", context: "detail", component: DetailCardView, icon: "⬚" });

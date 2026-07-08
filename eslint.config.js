@@ -32,6 +32,7 @@ export default [
                 URL: "readonly",
                 URLSearchParams: "readonly",
                 Uint8Array: "readonly",
+                Blob: "readonly",
                 setTimeout: "readonly",
                 clearTimeout: "readonly",
                 requestAnimationFrame: "readonly",

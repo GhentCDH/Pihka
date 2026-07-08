@@ -68,7 +68,8 @@ async function main() {
             }
         }
 
-        const ds = new DataSource(assetUrl(config.database || "app/database/sample.db"));
+        const databaseUrl = assetUrl(config.database || "app/database/sample.db");
+        const ds = new DataSource(databaseUrl);
         ds.addEventListener("downloading", () => showStatus("Downloading database…"));
         ds.addEventListener("loading", (e) => {
             const { bytes } = /** @type {CustomEvent<{bytes: number}>} */ (e).detail;
@@ -84,7 +85,7 @@ async function main() {
         applyTableConfig(meta, config);
         showStatus("Indexing for search…");
         await runEnrichment(ds, meta, config);
-        const store = new DataStore(ds, meta);
+        const store = new DataStore(ds, meta, databaseUrl);
         const { perspectives, defaultLanguage } = await loadPerspectives(meta);
 
         // Descriptive chrome (footer credits/provenance/logos + nav menu

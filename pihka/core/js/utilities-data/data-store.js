@@ -51,9 +51,15 @@ export class DataStore {
     #fkOptionsCache = new Map();
     #m2mCache = new Map();
 
-    constructor(ds, meta) {
+    constructor(ds, meta, databaseUrl = null) {
         this.#ds = ds;
         this.#meta = meta;
+        /**
+         * URL the SQLite file was fetched from, for direct-download links
+         * (the data layer owns knowledge of where data comes from).
+         * @type {string|null}
+         */
+        this.databaseUrl = databaseUrl;
     }
 
     /**

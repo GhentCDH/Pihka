@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { readFileSync } from "node:fs";
 
 // Helper: load a route directly. Routes are hash fragments, so deep links
 // load on any static server without rewrite rules. Wait for the app header
@@ -369,6 +370,32 @@ test("view toggle switches between table and cards", async ({ page }) => {
   await expect(page).toHaveURL(/author_id=1/);
 });
 
+test("export view: toggle opens the download options", async ({ page }) => {
+  await gotoRoute(page, "/en/works/table?author_id=1");
+  await page.locator(".view-toggles button", { hasText: "export" }).click();
+  await expect(page).toHaveURL(/\/en\/works\/export/);
+  await expect(page).toHaveURL(/author_id=1/); // filter survives the switch
+  // All four options render; the database link points at the source file
+  await expect(page.locator(".export-view article")).toHaveCount(4);
+  const dbLink = page.locator(".export-view a[download]");
+  await expect(dbLink).toHaveAttribute("href", /sample\.db$/);
+  await expect(page.locator(".export-view button", { hasText: "works-selection.json" })).toBeVisible();
+});
+
+test("export view: selection CSV downloads the filtered rows", async ({ page }) => {
+  await gotoRoute(page, "/en/authors/export?birth_year_min=1800");
+  await expect(page.locator(".export-view article")).toHaveCount(4);
+  const downloadPromise = page.waitForEvent("download");
+  await page.locator(".export-view button", { hasText: "authors-selection.csv" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("authors-selection.csv");
+  const csv = readFileSync(await download.path(), "utf8");
+  const lines = csv.trim().split("\r\n");
+  // 1 header + the 995 authors born from 1800 on (of 1010 total)
+  expect(lines.length).toBe(996);
+  expect(lines[0].startsWith("id,name,birth_year")).toBe(true);
+});
+
 test("home page shows perspectives and tables sections", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator(".perspective-section-title", { hasText: "Perspectives" })).toBeVisible();
@@ -454,7 +481,7 @@ test("point_map extension: geo tables get map views and the location facet", asy
   await gotoRoute(page, "/en/authors/table");
   // registered map view appears in the toggle; the location facet mounts
   // its mini map in the sidebar
-  const mapToggle = page.locator("button, a", { hasText: "🌍" }).first();
+  const mapToggle = page.locator("button, a", { hasText: "⌖" }).first();
   await expect(mapToggle).toBeVisible();
   await expect(page.locator(".facet-sidebar canvas")).toHaveCount(1);
   // extension CSS was injected by the component module itself
@@ -465,7 +492,7 @@ test("point_map extension: geo tables get map views and the location facet", asy
   await expect(page.locator(".maplibregl-marker").first()).toBeVisible({ timeout: 10000 });
   // non-geo tables offer no map view
   await gotoRoute(page, "/en/works/table");
-  await expect(page.locator("button, a", { hasText: "🌍" })).toHaveCount(0);
+  await expect(page.locator("button, a", { hasText: "⌖" })).toHaveCount(0);
 });
 
 test("point_map extension: filtering updates markers without rebuilding the map", async ({ page }) => {
