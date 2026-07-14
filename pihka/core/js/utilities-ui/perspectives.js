@@ -15,6 +15,9 @@ import { getPref } from "./prefs.js";
  * @property {number} page_size
  * @property {string|null} query - SQL backing the perspective's view
  * @property {Array|null} facets
+ * @property {Object|null} options - free-form per-perspective view options
+ *   (e.g. { clustering: "auto" } for the map view), passed through to view
+ *   components as-is
  * @property {"perspective"|"table"} kind - configured perspective or
  *   auto-generated table card (drives homepage grouping)
  */
@@ -104,6 +107,7 @@ function normalizePerspective(p, meta, kind = "table") {
         page_size:     typeof p.page_size === "number" ? p.page_size : 25,
         query:         typeof p.query === "string" ? p.query : null,
         facets:        Array.isArray(p.facets) ? p.facets : null,
+        options:       p.options || null,
         kind,
     };
 }

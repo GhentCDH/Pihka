@@ -48,3 +48,22 @@ export function rowsToPoints(rows, latCol, lonCol) {
     }
     return out;
 }
+
+/**
+ * Convert points (as produced by rowsToPoints/rowToPoint) into a GeoJSON
+ * FeatureCollection for a clustered GeoJSONSource. Row data is deliberately
+ * left out of `properties` (only a `__pmIndex` pointer back into the
+ * `points` array is stored) — clustering copies properties into its
+ * internal index, and rows can be wide or contain non-JSON-safe values
+ * (e.g. BLOB columns), whereas the index just needs to be a number.
+ */
+export function pointsToGeoJSON(points) {
+    return {
+        type: "FeatureCollection",
+        features: (points ?? []).map((p, i) => ({
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [p.lon, p.lat] },
+            properties: { __pmIndex: i },
+        })),
+    };
+}
