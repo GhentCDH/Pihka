@@ -47,9 +47,10 @@ async function main() {
             ...(typeof config.components === "string" ? [config.components] : []),
             ...(typeof config.views === "string" ? [config.views] : []),
         ];
-        const loadTimeoutMs = Number(config.componentLoadTimeoutMs) > 0
-            ? Number(config.componentLoadTimeoutMs)
-            : 10000;
+        const loadTimeoutMs =
+            Number(config.componentLoadTimeoutMs) > 0
+                ? Number(config.componentLoadTimeoutMs)
+                : 10000;
         for (const path of componentModules) {
             if (typeof path !== "string" || !path) {
                 console.warn(`[pihka] ignoring non-string "components" entry:`, path);
@@ -58,13 +59,18 @@ async function main() {
             try {
                 await Promise.race([
                     import(assetUrl(path)),
-                    new Promise((_, reject) => setTimeout(
-                        () => reject(new Error(`timed out after ${loadTimeoutMs}ms`)),
-                        loadTimeoutMs,
-                    )),
+                    new Promise((_, reject) =>
+                        setTimeout(
+                            () => reject(new Error(`timed out after ${loadTimeoutMs}ms`)),
+                            loadTimeoutMs,
+                        ),
+                    ),
                 ]);
             } catch (err) {
-                console.warn(`[pihka] failed to load component module "${path}" — continuing without it:`, err);
+                console.warn(
+                    `[pihka] failed to load component module "${path}" — continuing without it:`,
+                    err,
+                );
             }
         }
 
@@ -93,14 +99,18 @@ async function main() {
         const [footer, menu] = await Promise.all([loadFooter(), loadMenu()]);
 
         render(
-            h(Router, null, h(App, {
-                perspectives,
-                store,
-                defaultLang: defaultLanguage,
-                languages: Array.isArray(config.languages) ? config.languages : null,
-                menu,
-                footer,
-            })),
+            h(
+                Router,
+                null,
+                h(App, {
+                    perspectives,
+                    store,
+                    defaultLang: defaultLanguage,
+                    languages: Array.isArray(config.languages) ? config.languages : null,
+                    menu,
+                    footer,
+                }),
+            ),
             app,
         );
     } catch (error) {
