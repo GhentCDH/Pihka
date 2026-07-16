@@ -33,18 +33,48 @@ export function buildStyle() {
         },
         layers: [
             { id: "background", type: "background", paint: { "background-color": "#aac7e8" } },
-            { id: "earth", type: "fill", source: "protomaps", "source-layer": "earth",
-                paint: { "fill-color": "#f3eddc" } },
-            { id: "landcover", type: "fill", source: "protomaps", "source-layer": "landcover",
-                paint: { "fill-color": "#d6e2c3", "fill-opacity": 0.7 } },
-            { id: "landuse", type: "fill", source: "protomaps", "source-layer": "landuse",
-                paint: { "fill-color": "#e6e0c8", "fill-opacity": 0.5 } },
-            { id: "water", type: "fill", source: "protomaps", "source-layer": "water",
-                paint: { "fill-color": "#aac7e8" } },
-            { id: "boundaries", type: "line", source: "protomaps", "source-layer": "boundaries",
-                paint: { "line-color": "#888", "line-width": 0.6, "line-dasharray": [2, 2] } },
-            { id: "roads", type: "line", source: "protomaps", "source-layer": "roads",
-                paint: { "line-color": "#cdb892", "line-width": 0.5 } },
+            {
+                id: "earth",
+                type: "fill",
+                source: "protomaps",
+                "source-layer": "earth",
+                paint: { "fill-color": "#f3eddc" },
+            },
+            {
+                id: "landcover",
+                type: "fill",
+                source: "protomaps",
+                "source-layer": "landcover",
+                paint: { "fill-color": "#d6e2c3", "fill-opacity": 0.7 },
+            },
+            {
+                id: "landuse",
+                type: "fill",
+                source: "protomaps",
+                "source-layer": "landuse",
+                paint: { "fill-color": "#e6e0c8", "fill-opacity": 0.5 },
+            },
+            {
+                id: "water",
+                type: "fill",
+                source: "protomaps",
+                "source-layer": "water",
+                paint: { "fill-color": "#aac7e8" },
+            },
+            {
+                id: "boundaries",
+                type: "line",
+                source: "protomaps",
+                "source-layer": "boundaries",
+                paint: { "line-color": "#888", "line-width": 0.6, "line-dasharray": [2, 2] },
+            },
+            {
+                id: "roads",
+                type: "line",
+                source: "protomaps",
+                "source-layer": "roads",
+                paint: { "line-color": "#cdb892", "line-width": 0.5 },
+            },
         ],
     };
 }
@@ -108,6 +138,13 @@ export default function MapView({
                 await ensurePmtilesProtocol();
                 if (unmountedRef.current) return null;
 
+                // add the marker image to the map, and use that are the unclustered layer
+                const markerImg = new Image(35, 35);
+                const svgCode =
+                    '<svg xmlns="http://www.w3.org/2000/svg" display="block" height="41px" width="27px" viewBox="0 0 27 41"><g fill-rule="nonzero"><g transform="translate(3.0, 29.0)" fill="#000000"><ellipse opacity="0.04" cx="10.5" cy="5.80029008" rx="10.5" ry="5.25002273"></ellipse><ellipse opacity="0.04" cx="10.5" cy="5.80029008" rx="10.5" ry="5.25002273"></ellipse><ellipse opacity="0.04" cx="10.5" cy="5.80029008" rx="9.5" ry="4.77275007"></ellipse><ellipse opacity="0.04" cx="10.5" cy="5.80029008" rx="8.5" ry="4.29549936"></ellipse><ellipse opacity="0.04" cx="10.5" cy="5.80029008" rx="7.5" ry="3.81822308"></ellipse><ellipse opacity="0.04" cx="10.5" cy="5.80029008" rx="6.5" ry="3.34094679"></ellipse><ellipse opacity="0.04" cx="10.5" cy="5.80029008" rx="5.5" ry="2.86367051"></ellipse><ellipse opacity="0.04" cx="10.5" cy="5.80029008" rx="4.5" ry="2.38636864"></ellipse></g><g fill="#c33"><path d="M27,13.5 C27,19.074644 20.250001,27.000002 14.75,34.500002 C14.016665,35.500004 12.983335,35.500004 12.25,34.500002 C6.7499993,27.000002 0,19.222562 0,13.5 C0,6.0441559 6.0441559,0 13.5,0 C20.955844,0 27,6.0441559 27,13.5 Z"></path></g><g opacity="0.25" fill="#000000"><path d="M13.5,0 C6.0441559,0 0,6.0441559 0,13.5 C0,19.222562 6.7499993,27 12.25,34.5 C13,35.522727 14.016664,35.500004 14.75,34.5 C20.250001,27 27,19.074644 27,13.5 C27,6.0441559 20.955844,0 13.5,0 Z M13.5,1 C20.415404,1 26,6.584596 26,13.5 C26,15.898657 24.495584,19.181431 22.220703,22.738281 C19.945823,26.295132 16.705119,30.142167 13.943359,33.908203 C13.743445,34.180814 13.612715,34.322738 13.5,34.441406 C13.387285,34.322738 13.256555,34.180814 13.056641,33.908203 C10.284481,30.127985 7.4148684,26.314159 5.015625,22.773438 C2.6163816,19.232715 1,15.953538 1,13.5 C1,6.584596 6.584596,1 13.5,1 Z"></path></g><g transform="translate(6.0, 7.0)" fill="#FFFFFF"></g><g transform="translate(8.0, 8.0)"><circle fill="#000000" opacity="0.25" cx="5.5" cy="5.5" r="5.4999962"></circle><circle fill="#FFFFFF" cx="5.5" cy="5.5" r="5.4999962"></circle></g></g></svg>';
+                markerImg.src = "data:image/svg+xml;base64," + btoa(svgCode);
+                await markerImg.decode();
+
                 const first = (pointsRef.current ?? [])[0];
                 const map = new maplibregl.Map({
                     container: containerRef.current,
@@ -135,7 +172,10 @@ export default function MapView({
                     if (mapRef.current) mapRef.current.resize();
                 });
 
-                map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
+                map.addControl(
+                    new maplibregl.NavigationControl({ showCompass: false }),
+                    "top-right",
+                );
 
                 // Clustered rendering path: a GeoJSON source + GPU-rendered
                 // circle/symbol layers, added once and always present
@@ -143,12 +183,17 @@ export default function MapView({
                 // never needs to touch the map/style, only source data.
                 map.on("load", () => {
                     if (map.getSource(CLUSTER_SOURCE_ID)) return;
+
+                    if (!map.hasImage("marker")) {
+                        map.addImage("marker", markerImg);
+                    }
+
                     map.addSource(CLUSTER_SOURCE_ID, {
                         type: "geojson",
                         data: EMPTY_FC,
                         cluster: true,
                         clusterMaxZoom: 14,
-                        clusterRadius: 50,
+                        clusterRadius: 60,
                     });
                     map.addLayer({
                         id: "pm-clusters",
@@ -156,17 +201,22 @@ export default function MapView({
                         source: CLUSTER_SOURCE_ID,
                         filter: ["has", "point_count"],
                         paint: {
-                            "circle-color": "#c33",
+                            "circle-color": "#933",
                             "circle-opacity": 0.75,
                             "circle-radius": [
-                                "step", ["get", "point_count"],
-                                14,
-                                50, 18,
-                                250, 24,
-                                1000, 30,
-                                10000, 36,
+                                "step",
+                                ["get", "point_count"],
+                                20,
+                                50,
+                                25,
+                                250,
+                                35,
+                                1000,
+                                45,
+                                10000,
+                                60,
                             ],
-                            "circle-stroke-width": 2,
+                            "circle-stroke-width": 3,
                             "circle-stroke-color": "#fff",
                         },
                     });
@@ -184,14 +234,12 @@ export default function MapView({
                     });
                     map.addLayer({
                         id: "pm-unclustered",
-                        type: "circle",
+                        type: "symbol",
                         source: CLUSTER_SOURCE_ID,
                         filter: ["!", ["has", "point_count"]],
-                        paint: {
-                            "circle-color": "#c33",
-                            "circle-radius": 6,
-                            "circle-stroke-width": 1.5,
-                            "circle-stroke-color": "#fff",
+                        layout: {
+                            "icon-image": "marker",
+                            "icon-size": 1,
                         },
                     });
 
@@ -209,12 +257,27 @@ export default function MapView({
                         const idx = e.features?.[0]?.properties?.__pmIndex;
                         const point = idx != null ? pointsRef.current?.[idx] : null;
                         if (!point) return;
-                        openPopup(maplibreRef.current, map, point, popupNodesRef, popupsRef, popupPropsRef.current);
+                        openPopup(
+                            maplibreRef.current,
+                            map,
+                            point,
+                            popupNodesRef,
+                            popupsRef,
+                            popupPropsRef.current,
+                        );
                     });
-                    map.on("mouseenter", "pm-clusters", () => { map.getCanvas().style.cursor = "pointer"; });
-                    map.on("mouseleave", "pm-clusters", () => { map.getCanvas().style.cursor = ""; });
-                    map.on("mouseenter", "pm-unclustered", () => { map.getCanvas().style.cursor = "pointer"; });
-                    map.on("mouseleave", "pm-unclustered", () => { map.getCanvas().style.cursor = ""; });
+                    map.on("mouseenter", "pm-clusters", () => {
+                        map.getCanvas().style.cursor = "pointer";
+                    });
+                    map.on("mouseleave", "pm-clusters", () => {
+                        map.getCanvas().style.cursor = "";
+                    });
+                    map.on("mouseenter", "pm-unclustered", () => {
+                        map.getCanvas().style.cursor = "pointer";
+                    });
+                    map.on("mouseleave", "pm-unclustered", () => {
+                        map.getCanvas().style.cursor = "";
+                    });
                 });
 
                 return map;
@@ -227,24 +290,27 @@ export default function MapView({
     };
 
     // Destroy the map only on real unmount.
-    useEffect(() => () => {
-        unmountedRef.current = true;
-        if (resizeObserverRef.current) {
-            resizeObserverRef.current.disconnect();
-            resizeObserverRef.current = null;
-        }
-        // Unmount any open popup Preact trees so they don't leak.
-        for (const node of popupNodesRef.current) {
-            render(null, node);
-        }
-        popupNodesRef.current.clear();
-        popupsRef.current.clear();
-        markersRef.current.clear();
-        if (mapRef.current) {
-            mapRef.current.remove(); // takes markers and popups with it
-            mapRef.current = null;
-        }
-    }, []);
+    useEffect(
+        () => () => {
+            unmountedRef.current = true;
+            if (resizeObserverRef.current) {
+                resizeObserverRef.current.disconnect();
+                resizeObserverRef.current = null;
+            }
+            // Unmount any open popup Preact trees so they don't leak.
+            for (const node of popupNodesRef.current) {
+                render(null, node);
+            }
+            popupNodesRef.current.clear();
+            popupsRef.current.clear();
+            markersRef.current.clear();
+            if (mapRef.current) {
+                mapRef.current.remove(); // takes markers and popups with it
+                mapRef.current = null;
+            }
+        },
+        [],
+    );
 
     // Update markers/cluster data in place whenever the point set (or the
     // cluster mode) changes. Never touches the map/style itself — only the
@@ -289,12 +355,13 @@ export default function MapView({
                 // Key markers by table + row PK when available (stable
                 // across filter changes); rows without a PK fall back to
                 // coordinates, with a suffix disambiguating exact duplicates.
-                const pkCol = cols?.find(c => c.primaryKey)?.name ?? null;
+                const pkCol = cols?.find((c) => c.primaryKey)?.name ?? null;
                 const seen = new Set();
-                const keyed = (points ?? []).map(p => {
-                    let key = pkCol && p.row?.[pkCol] != null
-                        ? `${table}:pk:${p.row[pkCol]}`
-                        : `${table}:${p.lon},${p.lat}`;
+                const keyed = (points ?? []).map((p) => {
+                    let key =
+                        pkCol && p.row?.[pkCol] != null
+                            ? `${table}:pk:${p.row[pkCol]}`
+                            : `${table}:${p.lon},${p.lat}`;
                     while (seen.has(key)) key += "+";
                     seen.add(key);
                     return [key, p];
@@ -328,7 +395,14 @@ export default function MapView({
                     el.style.cursor = "pointer";
                     el.addEventListener("click", (e) => {
                         e.stopPropagation();
-                        openPopup(maplibregl, map, entry.point, popupNodesRef, popupsRef, popupPropsRef.current);
+                        openPopup(
+                            maplibregl,
+                            map,
+                            entry.point,
+                            popupNodesRef,
+                            popupsRef,
+                            popupPropsRef.current,
+                        );
                     });
                     markers.set(key, entry);
                 }
@@ -359,7 +433,9 @@ export default function MapView({
     // layout settles). Otherwise use the explicit `height`. Either way
     // MapLibre needs a definite box. The container stays mounted (hidden)
     // through empty states so the live map survives a zero-point filter.
-    return h(Fragment, null,
+    return h(
+        Fragment,
+        null,
         empty && h("p", { style: "color:var(--text-muted)" }, "No location data to display."),
         h("div", {
             ref: containerRef,
@@ -376,7 +452,12 @@ function openPopup(maplibregl, map, point, popupNodesRef, popupsRef, popupProps)
 
     render(
         h(PopupComponent, {
-            tableName, columns, row: point.row, fkResolved, lang, perspectiveId,
+            tableName,
+            columns,
+            row: point.row,
+            fkResolved,
+            lang,
+            perspectiveId,
         }),
         node,
     );
