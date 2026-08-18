@@ -5,6 +5,7 @@
  *   "tables": {
  *     "works": {
  *       "label": { "en": "Works", "nl": "Werken" },
+ *       "options": { "point_map": { "clustering": "auto" } },
  *       "columns": {
  *         "title":   { "label": { "en": "Title" } },
  *         "cover":   { "type": "asset" },
@@ -19,7 +20,10 @@
  * applyTableConfig() annotates the schema metadata with this display
  * information once at startup, so every downstream consumer (data layer
  * and components alike) reads plain JSON off the table/column objects and
- * never touches the config itself.
+ * never touches the config itself. `options` is a free-form, per-extension
+ * bag (see extension-options.js) picked up by perspectives.js so both plain
+ * tables and perspective views can configure extension view behavior (e.g.
+ * point_map clustering) the same way.
  */
 
 const DISPLAY_TYPES = new Set(["text", "number", "date", "url", "asset", "list"]);
@@ -38,8 +42,8 @@ export function registerDisplayType(name) {
 
 /**
  * Annotate schema metadata in place with display configuration.
- * Tables gain `hidden` and `label`; columns gain `hidden`, `label`,
- * `displayType`, and `format`.
+ * Tables gain `hidden`, `label`, and `options`; columns gain `hidden`,
+ * `label`, `displayType`, and `format`.
  *
  * Note: hiding is a display concern, not access control — the data stays
  * in the published .sqlite file.
@@ -57,6 +61,7 @@ export function applyTableConfig(meta, config) {
 
         tableMeta.hidden = cfg.hidden === true;
         tableMeta.label = cfg.label ?? null;
+        tableMeta.options = cfg.options && typeof cfg.options === "object" ? cfg.options : null;
 
         const columnsCfg = cfg.columns;
         if (!columnsCfg || typeof columnsCfg !== "object") continue;

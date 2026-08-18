@@ -31,10 +31,14 @@ export default function ThemeToggle() {
         applyTheme(next);
     };
 
-    return h("button", {
-        class: "theme-toggle outline secondary",
-        title: `Theme: ${theme} (click to change)`,
-        "aria-label": `Theme: ${theme}`,
-        onClick,
-    }, `${ICONS[theme]} ${theme}`);
+    return h(
+        "button",
+        {
+            class: "theme-toggle outline secondary",
+            title: `Theme: ${theme} (click to change)`,
+            "aria-label": `Theme: ${theme}`,
+            onClick,
+        },
+        `${ICONS[theme]} ${theme}`,
+    );
 }

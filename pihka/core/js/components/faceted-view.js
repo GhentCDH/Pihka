@@ -131,6 +131,7 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
                     columns,
                     rows: paginatedView ? rows : (allRows ?? rows),
                     sort, onSort: actions.onSort, fkResolved, lang, store,
+                    options: p.options,
                 }, totalRows),
             ),
         ),

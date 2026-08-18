@@ -147,6 +147,16 @@ export class DataSource extends EventTarget {
                 },
             });
 
+            // SQLite never reports a primary key for views via
+            // PRAGMA table_info (pk is always 0), even when the view's
+            // SELECT aliases a real PK as "id". Perspective views rely on
+            // exactly that convention (see perspective-views.js), so treat
+            // a literal "id" column as the PK when nothing else claims it.
+            if (type === "view" && !columns.some(c => c.primaryKey)) {
+                const idCol = columns.find(c => c.name === "id");
+                if (idCol) idCol.primaryKey = true;
+            }
+
             tables[name] = { type, columns };
         }
 
