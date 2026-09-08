@@ -1,5 +1,5 @@
 import { h } from "preact";
-import { useMemo } from "preact/hooks";
+import { useQuery, QueryStatus } from "../utilities-ui/use-query.js";
 import FacetSidebar from "./facet-sidebar.js";
 import Pagination from "./pagination.js";
 import { getView } from "../utilities-ui/view-registry.js";
@@ -26,7 +26,7 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
     const {
         columns, rows, totalRows, page, totalPages, pageSize,
         sort, filterMeta, filters, filtersKey, fkResolved,
-        search, searchError, actions,
+        search, searchError, actions, loading, error,
     } = useUrlState(store, p.table, {
         defaultPageSize, defaultSort, facets: p.facets, perspectiveId: p.id,
     });
@@ -34,7 +34,7 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
     const ftsInfo = store.getFtsInfo(p.table);
     const searchAvailable = !!ftsInfo;
 
-    const facetMeta = useMemo(() => {
+    const facetQuery = useQuery(() => {
         if (!p.facets) return null;
         return store.getFacetMeta(p.table, p.facets, filters);
     }, [store, p.table, p.facets, filtersKey]);
@@ -43,12 +43,16 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
     // current filters, not just the current page, so they need their own
     // unpaginated query.
     const needsAllRows = !!viewDef && !viewDef.paginated;
-    const allRows = useMemo(() => {
+    const allQuery = useQuery(async () => {
         if (!needsAllRows) return null;
-        return store.queryTable(p.table, { filters, sort, search, pageSize: null }).rows;
-    }, [needsAllRows, store, p.table, filtersKey, sort?.column, sort?.direction, search]);
+        return (await store.queryTable(p.table, { filters, sort, search, pageSize: null })).rows;
+    }, [needsAllRows, store, p.table, filtersKey, sort?.column, sort?.direction, search], !loading && !error);
 
     const { params } = useRouter();
+    if (error || facetQuery.error || allQuery.error) return h(QueryStatus, { error: error || facetQuery.error || allQuery.error });
+    const pending = loading || facetQuery.loading || allQuery.loading;
+    const facetMeta = facetQuery.data ?? facetQuery.previousData;
+    const allRows = allQuery.data ?? allQuery.previousData;
 
     const onClearAll = () => {
         navigate(`/${lang || "en"}/${p.id}/${activeView}`);
@@ -75,6 +79,7 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
             autoFilterMeta: filterMeta,
             filters,
             totalRows,
+            loading: pending,
             perspectiveName: localize(p.label, lang, p.name),
             lang,
             search,
@@ -84,9 +89,10 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
             actions: viewActions,
         }),
 
-        h("div", { class: "faceted-content" },
+        h("div", { class: "faceted-content", "aria-busy": pending },
+            pending && h(QueryStatus, {}),
             // Top bar: view toggles | pagination | result count | page size
-            h("div", { class: "faceted-toolbar" },
+            h("div", { class: "faceted-toolbar", style: pending ? "visibility:hidden" : "" },
                 // View toggles
                 p.allowed_views && p.allowed_views.length > 1 && h("div", { class: "view-toggles" },
                     p.allowed_views.map(v =>
@@ -123,7 +129,7 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
             ),
 
             // Active view
-            h("section", { id: p.table },
+            h("section", { id: p.table, style: pending ? "visibility:hidden" : "", "aria-hidden": pending ? "true" : null },
                 renderView(viewDef, activeView, {
                     id: p.id,
                     name: p.table,
@@ -142,4 +148,3 @@ function renderView(viewDef, activeView, viewProps, totalRows) {
     if (!viewDef) return h("p", null, `Unknown view: ${activeView}`);
     return h(viewDef.component, viewProps);
 }
-

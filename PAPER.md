@@ -112,13 +112,10 @@ Practically https://www.npmjs.com/package/@ghentcdh/annotated-text
 
 ### Extendability
 
-
-
 Pihka should allow to register components to show detail views or list views for (filtered) data.
 
 
 ### Custom machine readable formats
-
 
 Similar to views Pihka should allow to plug-in field related standard representations: xml formats, json formats, TEI documents, .. through the use of components which yield this info. 
 

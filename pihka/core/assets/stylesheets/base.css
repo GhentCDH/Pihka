@@ -139,9 +139,22 @@ html, body {
   margin: .25rem 0 .75rem;
 }
 
+/* The field/value table needs local scrolling just like related tables. */
+.detail-view > div:has(> table) {
+  min-width: 0;
+  overflow-x: auto;
+}
+
 #app > header {
   border-bottom: 1px solid var(--border);
   --pico-nav-element-spacing-vertical: 0.3rem;
+}
+
+@media (max-width: 768px) {
+  #app > header nav,
+  #app > header nav > ul {
+    flex-wrap: wrap;
+  }
 }
 
 #app > header .app-brand {

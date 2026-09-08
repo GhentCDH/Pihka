@@ -1,5 +1,5 @@
 import { h } from "preact";
-import { useMemo } from "preact/hooks";
+import { useQuery, QueryStatus } from "../utilities-ui/use-query.js";
 import DataViewListTable from "./data-views/data-view-list-table.js";
 import { buildPath } from "../utilities-ui/router.js";
 import { localize } from "../utilities-data/table-config.js";
@@ -17,21 +17,24 @@ export default function SearchView({ perspectives, store, lang, query }) {
 
     const searchable = perspectives.filter(p => store.getFtsInfo(p.table));
 
-    // Trigram tokens need >= 3 characters; without this gate every group
-    // would fall back to its unfiltered row set (data-store's guard).
-    const tooShort = q.length > 0 && q.length < 3
-        && searchable.some(p => store.getFtsInfo(p.table).mode === "trigram");
+    // Omit short trigram searches, which would return unfiltered rows,
+    // without suppressing whole-word searches on other tables.
+    const eligible = searchable.filter(p => q.length >= 3
+        || store.getFtsInfo(p.table).mode !== "trigram");
+    const tooShort = q.length > 0 && eligible.length === 0;
 
-    const groups = useMemo(() => {
+    const groupQuery = useQuery(async () => {
         if (!q || tooShort) return [];
-        return searchable
-            .map(p => ({ p, result: store.queryTable(p.table, { search: q, pageSize: GROUP_LIMIT }) }))
+        return (await Promise.all(eligible
+            .map(async p => ({ p, result: await store.queryTable(p.table, { search: q, pageSize: GROUP_LIMIT }) }))))
             .filter(g => g.result.totalRows > 0 || g.result.searchError);
-    }, [store, q, tooShort]);
+    }, [store, q, tooShort, perspectives]);
 
     if (searchable.length === 0) return h("p", null, "Search is not enabled for this site.");
     if (!q) return h("p", null, "Type a search above to look across all tables.");
     if (tooShort) return h("p", null, "Type at least 3 characters to search.");
+    if (groupQuery.loading || groupQuery.error) return h(QueryStatus, { error: groupQuery.error });
+    const groups = groupQuery.data;
 
     const searchError = groups.find(g => g.result.searchError)?.result.searchError;
     if (searchError) return h("p", { class: "fts-error" }, searchError);

@@ -6,19 +6,47 @@
 :3267 {
 	root * .
 
-	# Serve pre-compressed .br / .gz when the client supports it.
-	# Caddy will look for <file>.br then <file>.gz next to the original
-	# and serve them with the right Content-Encoding header.
-	# Range requests still work because the client receives the compressed
-	# bytes as-is (ranges apply to the compressed representation).
-	file_server {
-		precompressed
+	log {
+		output stdout
+		format filter {
+			wrap json {
+				time_key ""
+				level_key ""
+				name_key ""
+				message_key ""
+			}
+			fields {
+				request delete
+				bytes_read delete
+				user_id delete
+				duration delete
+				status delete
+				resp_headers delete
+				size rename bytes
+			}
+		}
+	}
+	log_append url {http.request.uri}
+	log_append method {http.request.method}
+	@range header Range *
+	@full not header Range *
+	log_append @range type range
+	log_append @full type full
+
+	# SQLite VFS offsets refer to the original file, never a compressed sidecar.
+	@sqlite path *.db *.sqlite
+	handle @sqlite {
+		file_server
+	}
+	handle {
+		file_server {
+			precompressed
+		}
 	}
 
 	# On-the-fly compression as a fallback for assets you didn't pre-compress
 	# (HTML, JSON, JS, etc.). Skipped automatically for already-compressed
-	# responses and — importantly — Caddy won't apply this to range requests,
-	# so it's safe alongside the precompressed DB file.
+	# responses. Database content types are deliberately not included.
 	encode {
 		zstd
 		gzip 5
@@ -44,4 +72,6 @@
 	# or treat them as content-addressed). Adjust as needed.
 	@db path *.db *.db.br *.db.gz *.sqlite *.sqlite.br *.sqlite.gz
 	header @db Cache-Control "public, max-age=31536000, immutable"
+	# The editable local demo keeps one URL; revalidate between sessions.
+	header /pihka/app/database/sample.db Cache-Control "no-cache"
 }

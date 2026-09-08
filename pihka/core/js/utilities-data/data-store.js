@@ -8,6 +8,17 @@ function quote(s) {
     return `"${s.replace(/"/g, '""')}"`;
 }
 
+// Share in-flight work too, but let a later request retry failed lookups.
+function cached(cache, key, load) {
+    if (!cache.has(key)) {
+        cache.set(key, Promise.resolve().then(load).catch(error => {
+            cache.delete(key);
+            throw error;
+        }));
+    }
+    return cache.get(key);
+}
+
 // FTS5 parses the MATCH argument as a query expression whose barewords can't
 // contain punctuation ('.', '-', '(' …). Quoting each whitespace-separated
 // term turns the input into literal phrase queries (implicitly AND-ed)
@@ -78,10 +89,10 @@ export class DataStore {
      * registered filter type's `filterMeta` hook runs and may extend or
      * reshape the result — e.g. the geo-filter extension replaces the
      * lat/lon range facets with a `geoMeta` entry carrying the data extent.
-     * @returns {{ rangeMeta: Object, multiMeta: Object, m2mMeta: Object,
-     *   rangeColumns: Array, multiColumns: Array, m2mColumns: Array }}
+     * @returns {Promise<{ rangeMeta: Object, multiMeta: Object, m2mMeta: Object,
+     *   rangeColumns: Array, multiColumns: Array, m2mColumns: Array }>}
      */
-    getFilterMeta(table) {
+    async getFilterMeta(table) {
         const tableMeta = this.#meta.tables[table];
         if (!tableMeta) {
             return { rangeMeta: {}, multiMeta: {}, m2mMeta: {}, rangeColumns: [], multiColumns: [], m2mColumns: [] };
@@ -91,13 +102,13 @@ export class DataStore {
 
         const rangeMeta = {};
         for (const col of rangeColumns) {
-            rangeMeta[col.name] = this.#loadRangeBounds(table, col.name);
+            rangeMeta[col.name] = await this.#loadRangeBounds(table, col.name);
         }
 
         const multiMeta = {};
         for (const col of multiColumns) {
             multiMeta[col.name] = {
-                options: this.#loadFkOptions(col.references.table, col.references.column),
+                options: await this.#loadFkOptions(col.references.table, col.references.column),
                 label: this.#meta.tables[col.references.table]?.label ?? col.references.table,
             };
         }
@@ -121,7 +132,7 @@ export class DataStore {
             const label = this.#meta.tables[rel.farTable]?.label ?? rel.farTable;
             m2mColumns.push({ name: key, label });
             m2mMeta[key] = {
-                options: this.#loadFkOptions(rel.farTable, rel.farRefColumn),
+                options: await this.#loadFkOptions(rel.farTable, rel.farRefColumn),
                 label,
                 filter: {
                     type: "m2m",
@@ -138,7 +149,7 @@ export class DataStore {
 
         const loadRangeBounds = (colName) => this.#loadRangeBounds(table, colName);
         for (const def of listFilterTypes()) {
-            def.filterMeta?.({ table, columns: tableMeta.columns, meta, loadRangeBounds });
+            await def.filterMeta?.({ table, columns: tableMeta.columns, meta, loadRangeBounds });
         }
 
         return meta;
@@ -164,9 +175,9 @@ export class DataStore {
      * @param {number} [options.page]
      * @param {number|null} [options.pageSize] - null disables pagination (all rows)
      * @param {string} [options.search] - FTS5 MATCH expression; ignored when no FTS index exists
-     * @returns {{ columns: Array, rows: Array, totalRows: number, page: number, totalPages: number, fkResolved?: Object, searchError?: string }}
+     * @returns {Promise<{ columns: Array, rows: Array, totalRows: number, page: number, totalPages: number, fkResolved?: Object, searchError?: string }>}
      */
-    queryTable(table, { filters = {}, sort = null, page = 0, pageSize = 25, search = "" } = {}) {
+    async queryTable(table, { filters = {}, sort = null, page = 0, pageSize = 25, search = "" } = {}) {
         const tableMeta = this.#meta.tables[table];
         if (!tableMeta) return { columns: [], rows: [], totalRows: 0, page: 0, totalPages: 1 };
 
@@ -181,7 +192,7 @@ export class DataStore {
             && !(tableMeta.fts.mode === "trigram" && search.trim().length < 3);
         const ftsInfo = searchActive ? tableMeta.fts : null;
         const joinClause = ftsInfo
-            ? `JOIN ${quote(ftsInfo.table)} ON ${quote(table)}.rowid = ${quote(ftsInfo.table)}.rowid`
+            ? `JOIN ${quote(ftsInfo.table)} ON ${quote(table)}.${quote(ftsInfo.rowid || "rowid")} = ${quote(ftsInfo.table)}.rowid`
             : "";
         const ftsPredicate = ftsInfo ? `${quote(ftsInfo.table)} MATCH ?` : "";
 
@@ -202,11 +213,11 @@ export class DataStore {
             orderClause = `ORDER BY ${quote(ftsInfo.table)}.rank`;
         }
 
-        const run = (matchTerm) => {
+        const run = async (matchTerm) => {
             // Bind order matches placeholder order: filters first, then FTS.
             const whereBinds = [...filterBinds, ...(ftsInfo ? [matchTerm] : [])];
             const countResult = [];
-            this.#ds.exec(
+            await this.#ds.exec(
                 `SELECT COUNT(*) as n FROM ${quote(table)} ${joinClause} ${whereClause}`,
                 { bind: whereBinds, rowMode: "object", callback: r => countResult.push(r) },
             );
@@ -219,13 +230,13 @@ export class DataStore {
             const limitBinds = paginated ? [pageSize, page * pageSize] : [];
             const sql = `SELECT ${quote(table)}.* FROM ${quote(table)} ${joinClause} ${whereClause} ${orderClause} ${limitClause}`;
             const rows = [];
-            this.#ds.exec(sql, {
+            await this.#ds.exec(sql, {
                 bind: [...whereBinds, ...limitBinds],
                 rowMode: "object",
                 callback: r => rows.push(r),
             });
 
-            const fkResolved = this.resolveForeignKeys(table);
+            const fkResolved = await this.resolveForeignKeys(table);
             return { columns, rows, totalRows, page, totalPages, fkResolved };
         };
 
@@ -234,15 +245,16 @@ export class DataStore {
         // Retry those as literal quoted terms so punctuation just works,
         // while syntactically valid queries keep the full FTS5 syntax.
         try {
-            return run(search);
+            return await run(search);
         } catch (err) {
-            if (!ftsInfo) throw err;
+            if (!ftsInfo || !/fts5: syntax error|unterminated string|no such column|malformed MATCH|unknown special query/i.test(err.message)) throw err;
             try {
-                return run(literalizeFtsQuery(search));
-            } catch {
+                return await run(literalizeFtsQuery(search));
+            } catch (retryError) {
+                if (!/fts5: syntax error|unterminated string|no such column|malformed MATCH|unknown special query/i.test(retryError.message)) throw retryError;
                 return {
                     columns, rows: [], totalRows: 0, page: 0, totalPages: 1,
-                    fkResolved: this.resolveForeignKeys(table),
+                    fkResolved: await this.resolveForeignKeys(table),
                     searchError: "Invalid search query",
                 };
             }
@@ -254,9 +266,9 @@ export class DataStore {
      *
      * @param {string} table
      * @param {*} id - Primary key value
-     * @returns {{ columns: Array, row: Object|null, fkResolved?: Object }}
+     * @returns {Promise<{ columns: Array, row: Object|null, fkResolved?: Object }>}
      */
-    queryRow(table, id) {
+    async queryRow(table, id) {
         const tableMeta = this.#meta.tables[table];
         if (!tableMeta) return { columns: [], row: null };
 
@@ -265,12 +277,12 @@ export class DataStore {
         if (!pkCol) return { columns, row: null };
 
         const rows = [];
-        this.#ds.exec(
+        await this.#ds.exec(
             `SELECT * FROM ${quote(table)} WHERE ${quote(pkCol.name)} = ? LIMIT 1`,
             { bind: [id], rowMode: "object", callback: r => rows.push(r) },
         );
 
-        const fkResolved = this.resolveForeignKeys(table);
+        const fkResolved = await this.resolveForeignKeys(table);
         return { columns, row: rows[0] ?? null, fkResolved };
     }
 
@@ -284,9 +296,9 @@ export class DataStore {
      * @param {string} table - the detail row's table
      * @param {Object} row - the detail row (values are read for the
      *   referenced columns, which are usually but not necessarily the PK)
-     * @returns {Array<{ table: string, column: string, value: *, totalRows: number }>}
+     * @returns {Promise<Array<{ table: string, column: string, value: *, totalRows: number }>>}
      */
-    queryRelated(table, row) {
+    async queryRelated(table, row) {
         if (!row) return [];
 
         const relations = [];
@@ -298,7 +310,7 @@ export class DataStore {
                 if (value == null) continue;
 
                 const countResult = [];
-                this.#ds.exec(
+                await this.#ds.exec(
                     `SELECT COUNT(*) as n FROM ${quote(childName)} WHERE ${quote(col.name)} = ?`,
                     { bind: [value], rowMode: "object", callback: r => countResult.push(r) },
                 );
@@ -328,16 +340,16 @@ export class DataStore {
      * @param {Object} [options]
      * @param {Object} [options.filters] - current filter state
      * @param {boolean} [options.excludeSelf=true]
-     * @returns {Array<{ value: *, count: number }>}
+     * @returns {Promise<Array<{ value: *, count: number }>>}
      */
-    queryFacetCounts(table, facetColumn, { filters = {}, excludeSelf = true } = {}) {
+    async queryFacetCounts(table, facetColumn, { filters = {}, excludeSelf = true } = {}) {
         const { whereClause, bindParams } = buildWhereClause(filters, {
             exclude: excludeSelf ? facetColumn : null,
         });
 
         const sql = `SELECT ${quote(facetColumn)} as value, COUNT(*) as count FROM ${quote(table)} ${whereClause} GROUP BY ${quote(facetColumn)} ORDER BY count DESC`;
         const rows = [];
-        this.#ds.exec(sql, { bind: bindParams, rowMode: "object", callback: r => rows.push(r) });
+        await this.#ds.exec(sql, { bind: bindParams, rowMode: "object", callback: r => rows.push(r) });
         return rows;
     }
 
@@ -348,19 +360,19 @@ export class DataStore {
      * @param {string} table
      * @param {Array} facetConfigs - from perspective.facets
      * @param {Object} currentFilters - current filter state
-     * @returns {Object} - { [field]: { type, label, options?, min?, max? } }
+     * @returns {Promise<Object>} - { [field]: { type, label, options?, min?, max? } }
      */
-    getFacetMeta(table, facetConfigs, currentFilters = {}) {
+    async getFacetMeta(table, facetConfigs, currentFilters = {}) {
         const result = {};
 
         for (const facet of facetConfigs) {
             const field = facet.field;
 
             if (facet.type === "range") {
-                const bounds = this.#loadRangeBounds(table, field);
+                const bounds = await this.#loadRangeBounds(table, field);
                 result[field] = { type: "range", label: facet.label, ...bounds };
             } else if (facet.type === "dropdown" || facet.type === "checkbox") {
-                const counts = this.queryFacetCounts(table, field, {
+                const counts = await this.queryFacetCounts(table, field, {
                     filters: currentFilters,
                     excludeSelf: true,
                 });
@@ -371,7 +383,7 @@ export class DataStore {
                 let options;
 
                 if (col?.references) {
-                    const fkOptions = this.#loadFkOptions(col.references.table, col.references.column);
+                    const fkOptions = await this.#loadFkOptions(col.references.table, col.references.column);
                     const fkMap = new Map(fkOptions.map(o => [o.value, o.display]));
                     options = counts.map(r => ({
                         value: r.value,
@@ -399,32 +411,31 @@ export class DataStore {
      * Uses typical display columns: name, title, label, or first TEXT column.
      *
      * @param {string} table
-     * @returns {Object} - { [colName]: { [id]: displayName } }
+     * @returns {Promise<Object>} - { [colName]: { [id]: displayName } }
      */
-    resolveForeignKeys(table) {
-        if (this.#fkResolvedCache.has(table)) return this.#fkResolvedCache.get(table);
+    async resolveForeignKeys(table) {
+        return cached(this.#fkResolvedCache, table, async () => {
+            const tableMeta = this.#meta.tables[table];
+            if (!tableMeta) return {};
 
-        const tableMeta = this.#meta.tables[table];
-        if (!tableMeta) return {};
-
-        const resolved = {};
-        for (const col of tableMeta.columns) {
-            if (!col.references) continue;
-            const options = this.#loadFkOptions(col.references.table, col.references.column);
-            const map = {};
-            for (const opt of options) {
-                map[opt.value] = opt.display;
+            const resolved = {};
+            for (const col of tableMeta.columns) {
+                if (!col.references) continue;
+                const options = await this.#loadFkOptions(col.references.table, col.references.column);
+                const map = {};
+                for (const opt of options) {
+                    map[opt.value] = opt.display;
+                }
+                resolved[col.name] = {
+                    displayMap: map,
+                    referencedTable: col.references.table,
+                    // Hidden tables still resolve display names, but the UI
+                    // shouldn't link into them.
+                    referencedTableHidden: this.#meta.tables[col.references.table]?.hidden === true,
+                };
             }
-            resolved[col.name] = {
-                displayMap: map,
-                referencedTable: col.references.table,
-                // Hidden tables still resolve display names, but the UI
-                // shouldn't link into them.
-                referencedTableHidden: this.#meta.tables[col.references.table]?.hidden === true,
-            };
-        }
-        this.#fkResolvedCache.set(table, resolved);
-        return resolved;
+            return resolved;
+        });
     }
 
     // --- Private helpers ---
@@ -485,41 +496,38 @@ export class DataStore {
         return relations;
     }
 
-    #loadRangeBounds(table, colName) {
+    async #loadRangeBounds(table, colName) {
         const cacheKey = `${table} ${colName}`;
-        if (this.#rangeBoundsCache.has(cacheKey)) return this.#rangeBoundsCache.get(cacheKey);
-
-        const rows = [];
-        this.#ds.exec(
-            `SELECT MIN(${quote(colName)}) as lo, MAX(${quote(colName)}) as hi FROM ${quote(table)}`,
-            { rowMode: "object", callback: r => rows.push(r) },
-        );
-        const bounds = { min: rows[0]?.lo ?? 0, max: rows[0]?.hi ?? 0 };
-        this.#rangeBoundsCache.set(cacheKey, bounds);
-        return bounds;
+        return cached(this.#rangeBoundsCache, cacheKey, async () => {
+            const rows = [];
+            await this.#ds.exec(
+                `SELECT MIN(${quote(colName)}) as lo, MAX(${quote(colName)}) as hi FROM ${quote(table)}`,
+                { rowMode: "object", callback: r => rows.push(r) },
+            );
+            return { min: rows[0]?.lo ?? 0, max: rows[0]?.hi ?? 0 };
+        });
     }
 
-    #loadFkOptions(referencedTable, referencedColumn) {
+    async #loadFkOptions(referencedTable, referencedColumn) {
         const cacheKey = `${referencedTable} ${referencedColumn}`;
-        if (this.#fkOptionsCache.has(cacheKey)) return this.#fkOptionsCache.get(cacheKey);
+        return cached(this.#fkOptionsCache, cacheKey, async () => {
+            const refMeta = this.#meta.tables[referencedTable];
+            if (!refMeta) return [];
 
-        const refMeta = this.#meta.tables[referencedTable];
-        if (!refMeta) return [];
+            // Prefer typical display columns by name, then first TEXT column, then PK
+            const DISPLAY_NAMES = ["title", "name", "label", "display_name", "description"];
+            const displayCol =
+                refMeta.columns.find(c => DISPLAY_NAMES.includes(c.name.toLowerCase()) && !c.primaryKey)
+                || refMeta.columns.find(c => !c.primaryKey && c.type === "TEXT")
+                || refMeta.columns.find(c => c.primaryKey);
+            if (!displayCol) return [];
 
-        // Prefer typical display columns by name, then first TEXT column, then PK
-        const DISPLAY_NAMES = ["title", "name", "label", "display_name", "description"];
-        const displayCol =
-            refMeta.columns.find(c => DISPLAY_NAMES.includes(c.name.toLowerCase()) && !c.primaryKey)
-            || refMeta.columns.find(c => !c.primaryKey && c.type === "TEXT")
-            || refMeta.columns.find(c => c.primaryKey);
-        if (!displayCol) return [];
-
-        const options = [];
-        this.#ds.exec(
-            `SELECT ${quote(referencedColumn)} as value, ${quote(displayCol.name)} as display FROM ${quote(referencedTable)} ORDER BY ${quote(displayCol.name)}`,
-            { rowMode: "object", callback: r => options.push(r) },
-        );
-        this.#fkOptionsCache.set(cacheKey, options);
-        return options;
+            const options = [];
+            await this.#ds.exec(
+                `SELECT ${quote(referencedColumn)} as value, ${quote(displayCol.name)} as display FROM ${quote(referencedTable)} ORDER BY ${quote(displayCol.name)}`,
+                { rowMode: "object", callback: r => options.push(r) },
+            );
+            return options;
+        });
     }
 }

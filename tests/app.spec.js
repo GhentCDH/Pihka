@@ -48,9 +48,11 @@ test("detail page lists related objects in a paginated table", async ({ page }) 
 
 test("configured column labels and types render in the works table", async ({ page }) => {
   await gotoRoute(page, "/en/works/table");
-  // "cover" column is configured with label "Cover" and type "asset"
+  // "cover" column is configured with label "Cover" and type "resource-image".
+  // Only the demo subset of works carries a cover, so assert the column exists
+  // and at least one row renders an <img>, not that any particular row does.
   await expect(page.locator("thead th", { hasText: "Cover" })).toBeVisible();
-  await expect(page.locator("tbody tr").first().locator("td img")).toBeVisible();
+  await expect(page.locator("tbody td img").first()).toBeVisible();
   // Table label "Works" shows in the breadcrumb
   await expect(page.locator("#app header nav")).toContainText("Works");
 });
@@ -181,8 +183,7 @@ test("year range filter narrows works rows", async ({ page }) => {
   const minSlider = sidebar.locator("input[type='range']").first();
   await minSlider.fill("2025");
   // Should show fewer rows
-  const rowCount = await content.locator("tbody tr").count();
-  expect(rowCount).toBeLessThan(25);
+  await expect.poll(() => content.locator("tbody tr").count()).toBeLessThan(25);
 });
 
 test("category dropdown facet filters junction rows", async ({ page }) => {
@@ -475,6 +476,48 @@ test("text-annotations extension: detail page renders the annotated text", async
   await expect(view.locator(".annotated-text-legend-chip")).toHaveText(["person", "place"]);
   // the annotations table also appears as a plain reverse-FK related section
   await expect(page.locator(".detail-related", { hasText: "Annotations" })).toBeVisible();
+});
+
+// --- Builtin resource cell renderers (resource-image/audio/video) ----------
+// Retype existing sample columns via an intercepted config, so the sample db
+// and the repo config stay untouched: cover holds app/assets-relative paths
+// (covers/<id>.jpg), manifest holds a full URL on 3 rows.
+
+test("resource types: image and video cells render media tags", async ({ page }) => {
+  await page.route("**/app/config.json", async r => {
+    const response = await r.fetch();
+    const config = await response.json();
+    config.tables.works.columns.cover.type = "resource-image";
+    config.tables.works.columns.manifest.type = "resource-video";
+    await r.fulfill({ json: config });
+  });
+  await gotoRoute(page, "/en/works/table");
+  // relative path resolves under app/assets/
+  await expect(page.locator("td img").first())
+    .toHaveAttribute("src", /app\/assets\/covers\/\d+\.jpg$/);
+  // full URLs pass through unchanged, and nothing preloads
+  const videos = page.locator("td video[controls]");
+  await expect(videos).toHaveCount(3);
+  await expect(videos.first())
+    .toHaveAttribute("src", "https://objects.library.uu.nl/manifest/iiif/v3/20.500.14918-326815");
+  await expect(videos.first()).toHaveAttribute("preload", "none");
+  // the registered resource renderer took over the column from the iiif type
+  await expect(page.locator(".iiif-badge")).toHaveCount(0);
+});
+
+test("resource types: audio renders on the detail page", async ({ page }) => {
+  await page.route("**/app/config.json", async r => {
+    const response = await r.fetch();
+    const config = await response.json();
+    config.tables.works.columns.manifest.type = "resource-audio";
+    await r.fulfill({ json: config });
+  });
+  await gotoRoute(page, "/en/works/1/table");
+  const audio = page.locator("audio[controls]");
+  await expect(audio).toHaveCount(1);
+  await expect(audio)
+    .toHaveAttribute("src", "https://objects.library.uu.nl/manifest/iiif/v3/20.500.14918-326815");
+  await expect(audio).toHaveAttribute("preload", "none");
 });
 
 test("point_map extension: geo tables get map views and the location facet", async ({ page }) => {

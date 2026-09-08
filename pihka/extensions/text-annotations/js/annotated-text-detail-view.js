@@ -1,5 +1,6 @@
 import { h } from "preact";
-import { useEffect, useMemo, useId } from "preact/hooks";
+import { useEffect, useId } from "preact/hooks";
+import { useQuery, QueryStatus } from "../../../core/js/utilities-ui/use-query.js";
 import { navigate } from "../../../core/js/utilities-ui/router.js";
 import { createAnnotatedText, createHighlightStyle } from "../vendor/@ghentcdh/annotated-text/index.js";
 
@@ -27,9 +28,9 @@ const PALETTE = ["#4c9ee3", "#e3a24c", "#5cb85c", "#c678dd", "#e06c75", "#56b6c2
 const isIntColumn = (col) => /INT/i.test(col.type ?? "") && !col.primaryKey;
 
 /** First reverse-FK relation whose child table looks like an annotations table. */
-function detectAnnotationRelation(store, table, row) {
+async function detectAnnotationRelation(store, table, row) {
     if (!store || !table || !row) return null;
-    for (const rel of store.queryRelated(table, row)) {
+    for (const rel of await store.queryRelated(table, row)) {
         const cols = store.getSchema(rel.table)?.columns ?? [];
         if (cols.some(c => c.name === "start" && isIntColumn(c)) &&
             cols.some(c => c.name === "end" && isIntColumn(c))) {
@@ -49,15 +50,16 @@ export function AnnotatedTextDetailView({ table, columns, row, store, lang }) {
         : null;
     const text = textCol ? String(row[textCol.name]) : null;
 
-    const detected = useMemo(
+    const detection = useQuery(
         () => detectAnnotationRelation(store, table, row),
         [store, table, row],
     );
+    const detected = detection.data;
 
     // All annotation rows for this row's text, oldest offset first, mapped
     // to the library's {id, start, end, label} shape plus a type-by-id map
     // for styling. Everything is plain JSON in, plain JSON out.
-    const { annotations, typeById, types } = useMemo(() => {
+    const annotationQuery = useQuery(async () => {
         if (!detected || !text) return { annotations: [], typeById: new Map(), types: [] };
         const { rel, cols } = detected;
         const pkName = cols.find(c => c.primaryKey)?.name ?? null;
@@ -65,7 +67,7 @@ export function AnnotatedTextDetailView({ table, columns, row, store, lang }) {
         const labelName = textColOf("label");
         const typeName = textColOf("type");
 
-        const { rows } = store.queryTable(rel.table, {
+        const { rows } = await store.queryTable(rel.table, {
             filters: { [rel.column]: { type: "multi", selected: new Set([rel.value]) } },
             sort: { column: "start", direction: "asc" },
             pageSize: null,
@@ -80,9 +82,10 @@ export function AnnotatedTextDetailView({ table, columns, row, store, lang }) {
         });
         return { annotations, typeById, types: [...new Set(typeById.values())].sort() };
     }, [detected, text, store]);
+    const { annotations, typeById, types } = annotationQuery.data ?? { annotations: [], typeById: new Map(), types: [] };
 
     useEffect(() => {
-        if (!text) return;
+        if (!text || detection.loading || annotationQuery.loading || detection.error || annotationQuery.error) return;
         const styles = Object.fromEntries(types.map((t, i) =>
             [t, { default: createHighlightStyle(PALETTE[i % PALETTE.length]) }]));
         const annotated = createAnnotatedText(containerId)
@@ -98,10 +101,11 @@ export function AnnotatedTextDetailView({ table, columns, row, store, lang }) {
                 }
             });
         return () => annotated.destroy();
-    }, [text, annotations, typeById, containerId, lang]);
+    }, [text, annotations, typeById, containerId, lang, detection.loading, annotationQuery.loading]);
 
     if (!row) return h("p", null, "Row not found.");
     if (!text) return h("p", null, "No text for this row.");
+    if (detection.loading || annotationQuery.loading || detection.error || annotationQuery.error) return h(QueryStatus, { error: detection.error || annotationQuery.error });
 
     return h("div", { class: "annotated-text-detail-view" },
         types.length > 0 && h("div", { class: "annotated-text-legend" },

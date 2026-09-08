@@ -10,8 +10,14 @@ function getSqlite3() {
 
 export class DataSource extends EventTarget {
     #db = null;
+    #closed = false;
+    #abort = new globalThis.AbortController();
+    capabilities = { readOnly: false };
 
-    /** Resolves when the database is open and ready to query. */
+    /**
+     * Resolves when open and ready to query. Rejects on initialization failure
+     * or with AbortError if closed before opening. Callers must handle rejection.
+     */
     ready;
 
     /**
@@ -27,33 +33,47 @@ export class DataSource extends EventTarget {
             // Yield one microtask so the caller constructing this source can
             // attach event listeners before the first event fires.
             await Promise.resolve();
+            this.#abort.signal.throwIfAborted();
 
             this.dispatchEvent(new CustomEvent("downloading"));
 
-            const res = await fetch(url);
+            const res = await fetch(url, { signal: this.#abort.signal });
+            this.#abort.signal.throwIfAborted();
             if (!res.ok) throw new Error(`Fetch failed: ${res.status} ${res.statusText}`);
             const buf = await res.arrayBuffer();
+            this.#abort.signal.throwIfAborted();
 
             this.dispatchEvent(new CustomEvent("loading", { detail: { bytes: buf.byteLength } }));
+            this.#abort.signal.throwIfAborted();
 
             const sqlite3 = await getSqlite3();
+            this.#abort.signal.throwIfAborted();
 
             const bytes = new Uint8Array(buf);
             const n = bytes.byteLength;
-            const pBuf = sqlite3.wasm.alloc(n);
-            sqlite3.wasm.heap8u().set(bytes, pBuf);
-
-            const db = new sqlite3.oo1.DB();
-            const rc = sqlite3.capi.sqlite3_deserialize(
-                db.pointer, "main", pBuf, n, n,
-                sqlite3.capi.SQLITE_DESERIALIZE_FREEONCLOSE |
-                sqlite3.capi.SQLITE_DESERIALIZE_RESIZEABLE,
-            );
-            db.checkRc(rc);
-            this.#db = db;
+            let pBuf = sqlite3.wasm.alloc(n);
+            let db = null;
+            try {
+                sqlite3.wasm.heap8u().set(bytes, pBuf);
+                db = new sqlite3.oo1.DB();
+                const rc = sqlite3.capi.sqlite3_deserialize(
+                    db.pointer, "main", pBuf, n, n,
+                    sqlite3.capi.SQLITE_DESERIALIZE_FREEONCLOSE |
+                    sqlite3.capi.SQLITE_DESERIALIZE_RESIZEABLE,
+                );
+                // FREEONCLOSE transfers ownership even when deserialize fails.
+                pBuf = 0;
+                db.checkRc(rc);
+                this.#db = db;
+                db = null;
+            } finally {
+                if (pBuf) sqlite3.wasm.dealloc(pBuf);
+                db?.close();
+            }
 
             this.dispatchEvent(new CustomEvent("ready"));
-        } catch (error) {
+        } catch (cause) {
+            const error = this.#closed ? this.#abort.signal.reason : cause;
             this.dispatchEvent(new CustomEvent("error", { detail: { error } }));
             throw error;
         }
@@ -61,14 +81,42 @@ export class DataSource extends EventTarget {
 
     /**
      * Execute SQL against the in-memory database.
-     * Accepts the same options object as sqlite3.oo1.DB#exec().
+     * Portable datasource subset only: bind parameters, object/array rows,
+     * and a synchronous callback(row) (no SQLite statement handle).
+     * Returning false stops row delivery, including subsequent statements;
+     * this downloader also stops stepping the current statement. Other
+     * sources may finish execution before delivering rows. The returned array
+     * contains exactly the delivered rows, including the row that stopped it.
      *
      * @param {string} sql
-     * @param {object} [options]
+     * @param {Object} [options]
+     * @param {Array|Object} [options.bind] Positional or named SQL parameters.
+     * @param {"object"|"array"} [options.rowMode="object"]
+     * @param {(row: Object|Array) => unknown} [options.callback]
+     * @returns {Promise<Array<Object|Array>>}
      */
-    exec(sql, options = {}) {
+    async exec(sql, options = {}) {
+        if (this.#closed) throw new Error("DataSource closed");
         if (!this.#db) throw new Error("DataSource not ready — await ds.ready first");
-        return this.#db.exec({ sql, ...options });
+        if (typeof sql !== "string") throw new TypeError("Datasource sql must be a string");
+        if (!options || typeof options !== "object" || Array.isArray(options)) throw new TypeError("Datasource exec options must be an object");
+        for (const key of Reflect.ownKeys(options)) {
+            if (typeof key !== "string" || !["bind", "rowMode", "callback"].includes(key)) throw new TypeError(`Unsupported datasource exec option: ${String(key)}`);
+        }
+        const { bind, rowMode = "object", callback } = options;
+        if (rowMode !== "object" && rowMode !== "array") throw new TypeError("Unsupported rowMode: use object or array");
+        if (callback !== undefined && typeof callback !== "function") throw new TypeError("Datasource callback must be a function");
+        const rows = [];
+        let stopped = false;
+        this.#db.exec({ sql, bind, rowMode, callback: row => {
+            if (stopped) return false;
+            rows.push(row);
+            if (callback?.(row) === false) {
+                stopped = true;
+                return false;
+            }
+        } });
+        return rows;
     }
 
     /**
@@ -101,7 +149,19 @@ export class DataSource extends EventTarget {
      *   `meta.tables[col.references.table]`
      */
     metadata() {
-        if (!this.#db) throw new Error("DataSource not ready — await ds.ready first");
+        return readMetadata(this);
+    }
+
+    /** Terminal and idempotent; cancels pending download/initialization. */
+    async close() {
+        this.#closed = true;
+        this.#abort.abort();
+        this.#db?.close();
+        this.#db = null;
+    }
+}
+
+export async function readMetadata(ds) {
 
         const tables = {};
 
@@ -109,8 +169,7 @@ export class DataSource extends EventTarget {
         // database and its kind. "shadow" rows are FTS5/R-Tree internal tables;
         // sqlite_* rows are SQLite system objects — both are excluded.
         const tableList = [];
-        this.#db.exec({
-            sql: "PRAGMA table_list",
+        await ds.exec("PRAGMA table_list", {
             rowMode: "object",
             callback: row => tableList.push(row),
         });
@@ -124,8 +183,7 @@ export class DataSource extends EventTarget {
 
             // Columns: cid, name, type, notnull, dflt_value, pk (1-based PK position)
             const columns = [];
-            this.#db.exec({
-                sql: `PRAGMA table_info(${quotedName})`,
+            await ds.exec(`PRAGMA table_info(${quotedName})`, {
                 rowMode: "object",
                 callback: row => columns.push({
                     name: row.name,
@@ -138,8 +196,7 @@ export class DataSource extends EventTarget {
 
             // Foreign keys: id, seq, table, from, to, on_update, on_delete
             // Attach each FK directly onto the originating column.
-            this.#db.exec({
-                sql: `PRAGMA foreign_key_list(${quotedName})`,
+            await ds.exec(`PRAGMA foreign_key_list(${quotedName})`, {
                 rowMode: "object",
                 callback: fk => {
                     const col = columns.find(c => c.name === fk.from);
@@ -151,10 +208,4 @@ export class DataSource extends EventTarget {
         }
 
         return { tables };
-    }
-
-    close() {
-        this.#db?.close();
-        this.#db = null;
-    }
 }

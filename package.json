@@ -12,6 +12,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "create-sample-db": "node scripts/create-sample-db.js",
+    "prepare-sample-db": "node scripts/prepare-sample-db.js",
     "download-dbs": "node scripts/download-dbs.js",
     "download-world-pmtiles": "node scripts/download-world-pmtiles.js",
     "download-covers": "node scripts/download-covers.js",

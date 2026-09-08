@@ -1,0 +1,14 @@
+{
+    "sqlite-wasm-http": {
+        "version": "1.2.0",
+        "files": ["dist/vfs-sync-http.js", "dist/vfs-http-types.js", "dist/endianness.js", "LICENSE"]
+    },
+    "lru-cache": {
+        "version": "7.18.3",
+        "files": ["index.mjs", "LICENSE"]
+    },
+    "@sqlite.org/sqlite-wasm": {
+        "version": "3.51.2-build4",
+        "files": ["dist/index.mjs", "dist/sqlite3.wasm", "dist/sqlite3-opfs-async-proxy.js"]
+    }
+}

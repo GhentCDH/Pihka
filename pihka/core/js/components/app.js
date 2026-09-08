@@ -12,6 +12,7 @@ import { useRouter, navigate, buildPath } from "../utilities-ui/router.js";
 import { localize } from "../utilities-data/table-config.js";
 import { usePref, setPref } from "../utilities-ui/prefs.js";
 import { preferredView } from "../utilities-ui/perspectives.js";
+import { useQuery, QueryStatus } from "../utilities-ui/use-query.js";
 
 // Render one nav menu entry: an external link (href) or a link to a
 // static page route (/:lang/page/:id).
@@ -141,15 +142,6 @@ export function App({ perspectives, store, defaultLang, languages = null, menu =
         const p = perspectives.find(p => p.id === perspectiveId);
         const tableName = p ? p.table : perspectiveId;
         const displayName = localize(p?.label, effectiveLang, p ? p.name : perspectiveId);
-        const { columns, row, fkResolved } = store.queryRow(tableName, rowId);
-
-        // Rows in other tables referencing this one (reverse FKs), with the
-        // child table's perspective id attached so the related section can
-        // link to detail pages and the filtered list view.
-        const related = store.queryRelated(tableName, row).map(rel => ({
-            ...rel,
-            perspectiveId: perspectives.find(cp => cp.table === rel.table)?.id ?? null,
-        }));
 
         return h(Layout, {
             ...layoutProps,
@@ -158,8 +150,9 @@ export function App({ perspectives, store, defaultLang, languages = null, menu =
                 String(rowId),
             ],
         },
-            h(DetailView, {
-                tableName: displayName, table: tableName, columns, row, fkResolved, related, store,
+            h(DetailRoute, {
+                key: `${tableName}:${rowId}`,
+                tableName: displayName, table: tableName, store, perspectives,
                 view, lang: effectiveLang,
                 perspectiveId, rowId,
             }),
@@ -173,7 +166,7 @@ export function App({ perspectives, store, defaultLang, languages = null, menu =
             h("p", null, `Perspective not found: ${perspectiveId}`),
         );
         return h(Layout, { ...layoutProps, crumbs: [localize(p.label, effectiveLang, p.name)] },
-            h(PerspectiveView, { perspective: p, store, view, lang: effectiveLang }),
+            h(PerspectiveView, { key: p.id, perspective: p, store, view, lang: effectiveLang }),
         );
     }
 
@@ -181,6 +174,20 @@ export function App({ perspectives, store, defaultLang, languages = null, menu =
     return h(Layout, layoutProps,
         h(PerspectiveList, { perspectives, store, lang: effectiveLang }),
     );
+}
+
+function DetailRoute({ perspectives, ...props }) {
+    const { store, table, rowId } = props;
+    const query = useQuery(async () => {
+        const result = await store.queryRow(table, rowId);
+        const related = (await store.queryRelated(table, result.row)).map(rel => ({
+            ...rel,
+            perspectiveId: perspectives.find(p => p.table === rel.table)?.id ?? null,
+        }));
+        return { ...result, related };
+    }, [store, table, rowId, perspectives]);
+    if (query.loading || query.error) return h(QueryStatus, { error: query.error });
+    return h(DetailView, { ...props, ...query.data });
 }
 
 /**

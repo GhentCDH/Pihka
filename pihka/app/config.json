@@ -5,7 +5,14 @@
         "nl"
     ],
     "database": "app/database/sample.db",
+    "datasource": {
+        "type": "http-vfs",
+        "options": {
+            "immutable": true
+        }
+    },
     "components": [
+        "extensions/http-vfs/http-vfs-component.js",
         "extensions/iiif-viewer/iiif-viewer-component.js",
         "extensions/point_map/point-map-component.js",
         "extensions/geo-filter/geo-filter-component.js",
@@ -31,7 +38,7 @@
             },
             "columns": {
                 "cover": {
-                    "type": "asset",
+                    "type": "resource-image",
                     "label": {
                         "en": "Cover",
                         "nl": "Omslag"

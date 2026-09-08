@@ -35,7 +35,13 @@ export async function loadPerspectives(meta) {
 
     // Configured perspectives (multi-table views or curated table views).
     const configured = Array.isArray(cfg.perspectives)
-        ? cfg.perspectives.map(p => normalizePerspective(p, meta, "perspective"))
+        ? cfg.perspectives.flatMap(p => {
+            const folded = String(p?.table ?? "").replace(/[A-Z]/g, c => c.toLowerCase());
+            const table = Object.keys(meta.tables).find(name => name.replace(/[A-Z]/g, c => c.toLowerCase()) === folded);
+            if (table) return [normalizePerspective({ ...p, table }, meta, "perspective")];
+            console.warn(`[perspectives] "${p.id}" skipped: table/view "${p.table}" is not published or could not be created`);
+            return [];
+        })
         : [];
 
     // Auto-generated table cards: every non-virtual, non-hidden relation

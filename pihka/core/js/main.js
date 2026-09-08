@@ -1,12 +1,13 @@
 // App bootstrap: loads the database, runs enrichment, and renders the app.
 // index.html only references this module — all logic lives in core/js/.
 
-// Registers the builtin list/detail views (side effect) before anything
-// parses URLs or renders.
+// Registers the builtin list/detail views and resource cell renderers
+// (side effects) before anything parses URLs or renders.
 import "./components/data-views/builtin-views.js";
+import "./components/data-views/builtin-resources.js";
 
 import { h, render } from "preact";
-import { DataSource } from "./utilities-data/datasource.js";
+import { createDataSource } from "./utilities-data/datasource-registry.js";
 import { DataStore } from "./utilities-data/data-store.js";
 import { loadPerspectives } from "./utilities-ui/perspectives.js";
 import { loadConfig } from "./utilities-data/config.js";
@@ -69,7 +70,8 @@ async function main() {
         }
 
         const databaseUrl = assetUrl(config.database || "app/database/sample.db");
-        const ds = new DataSource(databaseUrl);
+        const ds = createDataSource(databaseUrl, config.datasource);
+        ds.addEventListener("opening", () => showStatus("Opening database..."));
         ds.addEventListener("downloading", () => showStatus("Downloading database…"));
         ds.addEventListener("loading", (e) => {
             const { bytes } = /** @type {CustomEvent<{bytes: number}>} */ (e).detail;
@@ -79,9 +81,9 @@ async function main() {
 
         // Multi-table perspectives become SQL views before the schema is
         // read, so they show up in the metadata like any table.
-        createPerspectiveViews(ds, config);
+        await createPerspectiveViews(ds, config);
 
-        const meta = ds.metadata();
+        const meta = await ds.metadata();
         applyTableConfig(meta, config);
         showStatus("Indexing for search…");
         await runEnrichment(ds, meta, config);

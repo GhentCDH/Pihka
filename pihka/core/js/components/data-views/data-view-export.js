@@ -1,4 +1,5 @@
 import { h, Fragment } from "preact";
+import { useState, useRef, useEffect, useMemo } from "preact/hooks";
 import { visibleColumns } from "../../utilities-data/table-config.js";
 import { toCsv } from "../../utilities-data/csv.js";
 
@@ -19,6 +20,12 @@ import { toCsv } from "../../utilities-data/csv.js";
  * every view (the database download contains everything regardless).
  */
 export default function DataViewExport({ name, columns, rows, store }) {
+    const [error, setError] = useState(null);
+    const [busy, setBusy] = useState(false);
+    const current = useRef(null);
+    const token = useMemo(() => ({}), [name, columns, rows, store]);
+    current.current = token;
+    useEffect(() => () => { current.current = null; }, []);
     const cols = visibleColumns(columns ?? []);
     const colNames = cols.map(c => c.name);
     const pick = (row) => {
@@ -41,9 +48,17 @@ export default function DataViewExport({ name, columns, rows, store }) {
         "text/csv",
         toCsv(colNames, selection.map(pick)),
     );
-    const exportFullCsv = () => {
-        const all = store.queryTable(name, { pageSize: null });
-        downloadText(`${name}-full.csv`, "text/csv", toCsv(colNames, (all?.rows ?? []).map(pick)));
+    const exportFullCsv = async () => {
+        setBusy(true);
+        setError(null);
+        try {
+            const all = await store.queryTable(name, { pageSize: null });
+            if (current.current === token) downloadText(`${name}-full.csv`, "text/csv", toCsv(colNames, (all?.rows ?? []).map(pick)));
+        } catch (err) {
+            if (current.current === token) setError(err);
+        } finally {
+            if (current.current) setBusy(false);
+        }
     };
 
     const option = (title, description, action) => h("article", { class: "export-option" },
@@ -53,6 +68,7 @@ export default function DataViewExport({ name, columns, rows, store }) {
     );
 
     return h("div", { class: "export-view", style: "max-width:38rem" },
+        error && h("p", { role: "alert" }, String(error.message || error)),
         option(
             "Current selection (JSON)",
             `The ${selection.length.toLocaleString("en")} rows matching the active filters and search, as an array of objects.`,
@@ -66,7 +82,7 @@ export default function DataViewExport({ name, columns, rows, store }) {
         store && option(
             `All items in the ${name} table (CSV)`,
             `Every row of ${name}, ignoring filters, as comma-separated values with a header row.`,
-            h("button", { onClick: exportFullCsv }, `⤓ ${name}-full.csv`),
+            h("button", { onClick: exportFullCsv, disabled: busy, "aria-busy": busy }, `⤓ ${name}-full.csv`),
         ),
         databaseUrl && option(
             "Full database (SQLite)",

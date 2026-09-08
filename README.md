@@ -35,11 +35,31 @@ open http://localhost:3000
 
 Open http://localhost:3000 and browse the included demo database.
 
+The demo selects the optional HTTP VFS datasource and ships with prebuilt search
+indexes and its author-overview view. Core still defaults to downloading when
+`datasource` is omitted. After editing demo rows, run `npm run prepare-sample-db`
+(Node.js 22.13 or newer) to refresh the published indexes without regenerating rows.
+The sample database generator also runs this preparation step.
+
+The development server supplies weak ETags, so the demo explicitly uses
+`immutable: true`: keep the database unchanged throughout a browsing session and
+reload after preparation. For deployment, publish a new versioned database URL
+for each revision, or use a host with strong ETags and remove that option.
+
 ## Using your own data
 
 1. Place your `.sqlite` file in `app/database`
 2. Edit `app/config.json` to point to it
 3. Customize facets and views as needed
+
+### Optional HTTP Range Access
+
+The default datasource downloads the SQLite file and queries it in memory.
+For larger, immutable published databases, the optional
+[HTTP VFS datasource](pihka/extensions/http-vfs/README.md) reads pages through
+HTTP range requests instead. It vendors its own dependencies, needs no build
+step, and requires a range-capable host. Search indexes and perspective views
+must already exist in the published database; this source is strictly read-only.
 
 # credits
 
@@ -49,4 +69,3 @@ https://picocss.com/docs
 ## License
 
 MIT
-

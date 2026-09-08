@@ -13,6 +13,11 @@ const TOKENIZERS = {
 
 const DEFAULT_MODE = "trigram";
 
+// SQLite identifier matching folds ASCII only, not Unicode case pairs.
+function foldIdentifier(name) {
+    return name.replace(/[A-Z]/g, c => c.toLowerCase());
+}
+
 function resolveFtsMode(config) {
     const value = config?.enrichment?.fts;
     if (typeof value === "string") {
@@ -40,19 +45,59 @@ function resolveFtsMode(config) {
  * The in-memory DB is rebuilt from the .db file on every page load, so
  * indexes never go stale within a session — no triggers needed.
  */
-export function fts5Plugin(ds, meta, config) {
+export async function fts5Plugin(ds, meta, config) {
     const mode = resolveFtsMode(config);
+    // Inspect published definitions rather than guessing from an index name.
+    // Only external-content indexes with understood tokenizers are reusable.
+    const definitions = await ds.exec("SELECT name, sql FROM sqlite_schema WHERE type = 'table' AND sql IS NOT NULL", { rowMode: "object" });
+    const layouts = await ds.exec("SELECT name, wr FROM pragma_table_list WHERE schema = 'main'", { rowMode: "object" });
+    const tableNames = new Map(Object.keys(meta.tables).map(name => [foldIdentifier(name), name]));
+    for (const { name, sql } of definitions) {
+        if (!/\bUSING\s+fts5\s*\(/i.test(sql)) continue;
+        if (meta.tables[name]) meta.tables[name].hidden = true;
+        const option = (key) => {
+            const match = sql.match(new RegExp(`\\b${key}\\s*=\\s*(?:'((?:[^']|'')*)'|"((?:[^"]|"")*)"|([\\w]+))`, "i"));
+            return match ? (match[1]?.replace(/''/g, "'") ?? match[2]?.replace(/""/g, '"') ?? match[3]) : null;
+        };
+        const source = tableNames.get(foldIdentifier(option("content") ?? ""));
+        const target = meta.tables[source];
+        const rowidOption = foldIdentifier(option("content_rowid") || "rowid");
+        const tokenizer = (option("tokenize") || "unicode61").trim().split(/\s+/)[0].toLowerCase();
+        const indexedColumns = meta.tables[name]?.columns ?? [];
+        const detail = (option("detail") || "full").toLowerCase();
+        if (detail !== "full") {
+            console.warn(`[fts5] cannot reuse "${name}": unsupported detail=${detail}; detail=full is required for phrase and trigram search`);
+            continue;
+        }
+        if (!target || target.type !== "table" || !TOKENIZERS[tokenizer] || !indexedColumns.length) continue;
+        const rowidColumn = target.columns.find(c => foldIdentifier(c.name) === rowidOption);
+        const layout = layouts.find(t => foldIdentifier(t.name) === foldIdentifier(source));
+        const validRowid = rowidColumn ? /^INTEGER$/i.test(rowidColumn.type || "")
+            : layout?.wr === 0 && ["rowid", "_rowid_", "oid"].includes(rowidOption);
+        if (!validRowid) {
+            console.warn(`[fts5] cannot reuse "${name}": content rowid "${rowidOption}" is missing or not INTEGER (WITHOUT ROWID tables require an explicit integer column)`);
+            continue;
+        }
+        const columns = indexedColumns.map(c => target.columns.find(t => foldIdentifier(t.name) === foldIdentifier(c.name)));
+        if (!columns.every(c => c && !c.noFts)) {
+            console.warn(`[fts5] cannot reuse "${name}": indexed columns are missing or excluded by noFts`);
+            continue;
+        }
+        target.fts ??= { table: name, columns: columns.map(c => c.name), mode: tokenizer, rowid: rowidColumn?.name ?? rowidOption };
+    }
     for (const [name, tableMeta] of Object.entries(meta.tables)) {
         if (tableMeta.type !== "table") continue; // skip views, virtuals
+        if (tableMeta.fts || ds.capabilities?.readOnly) continue;
         try {
-            buildIndex(ds, name, tableMeta, mode);
+            await buildIndex(ds, name, tableMeta, mode);
         } catch (err) {
             console.warn(`[fts5] skipped "${name}":`, err.message);
         }
     }
 }
 
-function buildIndex(ds, tableName, tableMeta, mode) {
+async function buildIndex(ds, tableName, tableMeta, mode) {
+    if (tableMeta.columns.filter(c => c.primaryKey).length !== 1) return;
     const pkCol = tableMeta.columns.find(
         c => c.primaryKey && /^INTEGER$/i.test(c.type || ""),
     );
@@ -62,7 +107,14 @@ function buildIndex(ds, tableName, tableMeta, mode) {
         .filter(c => !RESERVED_FTS5_COLS.has(c.name.toLowerCase()) && !c.noFts);
     if (textCols.length === 0) return;
 
-    const ftsName = `${tableName}_fts`;
+    // Published objects (including FTS shadow tables) must never be replaced.
+    const names = new Set((await ds.exec("SELECT name FROM sqlite_schema UNION ALL SELECT name FROM sqlite_temp_schema"))
+        .map(r => foldIdentifier(r.name)));
+    let ftsName = `${tableName}_fts`;
+    for (let suffix = 1; ["", "_data", "_idx", "_content", "_docsize", "_config"]
+        .some(part => names.has(foldIdentifier(ftsName + part))); suffix++) {
+        ftsName = `${tableName}_fts_${suffix}`;
+    }
     const qFts = quoteIdentifier(ftsName);
     const qSrc = quoteIdentifier(tableName);
     const qPk = quoteIdentifier(pkCol.name);
@@ -73,7 +125,7 @@ function buildIndex(ds, tableName, tableMeta, mode) {
     const sourceLiteral = `'${tableName.replace(/'/g, "''")}'`;
     const pkLiteral = `'${pkCol.name.replace(/'/g, "''")}'`;
 
-    ds.exec(
+    await ds.exec(
         `CREATE VIRTUAL TABLE ${qFts} USING fts5(`
         + `${colDefs},`
         + ` content=${sourceLiteral},`
@@ -82,7 +134,7 @@ function buildIndex(ds, tableName, tableMeta, mode) {
         + `)`,
     );
 
-    ds.exec(
+    await ds.exec(
         `INSERT INTO ${qFts}(rowid, ${colDefs}) `
         + `SELECT ${qPk}, ${colDefs} FROM ${qSrc}`,
     );
@@ -91,5 +143,6 @@ function buildIndex(ds, tableName, tableMeta, mode) {
         table: ftsName,
         columns: textCols.map(c => c.name),
         mode,
+        rowid: pkCol.name,
     };
 }

@@ -11,10 +11,12 @@ import initSqlJs from 'sql.js';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
+import { prepareSampleDatabase } from './prepare-sample-db.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, 'data');
 const FULL_TEXT_DIR = join(DATA_DIR, 'full_text');
+const COVERS_DIR = join(__dirname, '..', 'pihka', 'app', 'assets', 'covers');
 
 async function createSampleDatabase() {
   const SQL = await initSqlJs();
@@ -102,6 +104,12 @@ async function createSampleDatabase() {
     }
   }
 
+  // Book covers are only a demo subset (scripts/download-covers.js downloads
+  // ~50 real covers from Open Library). A work's `cover` column is set iff its
+  // covers/{id}.jpg file exists on disk, so the DB never claims a cover it
+  // can't serve; every other work gets null and renders an empty Cover cell.
+  const hasCover = (id) => existsSync(join(COVERS_DIR, `${id}.jpg`));
+
   // Single transaction — without this, sql.js commits per-INSERT and 1000+ rows take minutes.
   db.run('BEGIN');
 
@@ -118,9 +126,12 @@ async function createSampleDatabase() {
   insC.free();
 
   const insW = db.prepare('INSERT INTO works VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+  let coverCount = 0;
   for (const [i, w] of works.entries()) {
     const manifest = i < MANIFEST_ROWS ? SAMPLE_MANIFEST : null;
-    insW.run([w.id, w.title, w.author_id, w.year, w.description, w.cover, manifest, fullText.get(w.id) ?? null]);
+    const cover = hasCover(w.id) ? `covers/${w.id}.jpg` : null;
+    if (cover) coverCount++;
+    insW.run([w.id, w.title, w.author_id, w.year, w.description, cover, manifest, fullText.get(w.id) ?? null]);
   }
   insW.free();
 
@@ -207,12 +218,14 @@ async function createSampleDatabase() {
   console.log(`  Authors:          ${authors.length}`);
   console.log(`  Categories:       ${categories.length}`);
   console.log(`  Works:            ${works.length}`);
+  console.log(`  Covers:           ${coverCount}`);
   console.log(`  Work categories:  ${junctionId}`);
   console.log(`  Full texts:       ${fullText.size}`);
   console.log(`  Text pages:       ${pageCount}`);
   console.log(`  Annotations:      ${annotationCount}`);
 
   db.close();
+  await prepareSampleDatabase(outputPath);
 }
 
 /** Tiny seeded PRNG (mulberry32) — keeps the generated DB deterministic. */

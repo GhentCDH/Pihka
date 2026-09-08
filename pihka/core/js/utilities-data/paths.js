@@ -28,5 +28,6 @@ export const basePath = (() => {
  * Usage: assetUrl("app/config.json") → "/pihka/app/config.json" (or "/app/config.json" at root)
  */
 export function assetUrl(relativePath) {
+    if (/^https?:\/\//i.test(relativePath) || relativePath.startsWith("/")) return relativePath;
     return basePath + "/" + relativePath;
 }

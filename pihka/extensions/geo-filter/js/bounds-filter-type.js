@@ -53,7 +53,7 @@ export const boundsFilterType = {
         return { conditions, params };
     },
 
-    filterMeta({ columns, meta, loadRangeBounds }) {
+    async filterMeta({ columns, meta, loadRangeBounds }) {
         const geo = findGeoColumns(columns);
         if (!geo) return;
 
@@ -65,8 +65,8 @@ export const boundsFilterType = {
 
         // `bounds` is the data extent, so the viewport facet can start
         // fitted to the data.
-        const latBounds = loadRangeBounds(geo.latCol.name);
-        const lonBounds = loadRangeBounds(geo.lonCol.name);
+        const latBounds = await loadRangeBounds(geo.latCol.name);
+        const lonBounds = await loadRangeBounds(geo.lonCol.name);
         meta.geoMeta = {
             latCol: geo.latCol.name,
             lonCol: geo.lonCol.name,

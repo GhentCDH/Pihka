@@ -1,0 +1,13 @@
+{
+    "sqlite-wasm-http/dist/vfs-sync-http.js": [
+        ["setVfsPostOpenSql", "setVfsPostOpenCallback"],
+        ["'PRAGMA journal_mode=DELETE;'", "'PRAGMA query_only=ON;'"],
+        ["entry.pageSize = pageData[0];", "entry.pageSize = pageData[0] === 1 ? 65536 : pageData[0];"],
+        ["chunkSize = prev.byteLength * 2;", "chunkSize = Math.min(prev.byteLength * 2, options?.maxReadBytes ?? 1048576);"],
+        ["const pages = chunkSize / entry.pageSize;", "// Count only pages actually returned, including at EOF."],
+        ["for (let i = Number(page) + 1; i < Number(page) + pages; i++)", "for (let i = Number(page) + 1; i < Number(page) + Math.ceil(data.byteLength / entry.pageSize); i++)"],
+        ["const pageOffset = Number(offset - pageStart);", "const pageOffset = Number(offset - pageStart);\n                if (pageOffset + n > data.byteLength) {\n                    if (dest instanceof Uint8Array) dest.fill(0);\n                    else wasm.heap8u().fill(0, dest, dest + n);\n                    return capi.SQLITE_IOERR_SHORT_READ;\n                }"],
+        ["debug['vfs']('xTruncate', fid, size);\n            return 0;", "debug['vfs']('xTruncate', fid, size);\n            return capi.SQLITE_READONLY;"],
+        ["return capi.SQLITE_ERROR;\n            }\n        },\n        xSync:", "return capi.SQLITE_IOERR;\n            }\n        },\n        xSync:"]
+    ]
+}

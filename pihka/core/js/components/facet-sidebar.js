@@ -20,7 +20,7 @@ import { localize } from "../utilities-data/table-config.js";
  */
 export default function FacetSidebar({
     facetMeta, autoFilterMeta, filters,
-    totalRows, perspectiveName, lang,
+    totalRows, perspectiveName, lang, loading = false,
     search, searchError, searchAvailable, searchMode, actions,
 }) {
     const hasActiveFilters = Object.keys(filters).length > 0 || (search && search.length > 0);
@@ -37,7 +37,7 @@ export default function FacetSidebar({
             }, "Clear all"),
         ),
         h("p", { style: "font-size:.8em;color:var(--text-muted);margin:.2rem 0 .5rem" },
-            `${totalRows} ${perspectiveName || "results"}`,
+            loading ? "Loading results..." : `${totalRows} ${perspectiveName || "results"}`,
         ),
 
         h(FtsSearchInput, {
@@ -243,4 +243,3 @@ function DropdownFacet({ label, options, selected, onChange }) {
         ),
     );
 }
-

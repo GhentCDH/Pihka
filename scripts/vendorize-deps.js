@@ -101,12 +101,20 @@ async function resolveIncludePaths(name, version, includePath) {
   return [normalized];
 }
 
-async function vendorPackage(name, range, { vendorDir = VENDOR_DIR, mapPrefix = "./pihka/core/vendor", include = [] } = {}) {
+async function vendorPackage(name, range, { vendorDir = VENDOR_DIR, mapPrefix = "./pihka/core/vendor", include = [], files = null } = {}) {
   // 1. Resolve version via unpkg package.json redirect
   console.log(`  Resolving ${name}@${range} ...`);
   const pkgJson = await fetchJson(`${UNPKG}/${name}@${range}/package.json`);
   const version = pkgJson.version;
   console.log(`  Resolved to ${name}@${version}`);
+  if (files) {
+    for (const file of files) {
+      const dest = join(vendorDir, name, file);
+      mkdirSync(dirname(dest), { recursive: true });
+      writeFileSync(dest, await fetchBinary(`${UNPKG}/${name}@${version}/${file}`));
+    }
+    return { name, version, entryPath: files[0] };
+  }
 
   // 2. Determine browser entry point: exports["."] (nested-aware) → module → main
   let entryPath = resolveExportEntry(pkgJson.exports?.["."]);
@@ -220,7 +228,7 @@ async function vendorPackage(name, range, { vendorDir = VENDOR_DIR, mapPrefix = 
  */
 function parseDepEntry(entry) {
   if (typeof entry === "string") return { range: entry, include: [] };
-  return { range: entry.version, include: entry.include ?? [] };
+  return { range: entry.version, include: entry.include ?? [], files: entry.files };
 }
 
 /**
@@ -261,15 +269,22 @@ function rewriteBareImports(vendorDir, entryFileByDep) {
   }
 }
 
-async function vendorExtensions() {
-  if (!existsSync(EXTENSIONS_DIR)) return;
+async function vendorExtensions(selected) {
+  if (!existsSync(EXTENSIONS_DIR)) {
+    if (selected !== undefined) throw new Error(`Unknown extension: ${selected || "(empty name)"}`);
+    return;
+  }
 
   const extensions = readdirSync(EXTENSIONS_DIR, { withFileTypes: true })
     .filter((e) => e.isDirectory() && existsSync(join(EXTENSIONS_DIR, e.name, "deps.json")))
     .map((e) => e.name);
+  if (selected !== undefined && !extensions.includes(selected)) {
+    throw new Error(`Unknown extension: ${selected || "(empty name)"}`);
+  }
   if (extensions.length === 0) return;
 
   for (const ext of extensions) {
+    if (selected !== undefined && ext !== selected) continue;
     const deps = JSON.parse(readFileSync(join(EXTENSIONS_DIR, ext, "deps.json"), "utf-8"));
     const names = Object.keys(deps);
     console.log(`Extension ${ext}: ${names.length} dependenc${names.length === 1 ? "y" : "ies"} to vendorize\n`);
@@ -284,13 +299,14 @@ async function vendorExtensions() {
 
     const entryFileByDep = new Map();
     for (const name of names) {
-      const { range, include } = parseDepEntry(deps[name]);
+      const { range, include, files } = parseDepEntry(deps[name]);
       // No import map involvement: extensions import their vendored deps
       // by relative path (./vendor/<pkg>/...).
       const result = await vendorPackage(name, range, {
         vendorDir,
         mapPrefix: `./pihka/extensions/${ext}/vendor`,
         include,
+        files,
       });
       if (result.entryPath) {
         entryFileByDep.set(name, join(vendorDir, name, result.entryPath));
@@ -301,6 +317,18 @@ async function vendorExtensions() {
     // Vendored packages may import each other by bare specifier — make
     // those imports resolvable without the page import map.
     rewriteBareImports(vendorDir, entryFileByDep);
+    const patchFile = join(EXTENSIONS_DIR, ext, "vendor-patches.json");
+    if (existsSync(patchFile)) {
+      for (const [file, replacements] of Object.entries(JSON.parse(readFileSync(patchFile, "utf8")))) {
+        const target = join(vendorDir, file);
+        let source = readFileSync(target, "utf8");
+        for (const [before, after] of replacements) {
+          if (source.split(before).length !== 2) throw new Error(`Vendor patch no longer matches uniquely: ${file}`);
+          source = source.replace(before, after);
+        }
+        writeFileSync(target, source.endsWith("\n") ? source : source + "\n");
+      }
+    }
   }
 }
 
@@ -311,8 +339,9 @@ async function vendorExtensions() {
 async function main() {
   // --extensions-only: leave pihka/core/vendor untouched and vendor only
   // the extensions' deps.json dirs.
-  if (process.argv.includes("--extensions-only")) {
-    await vendorExtensions();
+  const selected = process.argv.find(a => a.startsWith("--extension="))?.slice("--extension=".length);
+  if (selected !== undefined || process.argv.includes("--extensions-only")) {
+    await vendorExtensions(selected);
     return;
   }
 

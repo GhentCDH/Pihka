@@ -1,5 +1,6 @@
 import { h } from "preact";
-import { useState, useMemo } from "preact/hooks";
+import { useState } from "preact/hooks";
+import { useQuery, QueryStatus } from "../utilities-ui/use-query.js";
 import { getView, listViews } from "../utilities-ui/view-registry.js";
 import { navigate, buildPath } from "../utilities-ui/router.js";
 import { localize } from "../utilities-data/table-config.js";
@@ -74,7 +75,7 @@ export default function DetailView({ tableName, table, columns, row, fkResolved,
 function RelatedSection({ rel, store, lang }) {
     const [page, setPage] = useState(0);
 
-    const { columns, rows, totalRows, totalPages } = useMemo(
+    const query = useQuery(
         () => store.queryTable(rel.table, {
             filters: { [rel.column]: { type: "multi", selected: new Set([rel.value]) } },
             page,
@@ -82,7 +83,8 @@ function RelatedSection({ rel, store, lang }) {
         }),
         [store, rel.table, rel.column, rel.value, page],
     );
-    const fkResolved = store.resolveForeignKeys(rel.table);
+    if (query.loading || query.error) return h(QueryStatus, { error: query.error });
+    const { columns, rows, totalRows, totalPages, fkResolved } = query.data;
 
     const firstRow = totalRows > 0 ? page * RELATED_PAGE_SIZE + 1 : 0;
     const lastRow = Math.min((page + 1) * RELATED_PAGE_SIZE, totalRows);

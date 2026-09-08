@@ -1,4 +1,4 @@
-import { useMemo } from "preact/hooks";
+import { useQuery } from "./use-query.js";
 import { useRouter, updateParams } from "./router.js";
 import { usePref, setPref } from "./prefs.js";
 import { listFilterTypes, getFilterType, allReservedParams, preservedParams } from "../utilities-data/filter-registry.js";
@@ -104,19 +104,20 @@ function encodeFilters(filters) {
 
 /**
  * URL-driven state hook. Reads filter/sort/page from URL query params,
- * queries DataStore synchronously, and provides setters that update the URL.
+ * queries DataStore asynchronously, and provides setters that update the URL.
  *
- * @param {import('./data-store.js').DataStore} store
+ * @param {import('../utilities-data/data-store.js').DataStore} store
  * @param {string} table
  * @param {{ defaultPageSize?: number, defaultSort?: string, facets?: Array|null, perspectiveId?: string|null }} options
  */
 export function useUrlState(store, table, { defaultPageSize = 25, defaultSort = null, facets = null, perspectiveId = null } = {}) {
     const { params } = useRouter();
 
-    const filterMeta = useMemo(
+    const metadataQuery = useQuery(
         () => store.getFilterMeta(table),
         [store, table],
     );
+    const filterMeta = metadataQuery.data ?? { rangeMeta: {}, multiMeta: {}, m2mMeta: {}, rangeColumns: [], multiColumns: [], m2mColumns: [] };
 
     const decoded = decodeParams(params, filterMeta, facets);
     const filters = decoded.filters;
@@ -130,11 +131,12 @@ export function useUrlState(store, table, { defaultPageSize = 25, defaultSort = 
     const search = decoded.search;
     const filtersKey = serializeFilters(filters);
 
-    const queryResult = useMemo(
+    const query = useQuery(
         () => store.queryTable(table, { filters, sort, page, pageSize, search }),
         [store, table, filtersKey, sort?.column, sort?.direction, page, pageSize, search],
+        !!metadataQuery.data,
     );
-    const { columns, rows, totalRows, totalPages, fkResolved, searchError } = queryResult;
+    const { columns = [], rows = [], totalRows = 0, totalPages = 1, fkResolved, searchError } = query.data ?? query.previousData ?? {};
 
     const onSort = (column) => {
         let newSort;
@@ -199,6 +201,8 @@ export function useUrlState(store, table, { defaultPageSize = 25, defaultSort = 
     };
 
     return {
+        loading: metadataQuery.loading || query.loading,
+        error: metadataQuery.error || query.error,
         columns,
         rows,
         totalRows,

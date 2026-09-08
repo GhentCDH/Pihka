@@ -30,7 +30,7 @@ const types = new Map();
  *   - URL param patch for one filter entry (null values delete params).
  * @property {(key: string, filter: Object) => {conditions: string[], params: any[]}|null} [buildSql]
  *   - WHERE fragment for one filter entry.
- * @property {(ctx: {table: string, columns: Array, meta: Object, loadRangeBounds: (col: string) => {min: number, max: number}}) => void} [filterMeta]
+ * @property {(ctx: {table: string, columns: Array, meta: Object, loadRangeBounds: (col: string) => Promise<{min: number, max: number}>}) => void|Promise<void>} [filterMeta]
  *   - hook run while building a table's filter metadata; may mutate
  *   `ctx.meta` (add its own metadata, reshape rangeColumns, ...).
  */
@@ -44,7 +44,12 @@ function guardCallback(fn, type, fnName) {
     if (typeof fn !== "function") return undefined;
     return (...args) => {
         try {
-            return fn(...args);
+            const result = fn(...args);
+            if (fnName === "filterMeta" && result?.then) return result.catch(err => {
+                console.warn(`[pihka] filter type "${type}" ${fnName}() failed:`, err);
+                return null;
+            });
+            return result;
         } catch (err) {
             console.warn(`[pihka] filter type "${type}" ${fnName}() failed:`, err);
             return null;
