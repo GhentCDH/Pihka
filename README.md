@@ -84,3 +84,32 @@ Use Node 22.13 or newer. `npm run vendorize` reproduces committed dependency loc
 See [script architecture and commands](scripts/README.md) for manifests, safe
 downloads, sample generation and basemap selection. `npm run test:scripts` runs
 the maintenance-tool regression tests without changing published data.
+
+### Long text in tables and cards
+
+Set a word limit per column in `app/config.json`, for example:
+
+```json
+"tables": {
+  "works": {
+    "columns": {
+      "full_text": { "type": "text", "maxWords": 30, "fts": false }
+    }
+  }
+}
+```
+
+`maxWords` accepts a positive integer. Lists show whole words followed by an
+ellipsis and a localized link to the full record; detail views show the complete
+text. Rows without a single primary key use inline expansion instead. Without a
+valid `maxWords`, text columns retain their 300-character expand/collapse preview.
+Queries, search and exports always use the original values.
+
+Cell renderer plugins receive `context` (`list` or `detail`) and `detailHref`
+(a record link or `null`) alongside their existing props. This is presentation
+metadata only; the database engine remains independent of the UI.
+
+Desktop table browsing uses the screen below the header, with sticky column
+headings and scrolling rows. The footer is reachable below this workspace.
+Small screens and short windows retain normal page flow; wide tables can scroll
+horizontally when wrapping alone cannot fit their columns.

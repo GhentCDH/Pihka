@@ -10,7 +10,7 @@ const project = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const publicRoot = join(project, "pihka");
 const mime = { ".html": "text/html", ".js": "text/javascript", ".mjs": "text/javascript", ".json": "application/json", ".css": "text/css", ".wasm": "application/wasm", ".svg": "image/svg+xml", ".png": "image/png" };
 
-function createFixture(path) {
+function createFixture(path, fixtureSql = "") {
     const db = new DatabaseSync(path);
     db.exec(`
         PRAGMA page_size=4096;
@@ -34,6 +34,7 @@ function createFixture(path) {
         CREATE TABLE padding(id INTEGER PRIMARY KEY, data BLOB);
         INSERT INTO padding VALUES(1, zeroblob(4194304));
     `);
+    if (fixtureSql) db.exec(fixtureSql);
     db.close();
 }
 
@@ -59,10 +60,10 @@ function config(mode) {
 }
 
 /** Start on an ephemeral port in tests; CLI defaults to 3100. */
-export async function startBrowserTestServer({ port = 0 } = {}) {
+export async function startBrowserTestServer({ port = 0, fixtureSql = "" } = {}) {
     const directory = mkdtempSync(join(tmpdir(), "pihka-browser-"));
     const fixturePath = join(directory, "fixture.db");
-    createFixture(fixturePath);
+    createFixture(fixturePath, fixtureSql);
     const bytes = readFileSync(fixturePath);
     const requests = [];
     let origin;
