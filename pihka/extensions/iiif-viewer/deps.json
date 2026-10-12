@@ -1,3 +1,26 @@
 {
-    "tify": { "version": "^0.35.0", "include": ["dist/tify.css", "dist/translations", "LICENSE"] }
+    "tify": {
+        "version": "^0.36.2",
+        "files": [
+            "dist/tify.js",
+            "dist/tify.css",
+            "LICENSE",
+            "package.json",
+            "dist/translations/bg.json",
+            "dist/translations/de.json",
+            "dist/translations/eo.json",
+            "dist/translations/fi.json",
+            "dist/translations/fr.json",
+            "dist/translations/hr.json",
+            "dist/translations/it.json",
+            "dist/translations/ja.json",
+            "dist/translations/nl.json",
+            "dist/translations/pl.json",
+            "dist/translations/se.json",
+            "dist/translations/sq.json",
+            "dist/translations/sv.json",
+            "dist/translations/tr.json",
+            "dist/translations/zh.json"
+        ]
+    }
 }

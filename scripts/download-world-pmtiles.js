@@ -1,128 +1,83 @@
-/**
- * Download the latest Protomaps world basemap as a PMTiles file (maxzoom 9)
- *
- * Protomaps publishes daily OpenStreetMap-based vector tile builds at
- * https://maps.protomaps.com/builds/. Each build is a single .pmtiles
- * file (~130 GB at full zoom). This script extracts a lightweight subset
- * limited to zoom level 9, which is roughly city-level detail (~1.5 GB).
- *
- * PMTiles is a cloud-optimised single-file archive for map tiles that can
- * be served statically over HTTP using range requests — no tile server
- * needed. See: https://docs.protomaps.com/pmtiles/
- *
- * Requirements:
- *   - pmtiles CLI (Go binary): https://docs.protomaps.com/pmtiles/cli
- *     brew install protomaps/pm/pmtiles   (macOS)
- *
- * Run with: node scripts/download-world-pmtiles.js [--dry-run] [--maxzoom=N]
+/** Extract a static world basemap (zoom 4 by default) with the pmtiles CLI.
+ * node scripts/download-world-pmtiles.js [--dry-run] [--maxzoom=N]
+ *                                      [--extension=point_map|geo-filter]
  */
-
-import { existsSync, mkdirSync } from "node:fs";
-import { execSync } from "node:child_process";
-import { dirname, join } from "node:path";
+import { existsSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { atomicOutput } from "./lib/atomic-files.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-// The point_map extension serves this file as its basemap.
-const DATA_DIR = join(__dirname, "..", "pihka", "extensions", "point_map", "assets");
-
+const extensionsRoot = fileURLToPath(new URL("../pihka/extensions/", import.meta.url));
 const BUILDS_API = "https://build-metadata.protomaps.dev/builds.json";
 const BUILD_BASE = "https://build.protomaps.com";
-const DEFAULT_MAXZOOM = 4;
 
-// ---------------------------------------------------------------------------
-// Parse CLI flags
-// ---------------------------------------------------------------------------
-const args = process.argv.slice(2);
-const dryRun = args.includes("--dry-run");
-const maxzoomFlag = args.find((a) => a.startsWith("--maxzoom="));
-const maxzoom = maxzoomFlag ? Number(maxzoomFlag.split("=")[1]) : DEFAULT_MAXZOOM;
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-async function fetchLatestBuild() {
-  const res = await fetch(BUILDS_API);
-  if (!res.ok) throw new Error(`Failed to fetch builds: ${res.status}`);
-
-  const builds = await res.json();
-
-  // Each entry has { key: "YYYYMMDD.pmtiles", size, uploaded, version, ... }
-  // Sort descending by key (date string) to get the most recent first.
-  builds.sort((a, b) => (a.key < b.key ? 1 : a.key > b.key ? -1 : 0));
-
-  return builds[0];
+export function parseOptions(args) {
+    const options = { dryRun: false, maxzoom: 4, extension: "point_map" };
+    for (const arg of args) {
+        if (arg === "--dry-run") options.dryRun = true;
+        else if (/^--maxzoom=\d+$/.test(arg)) options.maxzoom = Number(arg.slice(10));
+        else if (arg.startsWith("--extension=")) options.extension = arg.slice(12);
+        else throw new Error(`Unknown or invalid option: ${arg}`);
+    }
+    if (!Number.isInteger(options.maxzoom) || options.maxzoom < 0 || options.maxzoom > 26) {
+        throw new Error("maxzoom must be an integer between 0 and 26");
+    }
+    if (!["point_map", "geo-filter"].includes(options.extension)) {
+        throw new Error("extension must be point_map or geo-filter");
+    }
+    return options;
 }
 
-function ensurePmtilesCli() {
-  try {
-    const version = execSync("pmtiles version", { encoding: "utf-8" }).trim();
-    console.log(`  Using ${version}`);
-  } catch {
-    console.error(
-      'Error: "pmtiles" CLI not found.\n' +
-        "Install it with:  brew install protomaps/pm/pmtiles\n" +
-        "Or see: https://docs.protomaps.com/pmtiles/cli"
-    );
-    process.exit(1);
-  }
+export async function downloadWorldPmtiles(
+    args = [],
+    { root = extensionsRoot, fetchImpl = fetch, run = execFileSync } = {},
+) {
+    const { dryRun, maxzoom, extension } = parseOptions(args);
+    const destination = join(root, extension, "assets", "world.pmtiles");
+    if (!dryRun && existsSync(destination)) {
+        console.log(`File already exists, skipping: ${destination}`);
+        return;
+    }
+    try {
+        console.log(`Using ${run("pmtiles", ["version"], { encoding: "utf8" }).trim()}`);
+    } catch (error) {
+        throw new Error("Install the pmtiles CLI: brew install protomaps/pm/pmtiles", {
+            cause: error,
+        });
+    }
+    const response = await fetchImpl(BUILDS_API);
+    if (!response.ok) throw new Error(`Failed to fetch builds: HTTP ${response.status}`);
+    const builds = await response.json();
+    if (
+        !Array.isArray(builds) ||
+        !builds.length ||
+        builds.some((b) => !/^\d{8}\.pmtiles$/.test(b?.key))
+    ) {
+        throw new Error("No valid PMTiles builds returned");
+    }
+    const latest = [...builds].sort((a, b) => b.key.localeCompare(a.key))[0];
+    const source = `${BUILD_BASE}/${latest.key}`;
+    const extract = (temporary) =>
+        run(
+            "pmtiles",
+            [
+                "extract",
+                source,
+                temporary,
+                `--maxzoom=${maxzoom}`,
+                ...(dryRun ? ["--dry-run"] : []),
+            ],
+            { stdio: "inherit" },
+        );
+    console.log(`Extracting ${source} to ${destination} at zoom ${maxzoom}`);
+    if (dryRun) extract(destination);
+    else await atomicOutput(destination, extract);
 }
 
-function ensureDataDir() {
-  if (!existsSync(DATA_DIR)) {
-    mkdirSync(DATA_DIR, { recursive: true });
-  }
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+    downloadWorldPmtiles(process.argv.slice(2)).catch((error) => {
+        console.error(error);
+        process.exitCode = 1;
+    });
 }
-
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
-
-async function main() {
-  ensurePmtilesCli();
-  ensureDataDir();
-
-  console.log("\nFetching latest build info from Protomaps...");
-  const latest = await fetchLatestBuild();
-  const sourceUrl = `${BUILD_BASE}/${latest.key}`;
-  // Fixed name: map-view.js references assets/world.pmtiles directly.
-  const outPath = join(DATA_DIR, "world.pmtiles");
-
-  console.log(`  Latest build:  ${latest.key}`);
-  console.log(`  Uploaded:      ${latest.uploaded}`);
-  console.log(`  Version:       ${latest.version}`);
-  console.log(`  Full size:     ${(latest.size / 1024 ** 3).toFixed(1)} GB`);
-  console.log(`  Source:        ${sourceUrl}`);
-  console.log(`  Output:        ${outPath}`);
-  console.log(`  Max zoom:      ${maxzoom}`);
-
-  if (!dryRun && existsSync(outPath)) {
-    console.log(`\n  File already exists, skipping. Delete it to re-download.`);
-    return;
-  }
-
-  const cmd = [
-    "pmtiles",
-    "extract",
-    sourceUrl,
-    outPath,
-    `--maxzoom=${maxzoom}`,
-    ...(dryRun ? ["--dry-run"] : []),
-  ].join(" ");
-
-  console.log(`\n  Running: ${cmd}\n`);
-
-  execSync(cmd, { stdio: "inherit" });
-
-  if (dryRun) {
-    console.log("\nDry run complete — no file was written.");
-  } else {
-    console.log(`\nDone. Saved to ${outPath}`);
-  }
-}
-
-main().catch((err) => {
-  console.error("\nError:", err.message);
-  process.exit(1);
-});

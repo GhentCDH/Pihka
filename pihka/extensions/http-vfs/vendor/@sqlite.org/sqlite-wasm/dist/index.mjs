@@ -1,3 +1,4 @@
+//#region src/bin/sqlite3-bundler-friendly.mjs
 /* @preserve
 **
 ** LICENSE for the sqlite3 WebAssembly/JavaScript APIs.
@@ -27,13 +28,13 @@
 /* @preserve
 ** This code was built from sqlite3 version...
 **
-** SQLITE_VERSION "3.52.0"
-** SQLITE_VERSION_NUMBER 3052000
-** SQLITE_SOURCE_ID "2026-01-20 18:30:48 2b3b36da9d60c265dceec5964ea51c752d81f41459fb6849c8faea658b253552"
+** SQLITE_VERSION "3.53.4"
+** SQLITE_VERSION_NUMBER 3053004
+** SQLITE_SOURCE_ID "2026-07-24 19:02:57 bf7c7f30031888f4e796e429ab3978879485813aaca6f641c7b33e4e09459bcc"
 **
-** Emscripten SDK: 4.0.23
+** Emscripten SDK: 5.0.5
 */
-async function sqlite3InitModule(moduleArg = {}) {
+async function sqlite3InitModule$1(moduleArg = {}) {
 	var moduleRtn;
 	var Module = moduleArg;
 	var ENVIRONMENT_IS_WEB = !!globalThis.window;
@@ -67,25 +68,27 @@ async function sqlite3InitModule(moduleArg = {}) {
 	var out = console.log.bind(console);
 	var err = console.error.bind(console);
 	var wasmBinary;
-	var ABORT = false, readyPromiseResolve, readyPromiseReject, HEAP8, HEAPU8, HEAP16, HEAP32, HEAPU32, HEAP64;
+	var ABORT = false;
+	var readyPromiseResolve, readyPromiseReject;
 	var runtimeInitialized = false;
 	function updateMemoryViews() {
 		var b = wasmMemory.buffer;
 		HEAP8 = new Int8Array(b);
 		HEAP16 = new Int16Array(b);
 		HEAPU8 = new Uint8Array(b);
-		new Uint16Array(b);
+		HEAPU16 = new Uint16Array(b);
 		HEAP32 = new Int32Array(b);
 		HEAPU32 = new Uint32Array(b);
-		new Float32Array(b);
-		new Float64Array(b);
+		HEAPF32 = new Float32Array(b);
+		HEAPF64 = new Float64Array(b);
 		HEAP64 = new BigInt64Array(b);
-		new BigUint64Array(b);
+		HEAPU64 = new BigUint64Array(b);
 	}
 	function initMemory() {
 		if (Module["wasmMemory"]) wasmMemory = Module["wasmMemory"];
 		else {
 			var INITIAL_MEMORY = Module["INITIAL_MEMORY"] || 8388608;
+			/** @suppress {checkTypes} */
 			wasmMemory = new WebAssembly.Memory({
 				"initial": INITIAL_MEMORY / 65536,
 				"maximum": 32768
@@ -114,12 +117,17 @@ async function sqlite3InitModule(moduleArg = {}) {
 		}
 		callRuntimeCallbacks(onPostRuns);
 	}
+	/**
+	* @param {string|number=} what
+	* @noreturn
+	*/
 	function abort(what) {
 		Module["onAbort"]?.(what);
-		what = "Aborted(" + what + ")";
+		what = `Aborted(${what})`;
 		err(what);
 		ABORT = true;
 		what += ". Build with -sASSERTIONS for more info.";
+		/** @suppress {checkTypes} */
 		var e = new WebAssembly.RuntimeError(what);
 		readyPromiseReject?.(e);
 		throw e;
@@ -167,6 +175,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 		};
 	}
 	async function createWasm() {
+		/** @param {WebAssembly.Module=} module*/
 		function receiveInstance(instance, module) {
 			wasmExports = instance.exports;
 			assignWasmExports(wasmExports);
@@ -184,6 +193,26 @@ async function sqlite3InitModule(moduleArg = {}) {
 		wasmBinaryFile ??= findWasmBinary();
 		return receiveInstantiationResult(await instantiateAsync(wasmBinary, wasmBinaryFile, info));
 	}
+	/** @type {!Int16Array} */
+	var HEAP16;
+	/** @type {!Int32Array} */
+	var HEAP32;
+	/** not-@type {!BigInt64Array} */
+	var HEAP64;
+	/** @type {!Int8Array} */
+	var HEAP8;
+	/** @type {!Float32Array} */
+	var HEAPF32;
+	/** @type {!Float64Array} */
+	var HEAPF64;
+	/** @type {!Uint16Array} */
+	var HEAPU16;
+	/** @type {!Uint32Array} */
+	var HEAPU32;
+	/** not-@type {!BigUint64Array} */
+	var HEAPU64;
+	/** @type {!Uint8Array} */
+	var HEAPU8;
 	var callRuntimeCallbacks = (callbacks) => {
 		while (callbacks.length > 0) callbacks.shift()(Module);
 	};
@@ -231,11 +260,9 @@ async function sqlite3InitModule(moduleArg = {}) {
 		join2: (l, r) => PATH.normalize(l + "/" + r)
 	};
 	var initRandomFill = () => {
-		return (view) => crypto.getRandomValues(view);
+		return (view) => (crypto.getRandomValues(view), 0);
 	};
-	var randomFill = (view) => {
-		(randomFill = initRandomFill())(view);
-	};
+	var randomFill = (view) => (randomFill = initRandomFill())(view);
 	var PATH_FS = {
 		resolve: (...args) => {
 			var resolvedPath = "", resolvedAbsolute = false;
@@ -281,6 +308,16 @@ async function sqlite3InitModule(moduleArg = {}) {
 		while (heapOrArray[idx] && !(idx >= maxIdx)) ++idx;
 		return idx;
 	};
+	/**
+	* Given a pointer 'idx' to a null-terminated UTF8-encoded string in the given
+	* array that contains uint8 values, returns a copy of that string as a
+	* Javascript String object.
+	* heapOrArray is either a regular array, or a JavaScript typed array view.
+	* @param {number=} idx
+	* @param {number=} maxBytesToRead
+	* @param {boolean=} ignoreNul - If true, the function will not stop on a NUL character.
+	* @return {string}
+	*/
 	var UTF8ArrayToString = (heapOrArray, idx = 0, maxBytesToRead, ignoreNul) => {
 		var endPtr = findStringEnd(heapOrArray, idx, maxBytesToRead, ignoreNul);
 		return UTF8Decoder.decode(heapOrArray.buffer ? heapOrArray.subarray(idx, endPtr) : new Uint8Array(heapOrArray.slice(idx, endPtr)));
@@ -329,6 +366,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 		heap[outIdx] = 0;
 		return outIdx - startIdx;
 	};
+	/** @type {function(string, boolean=, number=)} */
 	var intArrayFromString = (stringy, dontAddNull, length) => {
 		var len = length > 0 ? length : lengthBytesUTF8(stringy) + 1;
 		var u8array = new Array(len);
@@ -552,7 +590,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 				node.node_ops = MEMFS.ops_table.file.node;
 				node.stream_ops = MEMFS.ops_table.file.stream;
 				node.usedBytes = 0;
-				node.contents = null;
+				node.contents = MEMFS.emptyFileContents ??= /* @__PURE__ */ new Uint8Array(0);
 			} else if (FS.isLink(node.mode)) {
 				node.node_ops = MEMFS.ops_table.link.node;
 				node.stream_ops = MEMFS.ops_table.link.stream;
@@ -568,30 +606,23 @@ async function sqlite3InitModule(moduleArg = {}) {
 			return node;
 		},
 		getFileDataAsTypedArray(node) {
-			if (!node.contents) return new Uint8Array(0);
-			if (node.contents.subarray) return node.contents.subarray(0, node.usedBytes);
-			return new Uint8Array(node.contents);
+			return node.contents.subarray(0, node.usedBytes);
 		},
 		expandFileStorage(node, newCapacity) {
-			var prevCapacity = node.contents ? node.contents.length : 0;
+			var prevCapacity = node.contents.length;
 			if (prevCapacity >= newCapacity) return;
-			newCapacity = Math.max(newCapacity, prevCapacity * (prevCapacity < 1024 * 1024 ? 2 : 1.125) >>> 0);
-			if (prevCapacity != 0) newCapacity = Math.max(newCapacity, 256);
-			var oldContents = node.contents;
+			newCapacity = Math.max(newCapacity, prevCapacity * (prevCapacity < 1048576 ? 2 : 1.125) >>> 0);
+			if (prevCapacity) newCapacity = Math.max(newCapacity, 256);
+			var oldContents = MEMFS.getFileDataAsTypedArray(node);
 			node.contents = new Uint8Array(newCapacity);
-			if (node.usedBytes > 0) node.contents.set(oldContents.subarray(0, node.usedBytes), 0);
+			node.contents.set(oldContents);
 		},
 		resizeFileStorage(node, newSize) {
 			if (node.usedBytes == newSize) return;
-			if (newSize == 0) {
-				node.contents = null;
-				node.usedBytes = 0;
-			} else {
-				var oldContents = node.contents;
-				node.contents = new Uint8Array(newSize);
-				if (oldContents) node.contents.set(oldContents.subarray(0, Math.min(newSize, node.usedBytes)));
-				node.usedBytes = newSize;
-			}
+			var oldContents = node.contents;
+			node.contents = new Uint8Array(newSize);
+			node.contents.set(oldContents.subarray(0, Math.min(newSize, node.usedBytes)));
+			node.usedBytes = newSize;
 		},
 		node_ops: {
 			getattr(node) {
@@ -626,6 +657,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 			lookup(parent, name) {
 				if (!MEMFS.doesNotExistError) {
 					MEMFS.doesNotExistError = new FS.ErrnoError(44);
+					/** @suppress {checkTypes} */
 					MEMFS.doesNotExistError.stack = "<generic error, no stack>";
 				}
 				throw MEMFS.doesNotExistError;
@@ -678,8 +710,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 				var contents = stream.node.contents;
 				if (position >= stream.node.usedBytes) return 0;
 				var size = Math.min(stream.node.usedBytes - position, length);
-				if (size > 8 && contents.subarray) buffer.set(contents.subarray(position, position + size), offset);
-				else for (var i = 0; i < size; i++) buffer[offset + i] = contents[position + i];
+				buffer.set(contents.subarray(position, position + size), offset);
 				return size;
 			},
 			write(stream, buffer, offset, length, position, canOwn) {
@@ -687,24 +718,17 @@ async function sqlite3InitModule(moduleArg = {}) {
 				if (!length) return 0;
 				var node = stream.node;
 				node.mtime = node.ctime = Date.now();
-				if (buffer.subarray && (!node.contents || node.contents.subarray)) {
-					if (canOwn) {
-						node.contents = buffer.subarray(offset, offset + length);
-						node.usedBytes = length;
-						return length;
-					} else if (node.usedBytes === 0 && position === 0) {
-						node.contents = buffer.slice(offset, offset + length);
-						node.usedBytes = length;
-						return length;
-					} else if (position + length <= node.usedBytes) {
-						node.contents.set(buffer.subarray(offset, offset + length), position);
-						return length;
-					}
+				if (canOwn) {
+					node.contents = buffer.subarray(offset, offset + length);
+					node.usedBytes = length;
+				} else if (node.usedBytes === 0 && position === 0) {
+					node.contents = buffer.slice(offset, offset + length);
+					node.usedBytes = length;
+				} else {
+					MEMFS.expandFileStorage(node, position + length);
+					node.contents.set(buffer.subarray(offset, offset + length), position);
+					node.usedBytes = Math.max(node.usedBytes, position + length);
 				}
-				MEMFS.expandFileStorage(node, position + length);
-				if (node.contents.subarray && buffer.subarray) node.contents.set(buffer.subarray(offset, offset + length), position);
-				else for (var i = 0; i < length; i++) node.contents[position + i] = buffer[offset + i];
-				node.usedBytes = Math.max(node.usedBytes, position + length);
 				return length;
 			},
 			llseek(stream, offset, whence) {
@@ -721,7 +745,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 				var ptr;
 				var allocated;
 				var contents = stream.node.contents;
-				if (!(flags & 2) && contents && contents.buffer === HEAP8.buffer) {
+				if (!(flags & 2) && contents.buffer === HEAP8.buffer) {
 					allocated = false;
 					ptr = contents.byteOffset;
 				} else {
@@ -729,8 +753,10 @@ async function sqlite3InitModule(moduleArg = {}) {
 					ptr = mmapAlloc(length);
 					if (!ptr) throw new FS.ErrnoError(48);
 					if (contents) {
-						if (position > 0 || position + length < contents.length) if (contents.subarray) contents = contents.subarray(position, position + length);
-						else contents = Array.prototype.slice.call(contents, position, position + length);
+						if (position > 0 || position + length < contents.length) {
+							if (contents.subarray) contents = contents.subarray(position, position + length);
+							else contents = Array.prototype.slice.call(contents, position, position + length);
+						}
 						HEAP8.set(contents, ptr);
 					}
 				}
@@ -746,6 +772,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 		}
 	};
 	var FS_modeStringToFlags = (str) => {
+		if (typeof str != "string") return str;
 		var flags = {
 			"r": 0,
 			"r+": 2,
@@ -756,6 +783,11 @@ async function sqlite3InitModule(moduleArg = {}) {
 		}[str];
 		if (typeof flags == "undefined") throw new Error(`Unknown file open mode: ${str}`);
 		return flags;
+	};
+	var FS_fileDataToTypedArray = (data) => {
+		if (typeof data == "string") data = intArrayFromString(data, true);
+		if (!data.subarray) data = new Uint8Array(data);
+		return data;
 	};
 	var FS_getMode = (canRead, canWrite) => {
 		var mode = 0;
@@ -823,7 +855,6 @@ async function sqlite3InitModule(moduleArg = {}) {
 		ignorePermissions: true,
 		filesystems: null,
 		syncFSRequests: 0,
-		readFiles: {},
 		ErrnoError: class {
 			name = "ErrnoError";
 			constructor(errno) {
@@ -1032,8 +1063,8 @@ async function sqlite3InitModule(moduleArg = {}) {
 		nodePermissions(node, perms) {
 			if (FS.ignorePermissions) return 0;
 			if (perms.includes("r") && !(node.mode & 292)) return 2;
-			else if (perms.includes("w") && !(node.mode & 146)) return 2;
-			else if (perms.includes("x") && !(node.mode & 73)) return 2;
+			if (perms.includes("w") && !(node.mode & 146)) return 2;
+			if (perms.includes("x") && !(node.mode & 73)) return 2;
 			return 0;
 		},
 		mayLookup(dir) {
@@ -1069,13 +1100,14 @@ async function sqlite3InitModule(moduleArg = {}) {
 		mayOpen(node, flags) {
 			if (!node) return 44;
 			if (FS.isLink(node.mode)) return 32;
-			else if (FS.isDir(node.mode)) {
-				if (FS.flagsToPermissionString(flags) !== "r" || flags & 576) return 31;
+			var mode = FS.flagsToPermissionString(flags);
+			if (FS.isDir(node.mode)) {
+				if (mode !== "r" || flags & 576) return 31;
 			}
-			return FS.nodePermissions(node, FS.flagsToPermissionString(flags));
+			return FS.nodePermissions(node, mode);
 		},
-		checkOpExists(op, err$1) {
-			if (!op) throw new FS.ErrnoError(err$1);
+		checkOpExists(op, err) {
+			if (!op) throw new FS.ErrnoError(err);
 			return op;
 		},
 		MAX_OPEN_FDS: 4096,
@@ -1443,7 +1475,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 		},
 		open(path, flags, mode = 438) {
 			if (path === "") throw new FS.ErrnoError(44);
-			flags = typeof flags == "string" ? FS_modeStringToFlags(flags) : flags;
+			flags = FS_modeStringToFlags(flags);
 			if (flags & 64) mode = mode & 4095 | 32768;
 			else mode = 0;
 			var node;
@@ -1459,12 +1491,14 @@ async function sqlite3InitModule(moduleArg = {}) {
 				path = lookup.path;
 			}
 			var created = false;
-			if (flags & 64) if (node) {
-				if (flags & 128) throw new FS.ErrnoError(20);
-			} else if (isDirPath) throw new FS.ErrnoError(31);
-			else {
-				node = FS.mknod(path, mode | 511, 0);
-				created = true;
+			if (flags & 64) {
+				if (node) {
+					if (flags & 128) throw new FS.ErrnoError(20);
+				} else if (isDirPath) throw new FS.ErrnoError(31);
+				else {
+					node = FS.mknod(path, mode | 511, 0);
+					created = true;
+				}
 			}
 			if (!node) throw new FS.ErrnoError(44);
 			if (FS.isChrdev(node.mode)) flags &= -513;
@@ -1487,9 +1521,6 @@ async function sqlite3InitModule(moduleArg = {}) {
 			});
 			if (stream.stream_ops.open) stream.stream_ops.open(stream);
 			if (created) FS.chmod(node, mode & 511);
-			if (Module["logReadFiles"] && !(flags & 1)) {
-				if (!(path in FS.readFiles)) FS.readFiles[path] = 1;
-			}
 			return stream;
 		},
 		close(stream) {
@@ -1572,9 +1603,8 @@ async function sqlite3InitModule(moduleArg = {}) {
 		writeFile(path, data, opts = {}) {
 			opts.flags = opts.flags || 577;
 			var stream = FS.open(path, opts.flags, opts.mode);
-			if (typeof data == "string") data = new Uint8Array(intArrayFromString(data, true));
-			if (ArrayBuffer.isView(data)) FS.write(stream, data, 0, data.byteLength, void 0, opts.canOwn);
-			else abort("Unsupported data type");
+			data = FS_fileDataToTypedArray(data);
+			FS.write(stream, data, 0, data.byteLength, void 0, opts.canOwn);
 			FS.close(stream);
 		},
 		cwd: () => FS.currentPath,
@@ -1603,7 +1633,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 			TTY.register(FS.makedev(6, 0), TTY.default_tty1_ops);
 			FS.mkdev("/dev/tty", FS.makedev(5, 0));
 			FS.mkdev("/dev/tty1", FS.makedev(6, 0));
-			var randomBuffer = new Uint8Array(1024), randomLeft = 0;
+			var randomBuffer = /* @__PURE__ */ new Uint8Array(1024), randomLeft = 0;
 			var randomByte = () => {
 				if (randomLeft === 0) {
 					randomFill(randomBuffer);
@@ -1741,11 +1771,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 			var mode = FS_getMode(canRead, canWrite);
 			var node = FS.create(path, mode);
 			if (data) {
-				if (typeof data == "string") {
-					var arr = new Array(data.length);
-					for (var i = 0, len = data.length; i < len; ++i) arr[i] = data.charCodeAt(i);
-					data = arr;
-				}
+				data = FS_fileDataToTypedArray(data);
 				FS.chmod(node, mode | 146);
 				var stream = FS.open(node, 577);
 				FS.write(stream, data, 0, data.length, 0, canOwn);
@@ -1825,20 +1851,20 @@ async function sqlite3InitModule(moduleArg = {}) {
 					var header;
 					var hasByteServing = (header = xhr.getResponseHeader("Accept-Ranges")) && header === "bytes";
 					var usesGzip = (header = xhr.getResponseHeader("Content-Encoding")) && header === "gzip";
-					var chunkSize = 1024 * 1024;
+					var chunkSize = 1048576;
 					if (!hasByteServing) chunkSize = datalength;
 					var doXHR = (from, to) => {
 						if (from > to) abort("invalid range (" + from + ", " + to + ") or no bytes requested!");
 						if (to > datalength - 1) abort("only " + datalength + " bytes available! programmer error!");
-						var xhr$1 = new XMLHttpRequest();
-						xhr$1.open("GET", url, false);
-						if (datalength !== chunkSize) xhr$1.setRequestHeader("Range", "bytes=" + from + "-" + to);
-						xhr$1.responseType = "arraybuffer";
-						if (xhr$1.overrideMimeType) xhr$1.overrideMimeType("text/plain; charset=x-user-defined");
-						xhr$1.send(null);
-						if (!(xhr$1.status >= 200 && xhr$1.status < 300 || xhr$1.status === 304)) abort("Couldn't load " + url + ". Status: " + xhr$1.status);
-						if (xhr$1.response !== void 0) return new Uint8Array(xhr$1.response || []);
-						return intArrayFromString(xhr$1.responseText || "", true);
+						var xhr = new XMLHttpRequest();
+						xhr.open("GET", url, false);
+						if (datalength !== chunkSize) xhr.setRequestHeader("Range", "bytes=" + from + "-" + to);
+						xhr.responseType = "arraybuffer";
+						if (xhr.overrideMimeType) xhr.overrideMimeType("text/plain; charset=x-user-defined");
+						xhr.send(null);
+						if (!(xhr.status >= 200 && xhr.status < 300 || xhr.status === 304)) abort("Couldn't load " + url + ". Status: " + xhr.status);
+						if (xhr.response !== void 0) return new Uint8Array(xhr.response || []);
+						return intArrayFromString(xhr.responseText || "", true);
 					};
 					var lazyArray = this;
 					lazyArray.setDataGetter((chunkNum) => {
@@ -1918,6 +1944,19 @@ async function sqlite3InitModule(moduleArg = {}) {
 			return node;
 		}
 	};
+	/**
+	* Given a pointer 'ptr' to a null-terminated UTF8-encoded string in the
+	* emscripten HEAP, returns a copy of that string as a Javascript String object.
+	*
+	* @param {number} ptr
+	* @param {number=} maxBytesToRead - An optional length that specifies the
+	*   maximum number of bytes to read. You can omit this parameter to scan the
+	*   string until the first 0 byte. If maxBytesToRead is passed, and the string
+	*   at [ptr, ptr+maxBytesToReadr[ contains a null byte in the middle, then the
+	*   string will cut short at that byte index.
+	* @param {boolean=} ignoreNul - If true, the function will not stop on a NUL character.
+	* @return {string}
+	*/
 	var UTF8ToString = (ptr, maxBytesToRead, ignoreNul) => {
 		if (!ptr) return "";
 		var end = findStringEnd(HEAPU8, ptr, maxBytesToRead, ignoreNul);
@@ -2294,13 +2333,13 @@ async function sqlite3InitModule(moduleArg = {}) {
 				var nanoseconds = HEAP32[times + 8 >> 2];
 				if (nanoseconds == 1073741823) atime = now;
 				else if (nanoseconds == 1073741822) atime = null;
-				else atime = seconds * 1e3 + nanoseconds / (1e3 * 1e3);
+				else atime = seconds * 1e3 + nanoseconds / 1e6;
 				times += 16;
 				seconds = readI53FromI64(times);
 				nanoseconds = HEAP32[times + 8 >> 2];
 				if (nanoseconds == 1073741823) mtime = now;
 				else if (nanoseconds == 1073741822) mtime = null;
-				else mtime = seconds * 1e3 + nanoseconds / (1e3 * 1e3);
+				else mtime = seconds * 1e3 + nanoseconds / 1e6;
 			}
 			if ((mtime ?? atime) !== null) FS.utime(path, atime, mtime);
 			return 0;
@@ -2449,14 +2488,13 @@ async function sqlite3InitModule(moduleArg = {}) {
 	var getExecutableName = () => thisProgram || "./this.program";
 	var getEnvStrings = () => {
 		if (!getEnvStrings.strings) {
-			var lang = (globalThis.navigator?.language ?? "C").replace("-", "_") + ".UTF-8";
 			var env = {
 				"USER": "web_user",
 				"LOGNAME": "web_user",
 				"PATH": "/",
 				"PWD": "/",
 				"HOME": "/home/web_user",
-				"LANG": lang,
+				"LANG": (globalThis.navigator?.language ?? "C").replace("-", "_") + ".UTF-8",
 				"_": getExecutableName()
 			};
 			for (var x in ENV) if (ENV[x] === void 0) delete env[x];
@@ -2513,6 +2551,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 			return e.errno;
 		}
 	}
+	/** @param {number=} offset */
 	var doReadv = (stream, iov, iovcnt, offset) => {
 		var ret = 0;
 		for (var i = 0; i < iovcnt; i++) {
@@ -2560,6 +2599,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 			return e.errno;
 		}
 	}
+	/** @param {number=} offset */
 	var doWritev = (stream, iov, iovcnt, offset) => {
 		var ret = 0;
 		for (var i = 0; i < iovcnt; i++) {
@@ -2601,304 +2641,341 @@ async function sqlite3InitModule(moduleArg = {}) {
 	}
 	Module["wasmMemory"] = wasmMemory;
 	var _emscripten_builtin_memalign;
-	function assignWasmExports(wasmExports$1) {
-		Module["_sqlite3_status64"] = wasmExports$1["sqlite3_status64"];
-		Module["_sqlite3_status"] = wasmExports$1["sqlite3_status"];
-		Module["_sqlite3_db_status64"] = wasmExports$1["sqlite3_db_status64"];
-		Module["_sqlite3_msize"] = wasmExports$1["sqlite3_msize"];
-		Module["_sqlite3_db_status"] = wasmExports$1["sqlite3_db_status"];
-		Module["_sqlite3_vfs_find"] = wasmExports$1["sqlite3_vfs_find"];
-		Module["_sqlite3_initialize"] = wasmExports$1["sqlite3_initialize"];
-		Module["_sqlite3_malloc"] = wasmExports$1["sqlite3_malloc"];
-		Module["_sqlite3_free"] = wasmExports$1["sqlite3_free"];
-		Module["_sqlite3_vfs_register"] = wasmExports$1["sqlite3_vfs_register"];
-		Module["_sqlite3_vfs_unregister"] = wasmExports$1["sqlite3_vfs_unregister"];
-		Module["_sqlite3_malloc64"] = wasmExports$1["sqlite3_malloc64"];
-		Module["_sqlite3_realloc"] = wasmExports$1["sqlite3_realloc"];
-		Module["_sqlite3_realloc64"] = wasmExports$1["sqlite3_realloc64"];
-		Module["_sqlite3_value_text"] = wasmExports$1["sqlite3_value_text"];
-		Module["_sqlite3_randomness"] = wasmExports$1["sqlite3_randomness"];
-		Module["_sqlite3_stricmp"] = wasmExports$1["sqlite3_stricmp"];
-		Module["_sqlite3_strnicmp"] = wasmExports$1["sqlite3_strnicmp"];
-		Module["_sqlite3_uri_parameter"] = wasmExports$1["sqlite3_uri_parameter"];
-		Module["_sqlite3_uri_boolean"] = wasmExports$1["sqlite3_uri_boolean"];
-		Module["_sqlite3_serialize"] = wasmExports$1["sqlite3_serialize"];
-		Module["_sqlite3_prepare_v2"] = wasmExports$1["sqlite3_prepare_v2"];
-		Module["_sqlite3_step"] = wasmExports$1["sqlite3_step"];
-		Module["_sqlite3_column_int64"] = wasmExports$1["sqlite3_column_int64"];
-		Module["_sqlite3_reset"] = wasmExports$1["sqlite3_reset"];
-		Module["_sqlite3_exec"] = wasmExports$1["sqlite3_exec"];
-		Module["_sqlite3_column_int"] = wasmExports$1["sqlite3_column_int"];
-		Module["_sqlite3_finalize"] = wasmExports$1["sqlite3_finalize"];
-		Module["_sqlite3_file_control"] = wasmExports$1["sqlite3_file_control"];
-		Module["_sqlite3_column_name"] = wasmExports$1["sqlite3_column_name"];
-		Module["_sqlite3_column_text"] = wasmExports$1["sqlite3_column_text"];
-		Module["_sqlite3_column_type"] = wasmExports$1["sqlite3_column_type"];
-		Module["_sqlite3_errmsg"] = wasmExports$1["sqlite3_errmsg"];
-		Module["_sqlite3_deserialize"] = wasmExports$1["sqlite3_deserialize"];
-		Module["_sqlite3_clear_bindings"] = wasmExports$1["sqlite3_clear_bindings"];
-		Module["_sqlite3_value_blob"] = wasmExports$1["sqlite3_value_blob"];
-		Module["_sqlite3_value_bytes"] = wasmExports$1["sqlite3_value_bytes"];
-		Module["_sqlite3_value_double"] = wasmExports$1["sqlite3_value_double"];
-		Module["_sqlite3_value_int"] = wasmExports$1["sqlite3_value_int"];
-		Module["_sqlite3_value_int64"] = wasmExports$1["sqlite3_value_int64"];
-		Module["_sqlite3_value_subtype"] = wasmExports$1["sqlite3_value_subtype"];
-		Module["_sqlite3_value_pointer"] = wasmExports$1["sqlite3_value_pointer"];
-		Module["_sqlite3_value_type"] = wasmExports$1["sqlite3_value_type"];
-		Module["_sqlite3_value_nochange"] = wasmExports$1["sqlite3_value_nochange"];
-		Module["_sqlite3_value_frombind"] = wasmExports$1["sqlite3_value_frombind"];
-		Module["_sqlite3_value_dup"] = wasmExports$1["sqlite3_value_dup"];
-		Module["_sqlite3_value_free"] = wasmExports$1["sqlite3_value_free"];
-		Module["_sqlite3_result_blob"] = wasmExports$1["sqlite3_result_blob"];
-		Module["_sqlite3_result_error_toobig"] = wasmExports$1["sqlite3_result_error_toobig"];
-		Module["_sqlite3_result_error_nomem"] = wasmExports$1["sqlite3_result_error_nomem"];
-		Module["_sqlite3_result_double"] = wasmExports$1["sqlite3_result_double"];
-		Module["_sqlite3_result_error"] = wasmExports$1["sqlite3_result_error"];
-		Module["_sqlite3_result_int"] = wasmExports$1["sqlite3_result_int"];
-		Module["_sqlite3_result_int64"] = wasmExports$1["sqlite3_result_int64"];
-		Module["_sqlite3_result_null"] = wasmExports$1["sqlite3_result_null"];
-		Module["_sqlite3_result_pointer"] = wasmExports$1["sqlite3_result_pointer"];
-		Module["_sqlite3_result_subtype"] = wasmExports$1["sqlite3_result_subtype"];
-		Module["_sqlite3_result_text"] = wasmExports$1["sqlite3_result_text"];
-		Module["_sqlite3_result_zeroblob"] = wasmExports$1["sqlite3_result_zeroblob"];
-		Module["_sqlite3_result_zeroblob64"] = wasmExports$1["sqlite3_result_zeroblob64"];
-		Module["_sqlite3_result_error_code"] = wasmExports$1["sqlite3_result_error_code"];
-		Module["_sqlite3_user_data"] = wasmExports$1["sqlite3_user_data"];
-		Module["_sqlite3_context_db_handle"] = wasmExports$1["sqlite3_context_db_handle"];
-		Module["_sqlite3_vtab_nochange"] = wasmExports$1["sqlite3_vtab_nochange"];
-		Module["_sqlite3_vtab_in_first"] = wasmExports$1["sqlite3_vtab_in_first"];
-		Module["_sqlite3_vtab_in_next"] = wasmExports$1["sqlite3_vtab_in_next"];
-		Module["_sqlite3_aggregate_context"] = wasmExports$1["sqlite3_aggregate_context"];
-		Module["_sqlite3_get_auxdata"] = wasmExports$1["sqlite3_get_auxdata"];
-		Module["_sqlite3_set_auxdata"] = wasmExports$1["sqlite3_set_auxdata"];
-		Module["_sqlite3_column_count"] = wasmExports$1["sqlite3_column_count"];
-		Module["_sqlite3_data_count"] = wasmExports$1["sqlite3_data_count"];
-		Module["_sqlite3_column_blob"] = wasmExports$1["sqlite3_column_blob"];
-		Module["_sqlite3_column_bytes"] = wasmExports$1["sqlite3_column_bytes"];
-		Module["_sqlite3_column_double"] = wasmExports$1["sqlite3_column_double"];
-		Module["_sqlite3_column_value"] = wasmExports$1["sqlite3_column_value"];
-		Module["_sqlite3_column_decltype"] = wasmExports$1["sqlite3_column_decltype"];
-		Module["_sqlite3_column_database_name"] = wasmExports$1["sqlite3_column_database_name"];
-		Module["_sqlite3_column_table_name"] = wasmExports$1["sqlite3_column_table_name"];
-		Module["_sqlite3_column_origin_name"] = wasmExports$1["sqlite3_column_origin_name"];
-		Module["_sqlite3_bind_blob"] = wasmExports$1["sqlite3_bind_blob"];
-		Module["_sqlite3_bind_double"] = wasmExports$1["sqlite3_bind_double"];
-		Module["_sqlite3_bind_int"] = wasmExports$1["sqlite3_bind_int"];
-		Module["_sqlite3_bind_int64"] = wasmExports$1["sqlite3_bind_int64"];
-		Module["_sqlite3_bind_null"] = wasmExports$1["sqlite3_bind_null"];
-		Module["_sqlite3_bind_pointer"] = wasmExports$1["sqlite3_bind_pointer"];
-		Module["_sqlite3_bind_text"] = wasmExports$1["sqlite3_bind_text"];
-		Module["_sqlite3_bind_parameter_count"] = wasmExports$1["sqlite3_bind_parameter_count"];
-		Module["_sqlite3_bind_parameter_name"] = wasmExports$1["sqlite3_bind_parameter_name"];
-		Module["_sqlite3_bind_parameter_index"] = wasmExports$1["sqlite3_bind_parameter_index"];
-		Module["_sqlite3_db_handle"] = wasmExports$1["sqlite3_db_handle"];
-		Module["_sqlite3_stmt_readonly"] = wasmExports$1["sqlite3_stmt_readonly"];
-		Module["_sqlite3_stmt_isexplain"] = wasmExports$1["sqlite3_stmt_isexplain"];
-		Module["_sqlite3_stmt_explain"] = wasmExports$1["sqlite3_stmt_explain"];
-		Module["_sqlite3_stmt_busy"] = wasmExports$1["sqlite3_stmt_busy"];
-		Module["_sqlite3_next_stmt"] = wasmExports$1["sqlite3_next_stmt"];
-		Module["_sqlite3_stmt_status"] = wasmExports$1["sqlite3_stmt_status"];
-		Module["_sqlite3_sql"] = wasmExports$1["sqlite3_sql"];
-		Module["_sqlite3_expanded_sql"] = wasmExports$1["sqlite3_expanded_sql"];
-		Module["_sqlite3_preupdate_old"] = wasmExports$1["sqlite3_preupdate_old"];
-		Module["_sqlite3_preupdate_count"] = wasmExports$1["sqlite3_preupdate_count"];
-		Module["_sqlite3_preupdate_depth"] = wasmExports$1["sqlite3_preupdate_depth"];
-		Module["_sqlite3_preupdate_blobwrite"] = wasmExports$1["sqlite3_preupdate_blobwrite"];
-		Module["_sqlite3_preupdate_new"] = wasmExports$1["sqlite3_preupdate_new"];
-		Module["_sqlite3_value_numeric_type"] = wasmExports$1["sqlite3_value_numeric_type"];
-		Module["_sqlite3_set_authorizer"] = wasmExports$1["sqlite3_set_authorizer"];
-		Module["_sqlite3_strglob"] = wasmExports$1["sqlite3_strglob"];
-		Module["_sqlite3_strlike"] = wasmExports$1["sqlite3_strlike"];
-		Module["_sqlite3_auto_extension"] = wasmExports$1["sqlite3_auto_extension"];
-		Module["_sqlite3_cancel_auto_extension"] = wasmExports$1["sqlite3_cancel_auto_extension"];
-		Module["_sqlite3_reset_auto_extension"] = wasmExports$1["sqlite3_reset_auto_extension"];
-		Module["_sqlite3_prepare_v3"] = wasmExports$1["sqlite3_prepare_v3"];
-		Module["_sqlite3_create_module"] = wasmExports$1["sqlite3_create_module"];
-		Module["_sqlite3_create_module_v2"] = wasmExports$1["sqlite3_create_module_v2"];
-		Module["_sqlite3_drop_modules"] = wasmExports$1["sqlite3_drop_modules"];
-		Module["_sqlite3_declare_vtab"] = wasmExports$1["sqlite3_declare_vtab"];
-		Module["_sqlite3_vtab_on_conflict"] = wasmExports$1["sqlite3_vtab_on_conflict"];
-		Module["_sqlite3_vtab_collation"] = wasmExports$1["sqlite3_vtab_collation"];
-		Module["_sqlite3_vtab_in"] = wasmExports$1["sqlite3_vtab_in"];
-		Module["_sqlite3_vtab_rhs_value"] = wasmExports$1["sqlite3_vtab_rhs_value"];
-		Module["_sqlite3_vtab_distinct"] = wasmExports$1["sqlite3_vtab_distinct"];
-		Module["_sqlite3_keyword_name"] = wasmExports$1["sqlite3_keyword_name"];
-		Module["_sqlite3_keyword_count"] = wasmExports$1["sqlite3_keyword_count"];
-		Module["_sqlite3_keyword_check"] = wasmExports$1["sqlite3_keyword_check"];
-		Module["_sqlite3_complete"] = wasmExports$1["sqlite3_complete"];
-		Module["_sqlite3_libversion"] = wasmExports$1["sqlite3_libversion"];
-		Module["_sqlite3_libversion_number"] = wasmExports$1["sqlite3_libversion_number"];
-		Module["_sqlite3_shutdown"] = wasmExports$1["sqlite3_shutdown"];
-		Module["_sqlite3_last_insert_rowid"] = wasmExports$1["sqlite3_last_insert_rowid"];
-		Module["_sqlite3_set_last_insert_rowid"] = wasmExports$1["sqlite3_set_last_insert_rowid"];
-		Module["_sqlite3_changes64"] = wasmExports$1["sqlite3_changes64"];
-		Module["_sqlite3_changes"] = wasmExports$1["sqlite3_changes"];
-		Module["_sqlite3_total_changes64"] = wasmExports$1["sqlite3_total_changes64"];
-		Module["_sqlite3_total_changes"] = wasmExports$1["sqlite3_total_changes"];
-		Module["_sqlite3_txn_state"] = wasmExports$1["sqlite3_txn_state"];
-		Module["_sqlite3_close_v2"] = wasmExports$1["sqlite3_close_v2"];
-		Module["_sqlite3_busy_handler"] = wasmExports$1["sqlite3_busy_handler"];
-		Module["_sqlite3_progress_handler"] = wasmExports$1["sqlite3_progress_handler"];
-		Module["_sqlite3_busy_timeout"] = wasmExports$1["sqlite3_busy_timeout"];
-		Module["_sqlite3_interrupt"] = wasmExports$1["sqlite3_interrupt"];
-		Module["_sqlite3_is_interrupted"] = wasmExports$1["sqlite3_is_interrupted"];
-		Module["_sqlite3_create_function"] = wasmExports$1["sqlite3_create_function"];
-		Module["_sqlite3_create_function_v2"] = wasmExports$1["sqlite3_create_function_v2"];
-		Module["_sqlite3_create_window_function"] = wasmExports$1["sqlite3_create_window_function"];
-		Module["_sqlite3_overload_function"] = wasmExports$1["sqlite3_overload_function"];
-		Module["_sqlite3_trace_v2"] = wasmExports$1["sqlite3_trace_v2"];
-		Module["_sqlite3_commit_hook"] = wasmExports$1["sqlite3_commit_hook"];
-		Module["_sqlite3_update_hook"] = wasmExports$1["sqlite3_update_hook"];
-		Module["_sqlite3_rollback_hook"] = wasmExports$1["sqlite3_rollback_hook"];
-		Module["_sqlite3_preupdate_hook"] = wasmExports$1["sqlite3_preupdate_hook"];
-		Module["_sqlite3_set_errmsg"] = wasmExports$1["sqlite3_set_errmsg"];
-		Module["_sqlite3_error_offset"] = wasmExports$1["sqlite3_error_offset"];
-		Module["_sqlite3_errcode"] = wasmExports$1["sqlite3_errcode"];
-		Module["_sqlite3_extended_errcode"] = wasmExports$1["sqlite3_extended_errcode"];
-		Module["_sqlite3_errstr"] = wasmExports$1["sqlite3_errstr"];
-		Module["_sqlite3_limit"] = wasmExports$1["sqlite3_limit"];
-		Module["_sqlite3_open"] = wasmExports$1["sqlite3_open"];
-		Module["_sqlite3_open_v2"] = wasmExports$1["sqlite3_open_v2"];
-		Module["_sqlite3_create_collation"] = wasmExports$1["sqlite3_create_collation"];
-		Module["_sqlite3_create_collation_v2"] = wasmExports$1["sqlite3_create_collation_v2"];
-		Module["_sqlite3_collation_needed"] = wasmExports$1["sqlite3_collation_needed"];
-		Module["_sqlite3_get_autocommit"] = wasmExports$1["sqlite3_get_autocommit"];
-		Module["_sqlite3_table_column_metadata"] = wasmExports$1["sqlite3_table_column_metadata"];
-		Module["_sqlite3_extended_result_codes"] = wasmExports$1["sqlite3_extended_result_codes"];
-		Module["_sqlite3_uri_key"] = wasmExports$1["sqlite3_uri_key"];
-		Module["_sqlite3_uri_int64"] = wasmExports$1["sqlite3_uri_int64"];
-		Module["_sqlite3_db_name"] = wasmExports$1["sqlite3_db_name"];
-		Module["_sqlite3_db_filename"] = wasmExports$1["sqlite3_db_filename"];
-		Module["_sqlite3_db_readonly"] = wasmExports$1["sqlite3_db_readonly"];
-		Module["_sqlite3_compileoption_used"] = wasmExports$1["sqlite3_compileoption_used"];
-		Module["_sqlite3_compileoption_get"] = wasmExports$1["sqlite3_compileoption_get"];
-		Module["_sqlite3session_diff"] = wasmExports$1["sqlite3session_diff"];
-		Module["_sqlite3session_attach"] = wasmExports$1["sqlite3session_attach"];
-		Module["_sqlite3session_create"] = wasmExports$1["sqlite3session_create"];
-		Module["_sqlite3session_delete"] = wasmExports$1["sqlite3session_delete"];
-		Module["_sqlite3session_table_filter"] = wasmExports$1["sqlite3session_table_filter"];
-		Module["_sqlite3session_changeset"] = wasmExports$1["sqlite3session_changeset"];
-		Module["_sqlite3session_changeset_strm"] = wasmExports$1["sqlite3session_changeset_strm"];
-		Module["_sqlite3session_patchset_strm"] = wasmExports$1["sqlite3session_patchset_strm"];
-		Module["_sqlite3session_patchset"] = wasmExports$1["sqlite3session_patchset"];
-		Module["_sqlite3session_enable"] = wasmExports$1["sqlite3session_enable"];
-		Module["_sqlite3session_indirect"] = wasmExports$1["sqlite3session_indirect"];
-		Module["_sqlite3session_isempty"] = wasmExports$1["sqlite3session_isempty"];
-		Module["_sqlite3session_memory_used"] = wasmExports$1["sqlite3session_memory_used"];
-		Module["_sqlite3session_object_config"] = wasmExports$1["sqlite3session_object_config"];
-		Module["_sqlite3session_changeset_size"] = wasmExports$1["sqlite3session_changeset_size"];
-		Module["_sqlite3changeset_start"] = wasmExports$1["sqlite3changeset_start"];
-		Module["_sqlite3changeset_start_v2"] = wasmExports$1["sqlite3changeset_start_v2"];
-		Module["_sqlite3changeset_start_strm"] = wasmExports$1["sqlite3changeset_start_strm"];
-		Module["_sqlite3changeset_start_v2_strm"] = wasmExports$1["sqlite3changeset_start_v2_strm"];
-		Module["_sqlite3changeset_next"] = wasmExports$1["sqlite3changeset_next"];
-		Module["_sqlite3changeset_op"] = wasmExports$1["sqlite3changeset_op"];
-		Module["_sqlite3changeset_pk"] = wasmExports$1["sqlite3changeset_pk"];
-		Module["_sqlite3changeset_old"] = wasmExports$1["sqlite3changeset_old"];
-		Module["_sqlite3changeset_new"] = wasmExports$1["sqlite3changeset_new"];
-		Module["_sqlite3changeset_conflict"] = wasmExports$1["sqlite3changeset_conflict"];
-		Module["_sqlite3changeset_fk_conflicts"] = wasmExports$1["sqlite3changeset_fk_conflicts"];
-		Module["_sqlite3changeset_finalize"] = wasmExports$1["sqlite3changeset_finalize"];
-		Module["_sqlite3changeset_invert"] = wasmExports$1["sqlite3changeset_invert"];
-		Module["_sqlite3changeset_invert_strm"] = wasmExports$1["sqlite3changeset_invert_strm"];
-		Module["_sqlite3changeset_apply_v2"] = wasmExports$1["sqlite3changeset_apply_v2"];
-		Module["_sqlite3changeset_apply_v3"] = wasmExports$1["sqlite3changeset_apply_v3"];
-		Module["_sqlite3changeset_apply"] = wasmExports$1["sqlite3changeset_apply"];
-		Module["_sqlite3changeset_apply_v3_strm"] = wasmExports$1["sqlite3changeset_apply_v3_strm"];
-		Module["_sqlite3changeset_apply_v2_strm"] = wasmExports$1["sqlite3changeset_apply_v2_strm"];
-		Module["_sqlite3changeset_apply_strm"] = wasmExports$1["sqlite3changeset_apply_strm"];
-		Module["_sqlite3changegroup_new"] = wasmExports$1["sqlite3changegroup_new"];
-		Module["_sqlite3changegroup_add"] = wasmExports$1["sqlite3changegroup_add"];
-		Module["_sqlite3changegroup_output"] = wasmExports$1["sqlite3changegroup_output"];
-		Module["_sqlite3changegroup_add_strm"] = wasmExports$1["sqlite3changegroup_add_strm"];
-		Module["_sqlite3changegroup_output_strm"] = wasmExports$1["sqlite3changegroup_output_strm"];
-		Module["_sqlite3changegroup_delete"] = wasmExports$1["sqlite3changegroup_delete"];
-		Module["_sqlite3changeset_concat"] = wasmExports$1["sqlite3changeset_concat"];
-		Module["_sqlite3changeset_concat_strm"] = wasmExports$1["sqlite3changeset_concat_strm"];
-		Module["_sqlite3session_config"] = wasmExports$1["sqlite3session_config"];
-		Module["_sqlite3_sourceid"] = wasmExports$1["sqlite3_sourceid"];
-		Module["_sqlite3__wasm_pstack_ptr"] = wasmExports$1["sqlite3__wasm_pstack_ptr"];
-		Module["_sqlite3__wasm_pstack_restore"] = wasmExports$1["sqlite3__wasm_pstack_restore"];
-		Module["_sqlite3__wasm_pstack_alloc"] = wasmExports$1["sqlite3__wasm_pstack_alloc"];
-		Module["_sqlite3__wasm_pstack_remaining"] = wasmExports$1["sqlite3__wasm_pstack_remaining"];
-		Module["_sqlite3__wasm_pstack_quota"] = wasmExports$1["sqlite3__wasm_pstack_quota"];
-		Module["_sqlite3__wasm_test_struct"] = wasmExports$1["sqlite3__wasm_test_struct"];
-		Module["_sqlite3__wasm_enum_json"] = wasmExports$1["sqlite3__wasm_enum_json"];
-		Module["_sqlite3__wasm_vfs_unlink"] = wasmExports$1["sqlite3__wasm_vfs_unlink"];
-		Module["_sqlite3__wasm_db_vfs"] = wasmExports$1["sqlite3__wasm_db_vfs"];
-		Module["_sqlite3__wasm_db_reset"] = wasmExports$1["sqlite3__wasm_db_reset"];
-		Module["_sqlite3__wasm_db_export_chunked"] = wasmExports$1["sqlite3__wasm_db_export_chunked"];
-		Module["_sqlite3__wasm_db_serialize"] = wasmExports$1["sqlite3__wasm_db_serialize"];
-		Module["_sqlite3__wasm_vfs_create_file"] = wasmExports$1["sqlite3__wasm_vfs_create_file"];
-		Module["_sqlite3__wasm_posix_create_file"] = wasmExports$1["sqlite3__wasm_posix_create_file"];
-		Module["_sqlite3__wasm_kvvfsMakeKey"] = wasmExports$1["sqlite3__wasm_kvvfsMakeKey"];
-		Module["_sqlite3__wasm_kvvfs_methods"] = wasmExports$1["sqlite3__wasm_kvvfs_methods"];
-		Module["_sqlite3__wasm_vtab_config"] = wasmExports$1["sqlite3__wasm_vtab_config"];
-		Module["_sqlite3__wasm_db_config_ip"] = wasmExports$1["sqlite3__wasm_db_config_ip"];
-		Module["_sqlite3__wasm_db_config_pii"] = wasmExports$1["sqlite3__wasm_db_config_pii"];
-		Module["_sqlite3__wasm_db_config_s"] = wasmExports$1["sqlite3__wasm_db_config_s"];
-		Module["_sqlite3__wasm_config_i"] = wasmExports$1["sqlite3__wasm_config_i"];
-		Module["_sqlite3__wasm_config_ii"] = wasmExports$1["sqlite3__wasm_config_ii"];
-		Module["_sqlite3__wasm_config_j"] = wasmExports$1["sqlite3__wasm_config_j"];
-		Module["_sqlite3__wasm_qfmt_token"] = wasmExports$1["sqlite3__wasm_qfmt_token"];
-		Module["_sqlite3__wasm_kvvfs_decode"] = wasmExports$1["sqlite3__wasm_kvvfs_decode"];
-		Module["_sqlite3__wasm_kvvfs_encode"] = wasmExports$1["sqlite3__wasm_kvvfs_encode"];
-		Module["_sqlite3__wasm_init_wasmfs"] = wasmExports$1["sqlite3__wasm_init_wasmfs"];
-		Module["_sqlite3__wasm_test_intptr"] = wasmExports$1["sqlite3__wasm_test_intptr"];
-		Module["_sqlite3__wasm_test_voidptr"] = wasmExports$1["sqlite3__wasm_test_voidptr"];
-		Module["_sqlite3__wasm_test_int64_max"] = wasmExports$1["sqlite3__wasm_test_int64_max"];
-		Module["_sqlite3__wasm_test_int64_min"] = wasmExports$1["sqlite3__wasm_test_int64_min"];
-		Module["_sqlite3__wasm_test_int64_times2"] = wasmExports$1["sqlite3__wasm_test_int64_times2"];
-		Module["_sqlite3__wasm_test_int64_minmax"] = wasmExports$1["sqlite3__wasm_test_int64_minmax"];
-		Module["_sqlite3__wasm_test_int64ptr"] = wasmExports$1["sqlite3__wasm_test_int64ptr"];
-		Module["_sqlite3__wasm_test_stack_overflow"] = wasmExports$1["sqlite3__wasm_test_stack_overflow"];
-		Module["_sqlite3__wasm_test_str_hello"] = wasmExports$1["sqlite3__wasm_test_str_hello"];
-		Module["_sqlite3__wasm_SQLTester_strglob"] = wasmExports$1["sqlite3__wasm_SQLTester_strglob"];
-		Module["_malloc"] = wasmExports$1["malloc"];
-		Module["_free"] = wasmExports$1["free"];
-		Module["_realloc"] = wasmExports$1["realloc"];
-		_emscripten_builtin_memalign = wasmExports$1["emscripten_builtin_memalign"];
-		wasmExports$1["_emscripten_stack_restore"];
-		wasmExports$1["_emscripten_stack_alloc"];
-		wasmExports$1["emscripten_stack_get_current"];
-		wasmExports$1["__indirect_function_table"];
+	function assignWasmExports(wasmExports) {
+		Module["_sqlite3_status64"] = wasmExports["sqlite3_status64"];
+		Module["_sqlite3_status"] = wasmExports["sqlite3_status"];
+		Module["_sqlite3_db_status64"] = wasmExports["sqlite3_db_status64"];
+		Module["_sqlite3_msize"] = wasmExports["sqlite3_msize"];
+		Module["_sqlite3_db_status"] = wasmExports["sqlite3_db_status"];
+		Module["_sqlite3_vfs_find"] = wasmExports["sqlite3_vfs_find"];
+		Module["_sqlite3_initialize"] = wasmExports["sqlite3_initialize"];
+		Module["_sqlite3_malloc"] = wasmExports["sqlite3_malloc"];
+		Module["_sqlite3_free"] = wasmExports["sqlite3_free"];
+		Module["_sqlite3_vfs_register"] = wasmExports["sqlite3_vfs_register"];
+		Module["_sqlite3_vfs_unregister"] = wasmExports["sqlite3_vfs_unregister"];
+		Module["_sqlite3_malloc64"] = wasmExports["sqlite3_malloc64"];
+		Module["_sqlite3_realloc"] = wasmExports["sqlite3_realloc"];
+		Module["_sqlite3_realloc64"] = wasmExports["sqlite3_realloc64"];
+		Module["_sqlite3_value_text"] = wasmExports["sqlite3_value_text"];
+		Module["_sqlite3_randomness"] = wasmExports["sqlite3_randomness"];
+		Module["_sqlite3_stricmp"] = wasmExports["sqlite3_stricmp"];
+		Module["_sqlite3_strnicmp"] = wasmExports["sqlite3_strnicmp"];
+		Module["_sqlite3_uri_parameter"] = wasmExports["sqlite3_uri_parameter"];
+		Module["_sqlite3_uri_boolean"] = wasmExports["sqlite3_uri_boolean"];
+		Module["_sqlite3_serialize"] = wasmExports["sqlite3_serialize"];
+		Module["_sqlite3_prepare_v2"] = wasmExports["sqlite3_prepare_v2"];
+		Module["_sqlite3_step"] = wasmExports["sqlite3_step"];
+		Module["_sqlite3_column_int64"] = wasmExports["sqlite3_column_int64"];
+		Module["_sqlite3_reset"] = wasmExports["sqlite3_reset"];
+		Module["_sqlite3_exec"] = wasmExports["sqlite3_exec"];
+		Module["_sqlite3_column_int"] = wasmExports["sqlite3_column_int"];
+		Module["_sqlite3_finalize"] = wasmExports["sqlite3_finalize"];
+		Module["_sqlite3_file_control"] = wasmExports["sqlite3_file_control"];
+		Module["_sqlite3_column_name"] = wasmExports["sqlite3_column_name"];
+		Module["_sqlite3_column_text"] = wasmExports["sqlite3_column_text"];
+		Module["_sqlite3_column_type"] = wasmExports["sqlite3_column_type"];
+		Module["_sqlite3_errmsg"] = wasmExports["sqlite3_errmsg"];
+		Module["_sqlite3_deserialize"] = wasmExports["sqlite3_deserialize"];
+		Module["_sqlite3_clear_bindings"] = wasmExports["sqlite3_clear_bindings"];
+		Module["_sqlite3_value_blob"] = wasmExports["sqlite3_value_blob"];
+		Module["_sqlite3_value_bytes"] = wasmExports["sqlite3_value_bytes"];
+		Module["_sqlite3_value_double"] = wasmExports["sqlite3_value_double"];
+		Module["_sqlite3_value_int"] = wasmExports["sqlite3_value_int"];
+		Module["_sqlite3_value_int64"] = wasmExports["sqlite3_value_int64"];
+		Module["_sqlite3_value_subtype"] = wasmExports["sqlite3_value_subtype"];
+		Module["_sqlite3_value_pointer"] = wasmExports["sqlite3_value_pointer"];
+		Module["_sqlite3_value_type"] = wasmExports["sqlite3_value_type"];
+		Module["_sqlite3_value_nochange"] = wasmExports["sqlite3_value_nochange"];
+		Module["_sqlite3_value_frombind"] = wasmExports["sqlite3_value_frombind"];
+		Module["_sqlite3_value_dup"] = wasmExports["sqlite3_value_dup"];
+		Module["_sqlite3_value_free"] = wasmExports["sqlite3_value_free"];
+		Module["_sqlite3_result_blob"] = wasmExports["sqlite3_result_blob"];
+		Module["_sqlite3_result_error_toobig"] = wasmExports["sqlite3_result_error_toobig"];
+		Module["_sqlite3_result_error_nomem"] = wasmExports["sqlite3_result_error_nomem"];
+		Module["_sqlite3_result_double"] = wasmExports["sqlite3_result_double"];
+		Module["_sqlite3_result_error"] = wasmExports["sqlite3_result_error"];
+		Module["_sqlite3_result_int"] = wasmExports["sqlite3_result_int"];
+		Module["_sqlite3_result_int64"] = wasmExports["sqlite3_result_int64"];
+		Module["_sqlite3_result_null"] = wasmExports["sqlite3_result_null"];
+		Module["_sqlite3_result_pointer"] = wasmExports["sqlite3_result_pointer"];
+		Module["_sqlite3_result_subtype"] = wasmExports["sqlite3_result_subtype"];
+		Module["_sqlite3_result_text"] = wasmExports["sqlite3_result_text"];
+		Module["_sqlite3_result_zeroblob"] = wasmExports["sqlite3_result_zeroblob"];
+		Module["_sqlite3_result_zeroblob64"] = wasmExports["sqlite3_result_zeroblob64"];
+		Module["_sqlite3_result_error_code"] = wasmExports["sqlite3_result_error_code"];
+		Module["_sqlite3_user_data"] = wasmExports["sqlite3_user_data"];
+		Module["_sqlite3_context_db_handle"] = wasmExports["sqlite3_context_db_handle"];
+		Module["_sqlite3_vtab_nochange"] = wasmExports["sqlite3_vtab_nochange"];
+		Module["_sqlite3_vtab_in_first"] = wasmExports["sqlite3_vtab_in_first"];
+		Module["_sqlite3_vtab_in_next"] = wasmExports["sqlite3_vtab_in_next"];
+		Module["_sqlite3_aggregate_context"] = wasmExports["sqlite3_aggregate_context"];
+		Module["_sqlite3_get_auxdata"] = wasmExports["sqlite3_get_auxdata"];
+		Module["_sqlite3_set_auxdata"] = wasmExports["sqlite3_set_auxdata"];
+		Module["_sqlite3_column_count"] = wasmExports["sqlite3_column_count"];
+		Module["_sqlite3_data_count"] = wasmExports["sqlite3_data_count"];
+		Module["_sqlite3_column_blob"] = wasmExports["sqlite3_column_blob"];
+		Module["_sqlite3_column_bytes"] = wasmExports["sqlite3_column_bytes"];
+		Module["_sqlite3_column_double"] = wasmExports["sqlite3_column_double"];
+		Module["_sqlite3_column_value"] = wasmExports["sqlite3_column_value"];
+		Module["_sqlite3_column_decltype"] = wasmExports["sqlite3_column_decltype"];
+		Module["_sqlite3_column_database_name"] = wasmExports["sqlite3_column_database_name"];
+		Module["_sqlite3_column_table_name"] = wasmExports["sqlite3_column_table_name"];
+		Module["_sqlite3_column_origin_name"] = wasmExports["sqlite3_column_origin_name"];
+		Module["_sqlite3_bind_blob"] = wasmExports["sqlite3_bind_blob"];
+		Module["_sqlite3_bind_double"] = wasmExports["sqlite3_bind_double"];
+		Module["_sqlite3_bind_int"] = wasmExports["sqlite3_bind_int"];
+		Module["_sqlite3_bind_int64"] = wasmExports["sqlite3_bind_int64"];
+		Module["_sqlite3_bind_null"] = wasmExports["sqlite3_bind_null"];
+		Module["_sqlite3_bind_pointer"] = wasmExports["sqlite3_bind_pointer"];
+		Module["_sqlite3_bind_text"] = wasmExports["sqlite3_bind_text"];
+		Module["_sqlite3_bind_zeroblob"] = wasmExports["sqlite3_bind_zeroblob"];
+		Module["_sqlite3_bind_parameter_count"] = wasmExports["sqlite3_bind_parameter_count"];
+		Module["_sqlite3_bind_parameter_name"] = wasmExports["sqlite3_bind_parameter_name"];
+		Module["_sqlite3_bind_parameter_index"] = wasmExports["sqlite3_bind_parameter_index"];
+		Module["_sqlite3_db_handle"] = wasmExports["sqlite3_db_handle"];
+		Module["_sqlite3_stmt_readonly"] = wasmExports["sqlite3_stmt_readonly"];
+		Module["_sqlite3_stmt_isexplain"] = wasmExports["sqlite3_stmt_isexplain"];
+		Module["_sqlite3_stmt_explain"] = wasmExports["sqlite3_stmt_explain"];
+		Module["_sqlite3_stmt_busy"] = wasmExports["sqlite3_stmt_busy"];
+		Module["_sqlite3_next_stmt"] = wasmExports["sqlite3_next_stmt"];
+		Module["_sqlite3_stmt_status"] = wasmExports["sqlite3_stmt_status"];
+		Module["_sqlite3_sql"] = wasmExports["sqlite3_sql"];
+		Module["_sqlite3_expanded_sql"] = wasmExports["sqlite3_expanded_sql"];
+		Module["_sqlite3_preupdate_old"] = wasmExports["sqlite3_preupdate_old"];
+		Module["_sqlite3_preupdate_count"] = wasmExports["sqlite3_preupdate_count"];
+		Module["_sqlite3_preupdate_depth"] = wasmExports["sqlite3_preupdate_depth"];
+		Module["_sqlite3_preupdate_blobwrite"] = wasmExports["sqlite3_preupdate_blobwrite"];
+		Module["_sqlite3_preupdate_new"] = wasmExports["sqlite3_preupdate_new"];
+		Module["_sqlite3_value_numeric_type"] = wasmExports["sqlite3_value_numeric_type"];
+		Module["_sqlite3_set_authorizer"] = wasmExports["sqlite3_set_authorizer"];
+		Module["_sqlite3_strglob"] = wasmExports["sqlite3_strglob"];
+		Module["_sqlite3_strlike"] = wasmExports["sqlite3_strlike"];
+		Module["_sqlite3_auto_extension"] = wasmExports["sqlite3_auto_extension"];
+		Module["_sqlite3_cancel_auto_extension"] = wasmExports["sqlite3_cancel_auto_extension"];
+		Module["_sqlite3_reset_auto_extension"] = wasmExports["sqlite3_reset_auto_extension"];
+		Module["_sqlite3_prepare_v3"] = wasmExports["sqlite3_prepare_v3"];
+		Module["_sqlite3_create_module"] = wasmExports["sqlite3_create_module"];
+		Module["_sqlite3_create_module_v2"] = wasmExports["sqlite3_create_module_v2"];
+		Module["_sqlite3_drop_modules"] = wasmExports["sqlite3_drop_modules"];
+		Module["_sqlite3_declare_vtab"] = wasmExports["sqlite3_declare_vtab"];
+		Module["_sqlite3_vtab_on_conflict"] = wasmExports["sqlite3_vtab_on_conflict"];
+		Module["_sqlite3_vtab_collation"] = wasmExports["sqlite3_vtab_collation"];
+		Module["_sqlite3_vtab_in"] = wasmExports["sqlite3_vtab_in"];
+		Module["_sqlite3_vtab_rhs_value"] = wasmExports["sqlite3_vtab_rhs_value"];
+		Module["_sqlite3_vtab_distinct"] = wasmExports["sqlite3_vtab_distinct"];
+		Module["_sqlite3_keyword_name"] = wasmExports["sqlite3_keyword_name"];
+		Module["_sqlite3_keyword_count"] = wasmExports["sqlite3_keyword_count"];
+		Module["_sqlite3_keyword_check"] = wasmExports["sqlite3_keyword_check"];
+		Module["_sqlite3_complete"] = wasmExports["sqlite3_complete"];
+		Module["_sqlite3_libversion"] = wasmExports["sqlite3_libversion"];
+		Module["_sqlite3_libversion_number"] = wasmExports["sqlite3_libversion_number"];
+		Module["_sqlite3_shutdown"] = wasmExports["sqlite3_shutdown"];
+		Module["_sqlite3_last_insert_rowid"] = wasmExports["sqlite3_last_insert_rowid"];
+		Module["_sqlite3_set_last_insert_rowid"] = wasmExports["sqlite3_set_last_insert_rowid"];
+		Module["_sqlite3_changes64"] = wasmExports["sqlite3_changes64"];
+		Module["_sqlite3_changes"] = wasmExports["sqlite3_changes"];
+		Module["_sqlite3_total_changes64"] = wasmExports["sqlite3_total_changes64"];
+		Module["_sqlite3_total_changes"] = wasmExports["sqlite3_total_changes"];
+		Module["_sqlite3_txn_state"] = wasmExports["sqlite3_txn_state"];
+		Module["_sqlite3_close_v2"] = wasmExports["sqlite3_close_v2"];
+		Module["_sqlite3_busy_handler"] = wasmExports["sqlite3_busy_handler"];
+		Module["_sqlite3_progress_handler"] = wasmExports["sqlite3_progress_handler"];
+		Module["_sqlite3_busy_timeout"] = wasmExports["sqlite3_busy_timeout"];
+		Module["_sqlite3_interrupt"] = wasmExports["sqlite3_interrupt"];
+		Module["_sqlite3_is_interrupted"] = wasmExports["sqlite3_is_interrupted"];
+		Module["_sqlite3_create_function"] = wasmExports["sqlite3_create_function"];
+		Module["_sqlite3_create_function_v2"] = wasmExports["sqlite3_create_function_v2"];
+		Module["_sqlite3_create_window_function"] = wasmExports["sqlite3_create_window_function"];
+		Module["_sqlite3_overload_function"] = wasmExports["sqlite3_overload_function"];
+		Module["_sqlite3_trace_v2"] = wasmExports["sqlite3_trace_v2"];
+		Module["_sqlite3_commit_hook"] = wasmExports["sqlite3_commit_hook"];
+		Module["_sqlite3_update_hook"] = wasmExports["sqlite3_update_hook"];
+		Module["_sqlite3_rollback_hook"] = wasmExports["sqlite3_rollback_hook"];
+		Module["_sqlite3_preupdate_hook"] = wasmExports["sqlite3_preupdate_hook"];
+		Module["_sqlite3_set_errmsg"] = wasmExports["sqlite3_set_errmsg"];
+		Module["_sqlite3_error_offset"] = wasmExports["sqlite3_error_offset"];
+		Module["_sqlite3_errcode"] = wasmExports["sqlite3_errcode"];
+		Module["_sqlite3_extended_errcode"] = wasmExports["sqlite3_extended_errcode"];
+		Module["_sqlite3_errstr"] = wasmExports["sqlite3_errstr"];
+		Module["_sqlite3_limit"] = wasmExports["sqlite3_limit"];
+		Module["_sqlite3_open"] = wasmExports["sqlite3_open"];
+		Module["_sqlite3_open_v2"] = wasmExports["sqlite3_open_v2"];
+		Module["_sqlite3_create_collation"] = wasmExports["sqlite3_create_collation"];
+		Module["_sqlite3_create_collation_v2"] = wasmExports["sqlite3_create_collation_v2"];
+		Module["_sqlite3_collation_needed"] = wasmExports["sqlite3_collation_needed"];
+		Module["_sqlite3_get_autocommit"] = wasmExports["sqlite3_get_autocommit"];
+		Module["_sqlite3_table_column_metadata"] = wasmExports["sqlite3_table_column_metadata"];
+		Module["_sqlite3_extended_result_codes"] = wasmExports["sqlite3_extended_result_codes"];
+		Module["_sqlite3_uri_key"] = wasmExports["sqlite3_uri_key"];
+		Module["_sqlite3_uri_int64"] = wasmExports["sqlite3_uri_int64"];
+		Module["_sqlite3_db_name"] = wasmExports["sqlite3_db_name"];
+		Module["_sqlite3_db_filename"] = wasmExports["sqlite3_db_filename"];
+		Module["_sqlite3_db_readonly"] = wasmExports["sqlite3_db_readonly"];
+		Module["_sqlite3_compileoption_used"] = wasmExports["sqlite3_compileoption_used"];
+		Module["_sqlite3_compileoption_get"] = wasmExports["sqlite3_compileoption_get"];
+		Module["_sqlite3session_diff"] = wasmExports["sqlite3session_diff"];
+		Module["_sqlite3session_attach"] = wasmExports["sqlite3session_attach"];
+		Module["_sqlite3session_create"] = wasmExports["sqlite3session_create"];
+		Module["_sqlite3session_delete"] = wasmExports["sqlite3session_delete"];
+		Module["_sqlite3session_table_filter"] = wasmExports["sqlite3session_table_filter"];
+		Module["_sqlite3session_changeset"] = wasmExports["sqlite3session_changeset"];
+		Module["_sqlite3session_changeset_strm"] = wasmExports["sqlite3session_changeset_strm"];
+		Module["_sqlite3session_patchset_strm"] = wasmExports["sqlite3session_patchset_strm"];
+		Module["_sqlite3session_patchset"] = wasmExports["sqlite3session_patchset"];
+		Module["_sqlite3session_enable"] = wasmExports["sqlite3session_enable"];
+		Module["_sqlite3session_indirect"] = wasmExports["sqlite3session_indirect"];
+		Module["_sqlite3session_isempty"] = wasmExports["sqlite3session_isempty"];
+		Module["_sqlite3session_memory_used"] = wasmExports["sqlite3session_memory_used"];
+		Module["_sqlite3session_object_config"] = wasmExports["sqlite3session_object_config"];
+		Module["_sqlite3session_changeset_size"] = wasmExports["sqlite3session_changeset_size"];
+		Module["_sqlite3changeset_start"] = wasmExports["sqlite3changeset_start"];
+		Module["_sqlite3changeset_start_v2"] = wasmExports["sqlite3changeset_start_v2"];
+		Module["_sqlite3changeset_start_strm"] = wasmExports["sqlite3changeset_start_strm"];
+		Module["_sqlite3changeset_start_v2_strm"] = wasmExports["sqlite3changeset_start_v2_strm"];
+		Module["_sqlite3changeset_next"] = wasmExports["sqlite3changeset_next"];
+		Module["_sqlite3changeset_op"] = wasmExports["sqlite3changeset_op"];
+		Module["_sqlite3changeset_pk"] = wasmExports["sqlite3changeset_pk"];
+		Module["_sqlite3changeset_old"] = wasmExports["sqlite3changeset_old"];
+		Module["_sqlite3changeset_new"] = wasmExports["sqlite3changeset_new"];
+		Module["_sqlite3changeset_conflict"] = wasmExports["sqlite3changeset_conflict"];
+		Module["_sqlite3changeset_fk_conflicts"] = wasmExports["sqlite3changeset_fk_conflicts"];
+		Module["_sqlite3changeset_finalize"] = wasmExports["sqlite3changeset_finalize"];
+		Module["_sqlite3changeset_invert"] = wasmExports["sqlite3changeset_invert"];
+		Module["_sqlite3changeset_invert_strm"] = wasmExports["sqlite3changeset_invert_strm"];
+		Module["_sqlite3changeset_apply_v2"] = wasmExports["sqlite3changeset_apply_v2"];
+		Module["_sqlite3changeset_apply_v3"] = wasmExports["sqlite3changeset_apply_v3"];
+		Module["_sqlite3changeset_apply"] = wasmExports["sqlite3changeset_apply"];
+		Module["_sqlite3changeset_apply_v3_strm"] = wasmExports["sqlite3changeset_apply_v3_strm"];
+		Module["_sqlite3changeset_apply_v2_strm"] = wasmExports["sqlite3changeset_apply_v2_strm"];
+		Module["_sqlite3changeset_apply_strm"] = wasmExports["sqlite3changeset_apply_strm"];
+		Module["_sqlite3changegroup_new"] = wasmExports["sqlite3changegroup_new"];
+		Module["_sqlite3changegroup_add"] = wasmExports["sqlite3changegroup_add"];
+		Module["_sqlite3changegroup_output"] = wasmExports["sqlite3changegroup_output"];
+		Module["_sqlite3changegroup_add_strm"] = wasmExports["sqlite3changegroup_add_strm"];
+		Module["_sqlite3changegroup_output_strm"] = wasmExports["sqlite3changegroup_output_strm"];
+		Module["_sqlite3changegroup_delete"] = wasmExports["sqlite3changegroup_delete"];
+		Module["_sqlite3changeset_concat"] = wasmExports["sqlite3changeset_concat"];
+		Module["_sqlite3changeset_concat_strm"] = wasmExports["sqlite3changeset_concat_strm"];
+		Module["_sqlite3session_config"] = wasmExports["sqlite3session_config"];
+		Module["_sqlite3_sourceid"] = wasmExports["sqlite3_sourceid"];
+		Module["_sqlite3__wasm_pstack_ptr"] = wasmExports["sqlite3__wasm_pstack_ptr"];
+		Module["_sqlite3__wasm_pstack_restore"] = wasmExports["sqlite3__wasm_pstack_restore"];
+		Module["_sqlite3__wasm_pstack_alloc"] = wasmExports["sqlite3__wasm_pstack_alloc"];
+		Module["_sqlite3__wasm_pstack_remaining"] = wasmExports["sqlite3__wasm_pstack_remaining"];
+		Module["_sqlite3__wasm_pstack_quota"] = wasmExports["sqlite3__wasm_pstack_quota"];
+		Module["_sqlite3__wasm_test_struct"] = wasmExports["sqlite3__wasm_test_struct"];
+		Module["_sqlite3__wasm_enum_json"] = wasmExports["sqlite3__wasm_enum_json"];
+		Module["_sqlite3__wasm_vfs_unlink"] = wasmExports["sqlite3__wasm_vfs_unlink"];
+		Module["_sqlite3__wasm_db_vfs"] = wasmExports["sqlite3__wasm_db_vfs"];
+		Module["_sqlite3__wasm_db_reset"] = wasmExports["sqlite3__wasm_db_reset"];
+		Module["_sqlite3__wasm_db_export_chunked"] = wasmExports["sqlite3__wasm_db_export_chunked"];
+		Module["_sqlite3__wasm_db_serialize"] = wasmExports["sqlite3__wasm_db_serialize"];
+		Module["_sqlite3__wasm_vfs_create_file"] = wasmExports["sqlite3__wasm_vfs_create_file"];
+		Module["_sqlite3__wasm_posix_create_file"] = wasmExports["sqlite3__wasm_posix_create_file"];
+		Module["_sqlite3__wasm_kvvfsMakeKey"] = wasmExports["sqlite3__wasm_kvvfsMakeKey"];
+		Module["_sqlite3__wasm_kvvfs_methods"] = wasmExports["sqlite3__wasm_kvvfs_methods"];
+		Module["_sqlite3__wasm_vtab_config"] = wasmExports["sqlite3__wasm_vtab_config"];
+		Module["_sqlite3__wasm_db_config_ip"] = wasmExports["sqlite3__wasm_db_config_ip"];
+		Module["_sqlite3__wasm_db_config_pii"] = wasmExports["sqlite3__wasm_db_config_pii"];
+		Module["_sqlite3__wasm_db_config_s"] = wasmExports["sqlite3__wasm_db_config_s"];
+		Module["_sqlite3__wasm_config_i"] = wasmExports["sqlite3__wasm_config_i"];
+		Module["_sqlite3__wasm_config_ii"] = wasmExports["sqlite3__wasm_config_ii"];
+		Module["_sqlite3__wasm_config_j"] = wasmExports["sqlite3__wasm_config_j"];
+		Module["_sqlite3__wasm_qfmt_token"] = wasmExports["sqlite3__wasm_qfmt_token"];
+		Module["_sqlite3__wasm_kvvfs_decode"] = wasmExports["sqlite3__wasm_kvvfs_decode"];
+		Module["_sqlite3__wasm_kvvfs_encode"] = wasmExports["sqlite3__wasm_kvvfs_encode"];
+		Module["_sqlite3__wasm_init_wasmfs"] = wasmExports["sqlite3__wasm_init_wasmfs"];
+		Module["_sqlite3__wasm_test_intptr"] = wasmExports["sqlite3__wasm_test_intptr"];
+		Module["_sqlite3__wasm_test_voidptr"] = wasmExports["sqlite3__wasm_test_voidptr"];
+		Module["_sqlite3__wasm_test_int64_max"] = wasmExports["sqlite3__wasm_test_int64_max"];
+		Module["_sqlite3__wasm_test_int64_min"] = wasmExports["sqlite3__wasm_test_int64_min"];
+		Module["_sqlite3__wasm_test_int64_times2"] = wasmExports["sqlite3__wasm_test_int64_times2"];
+		Module["_sqlite3__wasm_test_int64_minmax"] = wasmExports["sqlite3__wasm_test_int64_minmax"];
+		Module["_sqlite3__wasm_test_int64ptr"] = wasmExports["sqlite3__wasm_test_int64ptr"];
+		Module["_sqlite3__wasm_test_stack_overflow"] = wasmExports["sqlite3__wasm_test_stack_overflow"];
+		Module["_sqlite3__wasm_test_str_hello"] = wasmExports["sqlite3__wasm_test_str_hello"];
+		Module["_sqlite3__wasm_SQLTester_strglob"] = wasmExports["sqlite3__wasm_SQLTester_strglob"];
+		Module["_malloc"] = wasmExports["malloc"];
+		Module["_free"] = wasmExports["free"];
+		Module["_realloc"] = wasmExports["realloc"];
+		_emscripten_builtin_memalign = wasmExports["emscripten_builtin_memalign"];
+		wasmExports["_emscripten_stack_restore"];
+		wasmExports["_emscripten_stack_alloc"];
+		wasmExports["emscripten_stack_get_current"];
+		wasmExports["__indirect_function_table"];
 	}
 	var wasmImports = {
+		/** @export */
 		__syscall_chmod: ___syscall_chmod,
+		/** @export */
 		__syscall_faccessat: ___syscall_faccessat,
+		/** @export */
 		__syscall_fchmod: ___syscall_fchmod,
+		/** @export */
 		__syscall_fchown32: ___syscall_fchown32,
+		/** @export */
 		__syscall_fcntl64: ___syscall_fcntl64,
+		/** @export */
 		__syscall_fstat64: ___syscall_fstat64,
+		/** @export */
 		__syscall_ftruncate64: ___syscall_ftruncate64,
+		/** @export */
 		__syscall_getcwd: ___syscall_getcwd,
+		/** @export */
 		__syscall_ioctl: ___syscall_ioctl,
+		/** @export */
 		__syscall_lstat64: ___syscall_lstat64,
+		/** @export */
 		__syscall_mkdirat: ___syscall_mkdirat,
+		/** @export */
 		__syscall_newfstatat: ___syscall_newfstatat,
+		/** @export */
 		__syscall_openat: ___syscall_openat,
+		/** @export */
 		__syscall_readlinkat: ___syscall_readlinkat,
+		/** @export */
 		__syscall_rmdir: ___syscall_rmdir,
+		/** @export */
 		__syscall_stat64: ___syscall_stat64,
+		/** @export */
 		__syscall_unlinkat: ___syscall_unlinkat,
+		/** @export */
 		__syscall_utimensat: ___syscall_utimensat,
+		/** @export */
 		_localtime_js: __localtime_js,
+		/** @export */
 		_mmap_js: __mmap_js,
+		/** @export */
 		_munmap_js: __munmap_js,
+		/** @export */
 		_tzset_js: __tzset_js,
+		/** @export */
 		clock_time_get: _clock_time_get,
+		/** @export */
 		emscripten_date_now: _emscripten_date_now,
+		/** @export */
 		emscripten_get_heap_max: _emscripten_get_heap_max,
+		/** @export */
 		emscripten_get_now: _emscripten_get_now,
+		/** @export */
 		emscripten_resize_heap: _emscripten_resize_heap,
+		/** @export */
 		environ_get: _environ_get,
+		/** @export */
 		environ_sizes_get: _environ_sizes_get,
+		/** @export */
 		fd_close: _fd_close,
+		/** @export */
 		fd_fdstat_get: _fd_fdstat_get,
+		/** @export */
 		fd_read: _fd_read,
+		/** @export */
 		fd_seek: _fd_seek,
+		/** @export */
 		fd_sync: _fd_sync,
+		/** @export */
 		fd_write: _fd_write,
+		/** @export */
 		memory: wasmMemory
 	};
 	function run() {
@@ -2929,15 +3006,66 @@ async function sqlite3InitModule(moduleArg = {}) {
 	}
 	var wasmExports = await createWasm();
 	run();
+	/**
+	post-js-header.js is to be prepended to other code to create
+	post-js.js for use with Emscripten's --post-js flag, so it gets
+	injected in the earliest stages of sqlite3InitModule().
+	
+	Running this function will bootstrap the library and return
+	a Promise to the sqlite3 namespace object.
+	
+	In the canonical builds, this gets called by extern-post-js.c-pp.js
+	*/
 	Module.runSQLite3PostLoadInit = async function(sqlite3InitScriptInfo, EmscriptenModule, sqlite3IsUnderTest) {
+		/** ^^^ Don't use Module.postRun, as that runs a different time
+		depending on whether this file is built with emcc 3.1.x or
+		4.0.x. This function name is intentionally obnoxiously verbose to
+		ensure that we don't collide with current and future Emscripten
+		symbol names. */
 		"use strict";
 		delete EmscriptenModule.runSQLite3PostLoadInit;
+		/* @preserve
+		**
+		** LICENSE for the sqlite3 WebAssembly/JavaScript APIs.
+		**
+		** This bundle (typically released as sqlite3.js or sqlite3.mjs)
+		** is an amalgamation of JavaScript source code from two projects:
+		**
+		** 1) https://emscripten.org: the Emscripten "glue code" is covered by
+		**    the terms of the MIT license and University of Illinois/NCSA
+		**    Open Source License, as described at:
+		**
+		**    https://emscripten.org/docs/introducing_emscripten/emscripten_license.html
+		**
+		** 2) https://sqlite.org: all code and documentation labeled as being
+		**    from this source are released under the same terms as the sqlite3
+		**    C library:
+		**
+		** 2022-10-16
+		**
+		** The author disclaims copyright to this source code.  In place of a
+		** legal notice, here is a blessing:
+		**
+		** *   May you do good and not evil.
+		** *   May you find forgiveness for yourself and forgive others.
+		** *   May you share freely, never taking more than you give.
+		*/
+		/* @preserve
+		** This code was built from sqlite3 version...
+		**
+		** SQLITE_VERSION "3.53.4"
+		** SQLITE_VERSION_NUMBER 3053004
+		** SQLITE_SOURCE_ID "2026-07-24 19:02:57 bf7c7f30031888f4e796e429ab3978879485813aaca6f641c7b33e4e09459bcc"
+		**
+		** Emscripten SDK: 5.0.5
+		*/
 		globalThis.sqlite3ApiBootstrap = async function sqlite3ApiBootstrap(apiConfig = globalThis.sqlite3ApiConfig || sqlite3ApiBootstrap.defaultConfig) {
 			if (sqlite3ApiBootstrap.sqlite3) {
 				(sqlite3ApiBootstrap.sqlite3.config || console).warn("sqlite3ApiBootstrap() called multiple times.", "Config and external initializers are ignored on calls after the first.");
 				return sqlite3ApiBootstrap.sqlite3;
 			}
-			const config = Object.assign(Object.create(null), {
+			const nu = (...obj) => Object.assign(Object.create(null), ...obj);
+			const config = nu({
 				exports: void 0,
 				memory: void 0,
 				bigIntEnabled: !!globalThis.BigInt64Array,
@@ -2946,8 +3074,15 @@ async function sqlite3InitModule(moduleArg = {}) {
 				error: console.error.bind(console),
 				log: console.log.bind(console),
 				wasmfsOpfsDir: "/opfs",
+				/**
+				useStdAlloc is just for testing allocator discrepancies. The
+				docs guarantee that this is false in the canonical builds. For
+				99% of purposes it doesn't matter which allocators we use, but
+				it becomes significant with, e.g., sqlite3_deserialize() and
+				certain wasm.xWrap.resultAdapter()s.
+				*/
 				useStdAlloc: false
-			}, apiConfig || {});
+			}, apiConfig);
 			Object.assign(config, {
 				allocExportName: config.useStdAlloc ? "malloc" : "sqlite3_malloc",
 				deallocExportName: config.useStdAlloc ? "free" : "sqlite3_free",
@@ -2961,37 +3096,104 @@ async function sqlite3InitModule(moduleArg = {}) {
 			].forEach((k) => {
 				if ("function" === typeof config[k]) config[k] = config[k]();
 			});
-			const capi = Object.create(null);
-			const wasm = Object.create(null);
+			/**
+			The main sqlite3 binding API gets installed into this object,
+			mimicking the C API as closely as we can. The numerous members
+			names with prefixes 'sqlite3_' and 'SQLITE_' behave, insofar as
+			possible, identically to the C-native counterparts, as documented at:
+			
+			https://sqlite.org/c3ref/intro.html
+			
+			A very few exceptions require an additional level of proxy
+			function or may otherwise require special attention in the WASM
+			environment, and all such cases are documented somewhere below
+			in this file or in sqlite3-api-glue.js. capi members which are
+			not documented are installed as 1-to-1 proxies for their
+			C-side counterparts.
+			*/
+			const capi = nu();
+			/**
+			Holds state which are specific to the WASM-related
+			infrastructure and glue code.
+			
+			Note that a number of members of this object are injected
+			dynamically after the api object is fully constructed, so
+			not all are documented in this file.
+			*/
+			const wasm = nu();
+			/** Internal helper for SQLite3Error ctor. */
 			const __rcStr = (rc) => {
 				return capi.sqlite3_js_rc_str && capi.sqlite3_js_rc_str(rc) || "Unknown result code #" + rc;
 			};
+			/** Internal helper for SQLite3Error ctor. */
 			const isInt32 = (n) => "number" === typeof n && n === (n | 0) && n <= 2147483647 && n >= -2147483648;
+			/**
+			An Error subclass specifically for reporting DB-level errors and
+			enabling clients to unambiguously identify such exceptions.
+			The C-level APIs never throw, but some of the higher-level
+			C-style APIs do and the object-oriented APIs use exceptions
+			exclusively to report errors.
+			*/
 			class SQLite3Error extends Error {
+				/**
+				Constructs this object with a message depending on its arguments:
+				
+				If its first argument is an integer, it is assumed to be
+				an SQLITE_... result code and it is passed to
+				sqlite3.capi.sqlite3_js_rc_str() to stringify it.
+				
+				If called with exactly 2 arguments and the 2nd is an object,
+				that object is treated as the 2nd argument to the parent
+				constructor.
+				
+				The exception's message is created by concatenating its
+				arguments with a space between each, except for the
+				two-args-with-an-object form and that the first argument will
+				get coerced to a string, as described above, if it's an
+				integer.
+				
+				If passed an integer first argument, the error object's
+				`resultCode` member will be set to the given integer value,
+				else it will be set to capi.SQLITE_ERROR.
+				*/
 				constructor(...args) {
 					let rc;
-					if (args.length) if (isInt32(args[0])) {
-						rc = args[0];
-						if (1 === args.length) super(__rcStr(args[0]));
-						else {
-							const rcStr = __rcStr(rc);
-							if ("object" === typeof args[1]) super(rcStr, args[1]);
+					if (args.length) {
+						if (isInt32(args[0])) {
+							rc = args[0];
+							if (1 === args.length) super(__rcStr(args[0]));
 							else {
-								args[0] = rcStr + ":";
-								super(args.join(" "));
+								const rcStr = __rcStr(rc);
+								if ("object" === typeof args[1]) super(rcStr, args[1]);
+								else {
+									args[0] = rcStr + ":";
+									super(args.join(" "));
+								}
 							}
-						}
-					} else if (2 === args.length && "object" === typeof args[1]) super(...args);
-					else super(args.join(" "));
+						} else if (2 === args.length && "object" === typeof args[1]) super(...args);
+						else super(args.join(" "));
+					}
 					this.resultCode = rc || capi.SQLITE_ERROR;
 					this.name = "SQLite3Error";
 				}
 			}
+			/**
+			Functionally equivalent to the SQLite3Error constructor but may
+			be used as part of an expression, e.g.:
+			
+			```
+			return someFunction(x) || SQLite3Error.toss(...);
+			```
+			*/
 			SQLite3Error.toss = (...args) => {
 				throw new SQLite3Error(...args);
 			};
 			const toss3 = SQLite3Error.toss;
 			if (config.wasmfsOpfsDir && !/^\/[^/]+$/.test(config.wasmfsOpfsDir)) toss3("config.wasmfsOpfsDir must be falsy or in the form '/dir-name'.");
+			/**
+			Returns true if the given BigInt value is small enough to fit
+			into an int64 value, else false.
+			*/
 			const bigIntFits64 = function f(b) {
 				if (!f._max) {
 					f._max = BigInt("0x7fffffffffffffff");
@@ -2999,7 +3201,15 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 				return b >= f._min && b <= f._max;
 			};
+			/**
+			Returns true if the given BigInt value is small enough to fit
+			into an int32, else false.
+			*/
 			const bigIntFits32 = (b) => b >= -2147483647n - 1n && b <= 2147483647n;
+			/**
+			Returns true if the given BigInt value is small enough to fit
+			into a double value without loss of precision, else false.
+			*/
 			const bigIntFitsDouble = function f(b) {
 				if (!f._min) {
 					f._min = Number.MIN_SAFE_INTEGER;
@@ -3007,19 +3217,61 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 				return b >= f._min && b <= f._max;
 			};
+			/** Returns v if v appears to be a TypedArray, else false. */
 			const isTypedArray = (v) => {
 				return v && v.constructor && isInt32(v.constructor.BYTES_PER_ELEMENT) ? v : false;
 			};
+			/**
+			Returns true if v appears to be one of our bind()-able TypedArray
+			types: Uint8Array or Int8Array or ArrayBuffer. Support for
+			TypedArrays with element sizes >1 is a potential TODO just
+			waiting on a use case to justify them. Until then, their `buffer`
+			property can be used to pass them as an ArrayBuffer. If it's not
+			a bindable array type, a falsy value is returned.
+			*/
 			const isBindableTypedArray = (v) => v && (v instanceof Uint8Array || v instanceof Int8Array || v instanceof ArrayBuffer);
+			/**
+			Returns true if v appears to be one of the TypedArray types
+			which is legal for holding SQL code (as opposed to binary blobs).
+			
+			Currently this is the same as isBindableTypedArray() but it
+			seems likely that we'll eventually want to add Uint32Array
+			and friends to the isBindableTypedArray() list but not to the
+			isSQLableTypedArray() list.
+			*/
 			const isSQLableTypedArray = (v) => v && (v instanceof Uint8Array || v instanceof Int8Array || v instanceof ArrayBuffer);
+			/** Returns true if isBindableTypedArray(v) does, else throws with a message
+			that v is not a supported TypedArray value. */
 			const affirmBindableTypedArray = (v) => isBindableTypedArray(v) || toss3("Value is not of a supported TypedArray type.");
+			/**
+			If v is-a Array, its join("") result is returned.  If
+			isSQLableTypedArray(v) is true then wasm.typedArrayToString(v) is
+			returned. If it looks like a WASM pointer, wasm.cstrToJs(v) is
+			returned. Else v is returned as-is.
+			
+			Reminder to self: the "return as-is" instead of returning ''+v is
+			arguably a design mistake but changing it is risky at this point.
+			*/
 			const flexibleString = function(v) {
 				if (isSQLableTypedArray(v)) return wasm.typedArrayToString(v instanceof ArrayBuffer ? new Uint8Array(v) : v, 0, v.length);
 				else if (Array.isArray(v)) return v.join("");
 				else if (wasm.isPtr(v)) v = wasm.cstrToJs(v);
 				return v;
 			};
+			/**
+			An Error subclass specifically for reporting Wasm-level malloc()
+			failure and enabling clients to unambiguously identify such
+			exceptions.
+			*/
 			class WasmAllocError extends Error {
+				/**
+				If called with 2 arguments and the 2nd one is an object, it
+				behaves like the Error constructor, else it concatenates all
+				arguments together with a single space between each to
+				construct an error message string. As a special case, if
+				called with no arguments then it uses a default error
+				message.
+				*/
 				constructor(...args) {
 					if (2 === args.length && "object" === typeof args[1]) super(...args);
 					else if (args.length) super(args.join(" "));
@@ -3028,20 +3280,322 @@ async function sqlite3InitModule(moduleArg = {}) {
 					this.name = "WasmAllocError";
 				}
 			}
+			/**
+			Functionally equivalent to the WasmAllocError constructor but may
+			be used as part of an expression, e.g.:
+			
+			```
+			return someAllocatingFunction(x) || WasmAllocError.toss(...);
+			```
+			*/
 			WasmAllocError.toss = (...args) => {
 				throw new WasmAllocError(...args);
 			};
 			Object.assign(capi, {
+				/**
+				sqlite3_bind_blob() works exactly like its C counterpart unless
+				its 3rd argument is one of:
+				
+				- JS string: the 3rd argument is converted to a C string, the
+				4th argument is ignored, and the C-string's length is used
+				in its place.
+				
+				- Array: converted to a string as defined for "flexible
+				strings" and then it's treated as a JS string.
+				
+				- Int8Array or Uint8Array: wasm.allocFromTypedArray() is used to
+				conver the memory to the WASM heap. If the 4th argument is
+				0 or greater, it is used as-is, otherwise the array's byteLength
+				value is used. This is an exception to the C API's undefined
+				behavior for a negative 4th argument, but results are undefined
+				if the given 4th argument value is greater than the byteLength
+				of the input array.
+				
+				- If it's an ArrayBuffer, it gets wrapped in a Uint8Array and
+				treated as that type.
+				
+				In all of those cases, the final argument (destructor) is
+				ignored and capi.SQLITE_WASM_DEALLOC is assumed.
+				
+				A 3rd argument of `null` is treated as if it were a WASM pointer
+				of 0.
+				
+				If the 3rd argument is neither a WASM pointer nor one of the
+				above-described types, capi.SQLITE_MISUSE is returned.
+				
+				The first argument may be either an `sqlite3_stmt*` WASM
+				pointer or an sqlite3.oo1.Stmt instance.
+				
+				For consistency with the C API, it requires the same number of
+				arguments. It returns capi.SQLITE_MISUSE if passed any other
+				argument count.
+				*/
 				sqlite3_bind_blob: void 0,
+				/**
+				sqlite3_bind_text() works exactly like its C counterpart unless
+				its 3rd argument is one of:
+				
+				- JS string: the 3rd argument is converted to a C string, the
+				4th argument is ignored, and the C-string's length is used
+				in its place.
+				
+				- Array: converted to a string as defined for "flexible
+				strings". The 4th argument is ignored and a value of -1
+				is assumed.
+				
+				- Int8Array or Uint8Array: is assumed to contain UTF-8 text, is
+				converted to a string. The 4th argument is ignored, replaced
+				by the array's byteLength value.
+				
+				- If it's an ArrayBuffer, it gets wrapped in a Uint8Array and
+				treated as that type.
+				
+				In each of those cases, the final argument (text destructor) is
+				ignored and capi.SQLITE_WASM_DEALLOC is assumed.
+				
+				A 3rd argument of `null` is treated as if it were a WASM pointer
+				of 0.
+				
+				If the 3rd argument is neither a WASM pointer nor one of the
+				above-described types, capi.SQLITE_MISUSE is returned.
+				
+				The first argument may be either an `sqlite3_stmt*` WASM
+				pointer or an sqlite3.oo1.Stmt instance.
+				
+				For consistency with the C API, it requires the same number of
+				arguments. It returns capi.SQLITE_MISUSE if passed any other
+				argument count.
+				
+				If client code needs to bind partial strings, it needs to
+				either parcel the string up before passing it in here or it
+				must pass in a WASM pointer for the 3rd argument and a valid
+				4th-argument value, taking care not to pass a value which
+				truncates a multi-byte UTF-8 character. When passing
+				WASM-format strings, it is important that the final argument be
+				valid or unexpected content can result, or WASM may crash if
+				the application reads past the WASM heap bounds.
+				*/
 				sqlite3_bind_text: void 0,
+				/**
+				sqlite3_create_function_v2() differs from its native
+				counterpart only in the following ways:
+				
+				1) The fourth argument (`eTextRep`) argument must not specify
+				any encoding other than sqlite3.SQLITE_UTF8. The JS API does not
+				currently support any other encoding and likely never
+				will. This function does not replace that argument on its own
+				because it may contain other flags. As a special case, if
+				the bottom 4 bits of that argument are 0, SQLITE_UTF8 is
+				assumed.
+				
+				2) Any of the four final arguments may be either WASM pointers
+				(assumed to be function pointers) or JS Functions. In the
+				latter case, each gets bound to WASM using
+				sqlite3.capi.wasm.installFunction() and that wrapper is passed
+				on to the native implementation.
+				
+				For consistency with the C API, it requires the same number of
+				arguments. It returns capi.SQLITE_MISUSE if passed any other
+				argument count.
+				
+				The semantics of JS functions are:
+				
+				xFunc: is passed `(pCtx, ...values)`. Its return value becomes
+				the new SQL function's result.
+				
+				xStep: is passed `(pCtx, ...values)`. Its return value is
+				ignored.
+				
+				xFinal: is passed `(pCtx)`. Its return value becomes the new
+				aggregate SQL function's result.
+				
+				xDestroy: is passed `(void*)`. Its return value is ignored. The
+				pointer passed to it is the one from the 5th argument to
+				sqlite3_create_function_v2().
+				
+				Note that:
+				
+				- `pCtx` in the above descriptions is a `sqlite3_context*`. At
+				least 99 times out of a hundred, that initial argument will
+				be irrelevant for JS UDF bindings, but it needs to be there
+				so that the cases where it _is_ relevant, in particular with
+				window and aggregate functions, have full access to the
+				lower-level sqlite3 APIs.
+				
+				- When wrapping JS functions, the remaining arguments are passd
+				to them as positional arguments, not as an array of
+				arguments, because that allows callback definitions to be
+				more JS-idiomatic than C-like. For example `(pCtx,a,b)=>a+b`
+				is more intuitive and legible than
+				`(pCtx,args)=>args[0]+args[1]`. For cases where an array of
+				arguments would be more convenient, the callbacks simply need
+				to be declared like `(pCtx,...args)=>{...}`, in which case
+				`args` will be an array.
+				
+				- If a JS wrapper throws, it gets translated to
+				sqlite3_result_error() or sqlite3_result_error_nomem(),
+				depending on whether the exception is an
+				sqlite3.WasmAllocError object or not.
+				
+				- When passing on WASM function pointers, arguments are _not_
+				converted or reformulated. They are passed on as-is in raw
+				pointer form using their native C signatures. Only JS
+				functions passed in to this routine, and thus wrapped by this
+				routine, get automatic conversions of arguments and result
+				values. The routines which perform those conversions are
+				exposed for client-side use as sqlite3_values_to_js(),
+				sqlite3_result_js(), and sqlite3_result_error_js().
+				
+				For xFunc(), xStep(), and xFinal():
+				
+				- When called from SQL, arguments to the UDF, and its result,
+				will be converted between JS and SQL with as much fidelity as
+				is feasible, triggering an exception if a type conversion
+				cannot be determined. Some freedom is afforded to numeric
+				conversions due to friction between the JS and C worlds:
+				integers which are larger than 32 bits may be treated as
+				doubles or BigInts.
+				
+				If any JS-side bound functions throw, those exceptions are
+				intercepted and converted to database-side errors with the
+				exception of xDestroy(): any exception from it is ignored,
+				possibly generating a console.error() message.  Destructors
+				must not throw.
+				
+				Automatically-converted JS-to-WASM functions will be cleaned up
+				either when (A) this function is called again with the same
+				name, arity, and encoding, but null/0 values for the functions,
+				or (B) when pDb is passed to sqlite3_close_v2(). If this factor
+				is relevant for a given client, they can create WASM-bound JS
+				functions themselves, hold on to their pointers, and pass the
+				pointers in to here. Later on, they can free those pointers
+				(using `wasm.uninstallFunction()` or equivalent).
+				
+				C reference: https://sqlite.org/c3ref/create_function.html
+				
+				Maintenance reminder: the ability to add new
+				WASM-accessible functions to the runtime requires that the
+				WASM build is compiled with emcc's `-sALLOW_TABLE_GROWTH`
+				flag.
+				*/
 				sqlite3_create_function_v2: (pDb, funcName, nArg, eTextRep, pApp, xFunc, xStep, xFinal, xDestroy) => {},
+				/**
+				Equivalent to passing the same arguments to
+				sqlite3_create_function_v2(), with 0 as the final argument.
+				*/
 				sqlite3_create_function: (pDb, funcName, nArg, eTextRep, pApp, xFunc, xStep, xFinal) => {},
+				/**
+				The sqlite3_create_window_function() JS wrapper differs from
+				its native implementation in the exact same way that
+				sqlite3_create_function_v2() does. The additional function,
+				xInverse(), is treated identically to xStep() by the wrapping
+				layer.
+				*/
 				sqlite3_create_window_function: (pDb, funcName, nArg, eTextRep, pApp, xStep, xFinal, xValue, xInverse, xDestroy) => {},
+				/**
+				The sqlite3_prepare_v3() binding handles two different uses
+				with differing JS/WASM semantics:
+				
+				1) sqlite3_prepare_v3(pDb, sqlString, -1, prepFlags, ppStmt , null)
+				
+				2) sqlite3_prepare_v3(pDb, sqlPointer, sqlByteLen, prepFlags, ppStmt, sqlPointerToPointer)
+				
+				The SQL length argument (the 3rd argument) must, for usage (1),
+				always be negative because it must be a byte length and that
+				value is expensive to calculate from JS (where only the
+				character length of strings is readily available). It is
+				retained in this API's interface for code/documentation
+				compatibility reasons but is currently _always_ ignored. With
+				usage (2), the 3rd argument is used as-is but is is still
+				critical that the C-style input string (2nd argument) be
+				terminated with a 0 byte.
+				
+				In usage (1), the 2nd argument must be of type string,
+				Uint8Array, Int8Array, or ArrayBuffer (all of which are assumed
+				to hold SQL). If it is, this function assumes case (1) and
+				calls the underyling C function with the equivalent of:
+				
+				(pDb, sqlAsString, -1, prepFlags, ppStmt, null)
+				
+				The `pzTail` argument is ignored in this case because its
+				result is meaningless when a string-type value is passed
+				through: the string goes through another level of internal
+				conversion for WASM's sake and the result pointer would refer
+				to that transient conversion's memory, not the passed-in
+				string.
+				
+				If the sql argument is not a string, it must be a _pointer_ to
+				a NUL-terminated string which was allocated in the WASM memory
+				(e.g. using capi.wasm.alloc() or equivalent). In that case,
+				the final argument may be 0/null/undefined or must be a pointer
+				to which the "tail" of the compiled SQL is written, as
+				documented for the C-side sqlite3_prepare_v3().
+				
+				In case (2), the underlying C function is called with the
+				equivalent of:
+				
+				(pDb, sqlAsPointer, sqlByteLen, prepFlags, ppStmt, pzTail)
+				
+				It returns its result and compiled statement as documented in
+				the C API. Fetching the output pointers (5th and 6th
+				parameters) requires using `capi.wasm.peek()` (or
+				equivalent) and the `pzTail` will point to an address relative to
+				the `sqlAsPointer` value.
+				
+				If passed an invalid 2nd argument type, this function will
+				return SQLITE_MISUSE and sqlite3_errmsg() will contain a string
+				describing the problem.
+				
+				Side-note: if given an empty string, or one which contains only
+				comments or an empty SQL expression, 0 is returned but the result
+				output pointer will be NULL.
+				*/
 				sqlite3_prepare_v3: (dbPtr, sql, sqlByteLen, prepFlags, stmtPtrPtr, strPtrPtr) => {},
+				/**
+				Equivalent to calling sqlite3_prapare_v3() with 0 as its 4th argument.
+				*/
 				sqlite3_prepare_v2: (dbPtr, sql, sqlByteLen, stmtPtrPtr, strPtrPtr) => {},
+				/**
+				This binding enables the callback argument to be a JavaScript.
+				
+				If the callback is a function, then for the duration of the
+				sqlite3_exec() call, it installs a WASM-bound function which
+				acts as a proxy for the given callback. That proxy will also
+				perform a conversion of the callback's arguments from
+				`(char**)` to JS arrays of strings. However, for API
+				consistency's sake it will still honor the C-level callback
+				parameter order and will call it like:
+				
+				`callback(pVoid, colCount, listOfValues, listOfColNames)`
+				
+				If the callback is not a JS function then this binding performs
+				no translation of the callback, but the sql argument is still
+				converted to a WASM string for the call using the
+				"string:flexible" argument converter.
+				*/
 				sqlite3_exec: (pDb, sql, callback, pVoid, pErrMsg) => {},
+				/**
+				If passed a single argument which appears to be a byte-oriented
+				TypedArray (Int8Array or Uint8Array), this function treats that
+				TypedArray as an output target, fetches `theArray.byteLength`
+				bytes of randomness, and populates the whole array with it. As
+				a special case, if the array's length is 0, this function
+				behaves as if it were passed (0,0). When called this way, it
+				returns its argument, else it returns the `undefined` value.
+				
+				If called with any other arguments, they are passed on as-is
+				to the C API. Results are undefined if passed any incompatible
+				values.
+				*/
 				sqlite3_randomness: (n, outPtr) => {}
 			});
+			/**
+			Various internal-use utilities are added here as needed. They
+			are bound to an object only so that we have access to them in
+			the differently-scoped steps of the API bootstrapping
+			process. At the end of the API setup process, this object gets
+			removed. These are NOT part of the public API.
+			*/
 			const util = {
 				affirmBindableTypedArray,
 				flexibleString,
@@ -3058,15 +3612,31 @@ async function sqlite3InitModule(moduleArg = {}) {
 				},
 				toss3,
 				typedArrayPart: wasm.typedArrayPart,
+				nu,
 				assert: function(arg, msg) {
 					if (!arg) util.toss("Assertion failed:", msg);
 				},
+				/**
+				Given a byte array or ArrayBuffer, this function throws if the
+				lead bytes of that buffer do not hold a SQLite3 database header,
+				else it returns without side effects.
+				
+				Added in 3.44.
+				*/
 				affirmDbHeader: function(bytes) {
 					if (bytes instanceof ArrayBuffer) bytes = new Uint8Array(bytes);
 					const header = "SQLite format 3";
 					if (15 > bytes.byteLength) toss3("Input does not contain an SQLite3 database header.");
 					for (let i = 0; i < 15; ++i) if (header.charCodeAt(i) !== bytes[i]) toss3("Input does not contain an SQLite3 database header.");
 				},
+				/**
+				Given a byte array or ArrayBuffer, this function throws if the
+				database does not, at a cursory glance, appear to be an SQLite3
+				database. It only examines the size and header, but further
+				checks may be added in the future.
+				
+				Added in 3.44.
+				*/
 				affirmIsDb: function(bytes) {
 					if (bytes instanceof ArrayBuffer) bytes = new Uint8Array(bytes);
 					const n = bytes.byteLength;
@@ -3074,16 +3644,121 @@ async function sqlite3InitModule(moduleArg = {}) {
 					util.affirmDbHeader(bytes);
 				}
 			};
+			/**
+			wasm.X properties which are used for configuring the wasm
+			environment via whwashutil.js. This object gets fleshed out with
+			a number of WASM-specific utilities, in sqlite3-api-glue.c-pp.js.
+			*/
 			Object.assign(wasm, {
+				/**
+				The symbols exported by the WASM environment.
+				*/
 				exports: config.exports || toss3("Missing API config.exports (WASM module exports)."),
+				/**
+				When Emscripten compiles with `-sIMPORTED_MEMORY`, it
+				initializes the heap and imports it into wasm, as opposed to
+				the other way around. In this case, the memory is not available
+				via this.exports.memory so the client must pass it in via
+				config.memory.
+				*/
 				memory: config.memory || config.exports["memory"] || toss3("API config object requires a WebAssembly.Memory object", "in either config.exports.memory (exported)", "or config.memory (imported)."),
+				/**
+				The WASM pointer size. If set then it MUST be one of 4 or 8 and
+				it MUST correspond to the WASM environment's pointer size. We
+				figure out the size by calling some un-JS-wrapped WASM function
+				which returns a pointer-type value. If that value is a BigInt,
+				it's 64-bit, else it's 32-bit. The pieces which populate
+				sqlite3.wasm (whwasmutil.js) can figure this out _if_ they can
+				allocate, but we have a chicken/egg situation there which makes
+				it illegal for that code to invoke wasm.dealloc() at the time
+				it would be needed. So we need to configure it ahead of time
+				(here) instead.
+				*/
 				pointerSize: "number" === typeof config.exports.sqlite3_libversion() ? 4 : 8,
+				/**
+				True if BigInt support was enabled via (e.g.) the
+				Emscripten -sWASM_BIGINT flag, else false. When
+				enabled, certain 64-bit sqlite3 APIs are enabled which
+				are not otherwise enabled due to JS/WASM int64
+				impedance mismatches.
+				*/
 				bigIntEnabled: !!config.bigIntEnabled,
+				/**
+				WebAssembly.Table object holding the indirect function call
+				table. Defaults to exports.__indirect_function_table.
+				*/
 				functionTable: config.functionTable,
+				/**
+				The API's primary point of access to the WASM-side memory
+				allocator.  Works like sqlite3_malloc() but throws a
+				WasmAllocError if allocation fails. It is important that any
+				code which might pass through the sqlite3 C API NOT throw and
+				must instead return SQLITE_NOMEM (or equivalent, depending on
+				the context).
+				
+				Very few cases in the sqlite3 JS APIs can result in
+				client-defined functions propagating exceptions via the C-style
+				API. Most notably, this applies to WASM-bound JS functions
+				which are created directly by clients and passed on _as WASM
+				function pointers_ to functions such as
+				sqlite3_create_function_v2(). Such bindings created
+				transparently by this API will automatically use wrappers which
+				catch exceptions and convert them to appropriate error codes.
+				
+				For cases where non-throwing allocation is required, use
+				this.alloc.impl(), which is the unadulterated WASM-exported
+				counterpart of this wrapper.
+				
+				Design note: this function is not named "malloc" primarily
+				because Emscripten uses that name and we wanted to avoid any
+				confusion early on in this code's development, when it still
+				had close ties to Emscripten's glue code.
+				*/
 				alloc: void 0,
+				/**
+				Rarely necessary in JS code, this routine works like
+				sqlite3_realloc(M,N), where M is either NULL or a pointer
+				obtained from this function or this.alloc() and N is the number
+				of bytes to reallocate the block to. Returns a pointer to the
+				reallocated block or 0 if allocation fails.
+				
+				If M is NULL and N is positive, this behaves like
+				this.alloc(N). If N is 0, it behaves like this.dealloc().
+				Results are undefined if N is negative (sqlite3_realloc()
+				treats that as 0, but if this code is built with a different
+				allocator it may misbehave with negative values).
+				
+				Like this.alloc.impl(), this.realloc.impl() is a direct binding
+				to the underlying realloc() implementation which does not throw
+				exceptions, instead returning 0 (or 0n) on allocation error.
+				*/
 				realloc: void 0,
+				/**
+				The API's primary point of access to the WASM-side memory
+				deallocator. Works like sqlite3_free().
+				
+				Design note: this function is not named "free" for the same
+				reason that this.alloc() is not called this.malloc().
+				*/
 				dealloc: void 0
 			});
+			/**
+			wasm.alloc()'s srcTypedArray.byteLength bytes,
+			populates them with the values from the source
+			TypedArray, and returns the pointer to that memory. The
+			returned pointer must eventually be passed to
+			wasm.dealloc() to clean it up.
+			
+			The argument may be a Uint8Array, Int8Array, or ArrayBuffer,
+			and it throws if passed any other type.
+			
+			As a special case, to avoid further special cases where
+			this is used, if srcTypedArray.byteLength is 0, it
+			allocates a single byte and sets it to the value
+			0. Even in such cases, calls must behave as if the
+			allocated memory has exactly srcTypedArray.byteLength
+			bytes.
+			*/
 			wasm.allocFromTypedArray = function(srcTypedArray) {
 				if (srcTypedArray instanceof ArrayBuffer) srcTypedArray = new Uint8Array(srcTypedArray);
 				affirmBindableTypedArray(srcTypedArray);
@@ -3112,6 +3787,35 @@ async function sqlite3InitModule(moduleArg = {}) {
 				};
 				wasm.dealloc.impl = wasm.exports[keyDealloc];
 			}
+			/**
+			Reports info about compile-time options using
+			sqlite3_compileoption_get() and sqlite3_compileoption_used(). It
+			has several distinct uses:
+			
+			If optName is an array then it is expected to be a list of
+			compilation options and this function returns an object
+			which maps each such option to true or false, indicating
+			whether or not the given option was included in this
+			build. That object is returned.
+			
+			If optName is an object, its keys are expected to be compilation
+			options and this function sets each entry to true or false,
+			indicating whether the compilation option was used or not. That
+			object is returned.
+			
+			If passed no arguments then it returns an object mapping
+			all known compilation options to their compile-time values,
+			or boolean true if they are defined with no value. This
+			result, which is relatively expensive to compute, is cached
+			and returned for future no-argument calls.
+			
+			In all other cases it returns true if the given option was
+			active when when compiling the sqlite3 module, else false.
+			
+			Compile-time option names may optionally include their
+			"SQLITE_" prefix. When it returns an object of all options,
+			the prefix is elided.
+			*/
 			wasm.compileOptionUsed = function f(optName) {
 				if (!arguments.length) {
 					if (f._result) return f._result;
@@ -3124,7 +3828,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 							rv[1] = m ? f._rxInt.test(m[2]) ? +m[2] : m[2] : true;
 						};
 					}
-					const rc = Object.create(null), ov = [0, 0];
+					const rc = nu(), ov = [0, 0];
 					let i = 0, k;
 					while (k = capi.sqlite3_compileoption_get(i++)) {
 						f._opt(k, ov);
@@ -3132,7 +3836,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 					}
 					return f._result = rc;
 				} else if (Array.isArray(optName)) {
-					const rc = Object.create(null);
+					const rc = nu();
 					optName.forEach((v) => {
 						rc[v] = capi.sqlite3_compileoption_used(v);
 					});
@@ -3145,12 +3849,87 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 				return "string" === typeof optName ? !!capi.sqlite3_compileoption_used(optName) : false;
 			};
-			wasm.pstack = Object.assign(Object.create(null), {
+			/**
+			sqlite3.wasm.pstack (pseudo-stack) holds a special-case allocator
+			intended solely for short-lived, small data. In practice, it's
+			primarily used to allocate output pointers. It must not be used
+			for any memory which needs to outlive the scope in which it's
+			obtained from pstack.
+			
+			The library guarantees only that a minimum of 2kb are available
+			in this allocator, and it may provide more (it's a build-time
+			value). pstack.quota and pstack.remaining can be used to get the
+			total resp. remaining amount of memory.
+			
+			It has only a single intended usage pattern:
+			
+			```
+			const stackPos = pstack.pointer;
+			try{
+			const ptr = pstack.alloc(8);
+			// ==> pstack.pointer === ptr
+			const otherPtr = pstack.alloc(8);
+			// ==> pstack.pointer === otherPtr
+			...
+			}finally{
+			pstack.restore(stackPos);
+			// ==> pstack.pointer === stackPos
+			}
+			```
+			
+			This allocator is much faster than a general-purpose one but is
+			limited to usage patterns like the one shown above (which are
+			pretty common when using sqlite3.capi).
+			
+			The memory lives in the WASM heap and can be used with routines
+			such as wasm.poke() and wasm.heap8u().slice().
+			*/
+			wasm.pstack = nu({
+				/**
+				Sets the current pstack position to the given pointer. Results
+				are undefined if the passed-in value did not come from
+				this.pointer.
+				
+				In debug builds this may trigger an assert() in the WASM
+				environment if passed an illegal value.
+				*/
 				restore: wasm.exports.sqlite3__wasm_pstack_restore,
+				/**
+				Attempts to allocate the given number of bytes from the
+				pstack. On success, it zeroes out a block of memory of the
+				given size, adjusts the pstack pointer, and returns a pointer
+				to the memory. On error, throws a WasmAllocError. The
+				memory must eventually be released using restore().
+				
+				If n is a string, it must be a WASM "IR" value in the set
+				accepted by wasm.sizeofIR(), which is mapped to the size of
+				that data type. If passed a string not in that set, it throws a
+				WasmAllocError.
+				
+				This method always adjusts the given value to be a multiple
+				of 8 bytes because failing to do so can lead to incorrect
+				results when reading and writing 64-bit values from/to the WASM
+				heap. Similarly, the returned address is always 8-byte aligned.
+				*/
 				alloc: function(n) {
 					if ("string" === typeof n && !(n = wasm.sizeofIR(n))) WasmAllocError.toss("Invalid value for pstack.alloc(", arguments[0], ")");
 					return wasm.exports.sqlite3__wasm_pstack_alloc(n) || WasmAllocError.toss("Could not allocate", n, "bytes from the pstack.");
 				},
+				/**
+				alloc()'s n chunks, each sz bytes, as a single memory block and
+				returns the addresses as an array of n element, each holding
+				the address of one chunk.
+				
+				sz may optionally be an IR string accepted by wasm.sizeofIR().
+				
+				Throws a WasmAllocError if allocation fails.
+				
+				Example:
+				
+				```
+				const [p1, p2, p3] = wasm.pstack.allocChunks(3, wasm.ptr.size);
+				```
+				*/
 				allocChunks: function(n, sz) {
 					if ("string" === typeof sz && !(sz = wasm.sizeofIR(sz))) WasmAllocError.toss("Invalid size value for allocChunks(", arguments[1], ")");
 					const mem = wasm.pstack.alloc(n * sz);
@@ -3159,9 +3938,36 @@ async function sqlite3InitModule(moduleArg = {}) {
 					for (; i < n; ++i, offset += sz) rc.push(wasm.ptr.add(mem, offset));
 					return rc;
 				},
+				/**
+				A convenience wrapper for allocChunks() which sizes each chunk
+				as either 8 bytes (safePtrSize is truthy) or wasm.ptr.size (if
+				safePtrSize is falsy).
+				
+				How it returns its result differs depending on its first
+				argument: if it's 1, it returns a single pointer value. If it's
+				more than 1, it returns the same as allocChunks().
+				
+				When a returned pointer will refer to a 64-bit value, e.g. a
+				double or int64, and that value must be written or fetched,
+				e.g. using wasm.poke() or wasm.peek(), it is
+				important that the pointer in question be aligned to an 8-byte
+				boundary or else it will not be fetched or written properly and
+				will corrupt or read neighboring memory.
+				
+				However, when all pointers involved point to "small" data, it
+				is safe to pass a falsy value to save a tiny bit of memory.
+				*/
 				allocPtr: (n = 1, safePtrSize = true) => {
 					return 1 === n ? wasm.pstack.alloc(safePtrSize ? 8 : wasm.ptr.size) : wasm.pstack.allocChunks(n, safePtrSize ? 8 : wasm.ptr.size);
 				},
+				/**
+				Records the current pstack position, calls the given function,
+				passing it the sqlite3 object, then restores the pstack
+				regardless of whether the function throws. Returns the result
+				of the call or propagates an exception on error.
+				
+				Added in 3.44.
+				*/
 				call: function(f) {
 					const stackPos = wasm.pstack.pointer;
 					try {
@@ -3172,18 +3978,34 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 			});
 			Object.defineProperties(wasm.pstack, {
+				/**
+				Resolves to the current pstack position pointer either as a
+				Number (32-bit WASM) or BigInt (64-bit WASM). This value is
+				intended _only_ to be saved for passing to restore(). Writing
+				to this memory, without first reserving it via
+				wasm.pstack.alloc() and friends, leads to undefined results.
+				*/
 				pointer: {
 					configurable: false,
 					iterable: true,
 					writeable: false,
 					get: wasm.exports.sqlite3__wasm_pstack_ptr
 				},
+				/**
+				Resolves to the total number of bytes available in the pstack
+				allocator, including any space which is currently
+				allocated. This value is a compile-time constant.
+				*/
 				quota: {
 					configurable: false,
 					iterable: true,
 					writeable: false,
 					get: wasm.exports.sqlite3__wasm_pstack_quota
 				},
+				/**
+				Resolves to the number of bytes remaining in the pstack
+				allocator.
+				*/
 				remaining: {
 					configurable: false,
 					iterable: true,
@@ -3191,6 +4013,9 @@ async function sqlite3InitModule(moduleArg = {}) {
 					get: wasm.exports.sqlite3__wasm_pstack_remaining
 				}
 			});
+			/**
+			Docs: https://sqlite.org/wasm/doc/trunk/api-c-style.md#sqlite3_randomness
+			*/
 			capi.sqlite3_randomness = (...args) => {
 				if (1 === args.length && util.isTypedArray(args[0]) && 1 === args[0].BYTES_PER_ELEMENT) {
 					const ta = args[0];
@@ -3221,6 +4046,28 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 				wasm.exports.sqlite3_randomness(...args);
 			};
+			/**
+			If the wasm environment has a WASMFS/OPFS-backed persistent
+			storage directory, its path is returned by this function. If it
+			does not then it returns "" (noting that "" is a falsy value).
+			
+			The first time this is called, this function inspects the current
+			environment to determine whether WASMFS persistence support is
+			available and, if it is, enables it (if needed). After the first
+			call it always returns the cached result.
+			
+			If the returned string is not empty, any files stored under the
+			returned path (recursively) are housed in OPFS storage. If the
+			returned string is empty, this particular persistent storage
+			option is not available on the client.
+			
+			Though the mount point name returned by this function is intended
+			to remain stable, clients should not hard-coded it anywhere.
+			Always call this function to get the path.
+			
+			This function is a no-op in most builds of this library, as the
+			WASMFS capability requires a custom build.
+			*/
 			capi.sqlite3_wasmfs_opfs_dir = function() {
 				if (void 0 !== this.dir) return this.dir;
 				const pdir = config.wasmfsOpfsDir;
@@ -3231,11 +4078,39 @@ async function sqlite3InitModule(moduleArg = {}) {
 				} catch (e) {
 					return this.dir = "";
 				}
-			}.bind(Object.create(null));
+			}.bind(nu());
+			/**
+			Returns true if sqlite3.capi.sqlite3_wasmfs_opfs_dir() is a
+			non-empty string and the given name starts with (that string +
+			'/'), else returns false.
+			*/
 			capi.sqlite3_wasmfs_filename_is_persistent = function(name) {
 				const p = capi.sqlite3_wasmfs_opfs_dir();
 				return p && name ? name.startsWith(p + "/") : false;
 			};
+			/**
+			Given an `sqlite3*`, an sqlite3_vfs name, and an optional db name
+			(defaulting to "main"), returns a truthy value (see below) if
+			that db uses that VFS, else returns false. If pDb is falsy then
+			the 3rd argument is ignored and this function returns a truthy
+			value if the default VFS name matches that of the 2nd argument.
+			Results are undefined if pDb is truthy but refers to an invalid
+			pointer. The 3rd argument specifies the database name of the
+			given database connection to check, defaulting to the main db.
+			
+			The 2nd and 3rd arguments may either be a JS string or a WASM
+			C-string. If the 2nd argument is a NULL WASM pointer, the default
+			VFS is assumed. If the 3rd is a NULL WASM pointer, "main" is
+			assumed.
+			
+			The truthy value it returns is a pointer to the `sqlite3_vfs`
+			object.
+			
+			To permit safe use of this function from APIs which may be called
+			via C (like SQL UDFs), this function does not throw: if bad
+			arguments cause a conversion error when passing into wasm-space,
+			false is returned.
+			*/
 			capi.sqlite3_js_db_uses_vfs = function(pDb, vfsName, dbName = 0) {
 				try {
 					const pK = capi.sqlite3_vfs_find(vfsName);
@@ -3246,6 +4121,10 @@ async function sqlite3InitModule(moduleArg = {}) {
 					return false;
 				}
 			};
+			/**
+			Returns an array of the names of all currently-registered sqlite3
+			VFSes.
+			*/
 			capi.sqlite3_js_vfs_list = function() {
 				const rc = [];
 				let pVfs = capi.sqlite3_vfs_find(wasm.ptr.null);
@@ -3257,6 +4136,19 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 				return rc;
 			};
+			/**
+			A convenience wrapper around sqlite3_serialize() which serializes
+			the given `sqlite3*` pointer to a Uint8Array. The first argument
+			may be either an `sqlite3*` or an sqlite3.oo1.DB instance.
+			
+			On success it returns a Uint8Array. If the schema is empty, an
+			empty array is returned.
+			
+			`schema` is the schema to serialize. It may be a WASM C-string
+			pointer or a JS string. If it is falsy, it defaults to `"main"`.
+			
+			On error it throws with a description of the problem.
+			*/
 			capi.sqlite3_js_db_export = function(pDb, schema = 0) {
 				pDb = wasm.xWrap.testConvertArg("sqlite3*", pDb);
 				if (!pDb) toss3("Invalid sqlite3* argument.");
@@ -3266,22 +4158,68 @@ async function sqlite3InitModule(moduleArg = {}) {
 				try {
 					const pSize = wasm.scopedAlloc(8 + wasm.ptr.size);
 					const ppOut = wasm.ptr.add(pSize, 8);
+					/**
+					Maintenance reminder, since this cost a full hour of grief
+					and confusion: if the order of pSize/ppOut are reversed in
+					that memory block, fetching the value of pSize after the
+					export reads a garbage size because it's not on an 8-byte
+					memory boundary!
+					*/
 					const zSchema = schema ? wasm.isPtr(schema) ? schema : wasm.scopedAllocCString("" + schema) : wasm.ptr.null;
 					let rc = wasm.exports.sqlite3__wasm_db_serialize(pDb, zSchema, ppOut, pSize, 0);
 					if (rc) toss3("Database serialization failed with code", sqlite3.capi.sqlite3_js_rc_str(rc));
 					pOut = wasm.peekPtr(ppOut);
 					const nOut = wasm.peek(pSize, "i64");
-					rc = nOut ? wasm.heap8u().slice(Number(pOut), Number(pOut) + Number(nOut)) : new Uint8Array();
+					rc = nOut ? wasm.heap8u().slice(Number(pOut), Number(pOut) + Number(nOut)) : /* @__PURE__ */ new Uint8Array();
 					return rc;
 				} finally {
 					if (pOut) wasm.exports.sqlite3_free(pOut);
 					wasm.scopedAllocPop(scope);
 				}
 			};
+			/**
+			Given a `sqlite3*` and a database name (JS string or WASM
+			C-string pointer, which may be 0), returns a pointer to the
+			sqlite3_vfs responsible for it. If the given db name is null/0,
+			or not provided, then "main" is assumed.
+			*/
 			capi.sqlite3_js_db_vfs = (dbPointer, dbName = wasm.ptr.null) => util.sqlite3__wasm_db_vfs(dbPointer, dbName);
+			/**
+			A thin wrapper around capi.sqlite3_aggregate_context() which
+			behaves the same except that it throws a WasmAllocError if that
+			function returns 0. As a special case, if n is falsy it does
+			_not_ throw if that function returns 0. That special case is
+			intended for use with xFinal() implementations.
+			*/
 			capi.sqlite3_js_aggregate_context = (pCtx, n) => {
 				return capi.sqlite3_aggregate_context(pCtx, n) || (n ? WasmAllocError.toss("Cannot allocate", n, "bytes for sqlite3_aggregate_context()") : 0);
 			};
+			/**
+			If the current environment supports the POSIX file APIs, this routine
+			creates (or overwrites) the given file using those APIs. This is
+			primarily intended for use in Emscripten-based builds where the POSIX
+			APIs are transparently proxied by an in-memory virtual filesystem.
+			It may behave differently in other environments.
+			
+			The first argument must be either a JS string or WASM C-string
+			holding the filename. This routine does _not_ create intermediary
+			directories if the filename has a directory part.
+			
+			The 2nd argument may either a valid WASM memory pointer, an
+			ArrayBuffer, or a Uint8Array. The 3rd must be the length, in
+			bytes, of the data array to copy. If the 2nd argument is an
+			ArrayBuffer or Uint8Array and the 3rd is not a positive integer
+			then the 3rd defaults to the array's byteLength value.
+			
+			Results are undefined if data is a WASM pointer and dataLen is
+			exceeds data's bounds.
+			
+			Throws if any arguments are invalid or if creating or writing to
+			the file fails.
+			
+			Added in 3.43 as an alternative for the deprecated
+			sqlite3_js_vfs_create_file().
+			*/
 			capi.sqlite3_js_posix_create_file = function(filename, data, dataLen) {
 				let pData;
 				if (data && wasm.isPtr(data)) pData = data;
@@ -3297,18 +4235,92 @@ async function sqlite3InitModule(moduleArg = {}) {
 					if (pData && pData !== data) wasm.dealloc(pData);
 				}
 			};
+			/**
+			Deprecation warning: this function does not work properly in
+			debug builds of sqlite3 because its out-of-scope use of the
+			sqlite3_vfs API triggers assertions in the core library.  That
+			was unfortunately not discovered until 2023-08-11. This function
+			is now deprecated. It should not be used in new code and should
+			be removed from existing code.
+			
+			Alternative options:
+			
+			- The "unix" VFS and its variants can get equivalent
+			functionality with sqlite3_js_posix_create_file().
+			
+			- OPFS: use either sqlite3.oo1.OpfsDb.importDb(), for the "opfs"
+			VFS, or the importDb() method of the PoolUtil object provided
+			by the "opfs-sahpool" OPFS (noting that its VFS name may differ
+			depending on client-side configuration). We cannot proxy those
+			from here because the former is necessarily asynchronous and
+			the latter requires information not available to this function.
+			
+			Historical (deprecated) behaviour:
+			
+			Creates a file using the storage appropriate for the given
+			sqlite3_vfs.  The first argument may be a VFS name (JS string
+			only, NOT a WASM C-string), WASM-managed `sqlite3_vfs*`, or
+			a capi.sqlite3_vfs instance. Pass 0 (a NULL pointer) to use the
+			default VFS. If passed a string which does not resolve using
+			sqlite3_vfs_find(), an exception is thrown. (Note that a WASM
+			C-string is not accepted because it is impossible to
+			distinguish from a C-level `sqlite3_vfs*`.)
+			
+			The second argument, the filename, must be a JS or WASM C-string.
+			
+			The 3rd may either be falsy, a valid WASM memory pointer, an
+			ArrayBuffer, or a Uint8Array. The 4th must be the length, in
+			bytes, of the data array to copy. If the 3rd argument is an
+			ArrayBuffer or Uint8Array and the 4th is not a positive integer
+			then the 4th defaults to the array's byteLength value.
+			
+			If data is falsy then a file is created with dataLen bytes filled
+			with uninitialized data (whatever truncate() leaves there). If
+			data is not falsy then a file is created or truncated and it is
+			filled with the first dataLen bytes of the data source.
+			
+			Throws if any arguments are invalid or if creating or writing to
+			the file fails.
+			
+			Note that most VFSes do _not_ automatically create directory
+			parts of filenames, nor do all VFSes have a concept of
+			directories.  If the given filename is not valid for the given
+			VFS, an exception will be thrown. This function exists primarily
+			to assist in implementing file-upload capability, with the caveat
+			that clients must have some idea of the VFS into which they want
+			to upload and that VFS must support the operation.
+			
+			VFS-specific notes:
+			
+			- "memdb": results are undefined.
+			
+			- "kvvfs": will fail with an I/O error due to strict internal
+			requirements of that VFS's xTruncate().
+			
+			- "unix" and related: will use the WASM build's equivalent of the
+			POSIX I/O APIs. This will work so long as neither a specific
+			VFS nor the WASM environment imposes requirements which break
+			it.  (Much later: it turns out that debug builds of the library
+			impose such requirements, in that they assert() that dataLen is
+			an even multiple of a valid db page size.)
+			
+			- "opfs": uses OPFS storage and creates directory parts of the
+			filename. It can only be used to import an SQLite3 database
+			file and will fail if given anything else.
+			*/
 			capi.sqlite3_js_vfs_create_file = function(vfs, filename, data, dataLen) {
 				config.warn("sqlite3_js_vfs_create_file() is deprecated and", "should be avoided because it can lead to C-level crashes.", "See its documentation for alternatives.");
 				let pData;
-				if (data) if (wasm.isPtr(data)) pData = data;
-				else {
-					if (data instanceof ArrayBuffer) data = new Uint8Array(data);
-					if (data instanceof Uint8Array) {
-						pData = wasm.allocFromTypedArray(data);
-						if (arguments.length < 4 || !util.isInt32(dataLen) || dataLen < 0) dataLen = data.byteLength;
-					} else SQLite3Error.toss("Invalid 3rd argument type for sqlite3_js_vfs_create_file().");
-				}
-				else pData = 0;
+				if (data) {
+					if (wasm.isPtr(data)) pData = data;
+					else {
+						if (data instanceof ArrayBuffer) data = new Uint8Array(data);
+						if (data instanceof Uint8Array) {
+							pData = wasm.allocFromTypedArray(data);
+							if (arguments.length < 4 || !util.isInt32(dataLen) || dataLen < 0) dataLen = data.byteLength;
+						} else SQLite3Error.toss("Invalid 3rd argument type for sqlite3_js_vfs_create_file().");
+					}
+				} else pData = 0;
 				if (!util.isInt32(dataLen) || dataLen < 0) {
 					if (pData && pData !== data) wasm.dealloc(pData);
 					SQLite3Error.toss("Invalid 4th argument for sqlite3_js_vfs_create_file().");
@@ -3320,11 +4332,34 @@ async function sqlite3InitModule(moduleArg = {}) {
 					if (pData && pData !== data) wasm.dealloc(pData);
 				}
 			};
+			/**
+			Converts SQL input from a variety of convenient formats
+			to plain strings.
+			
+			If v is a string, it is returned as-is. If it is-a Array, its
+			join("") result is returned.  If is is a Uint8Array, Int8Array,
+			or ArrayBuffer, it is assumed to hold UTF-8-encoded text and is
+			decoded to a string. If it looks like a WASM pointer,
+			wasm.cstrToJs(sql) is returned. Else undefined is returned.
+			
+			Added in 3.44
+			*/
 			capi.sqlite3_js_sql_to_string = (sql) => {
 				if ("string" === typeof sql) return sql;
 				const x = flexibleString(v);
 				return x === v ? void 0 : x;
 			};
+			/**
+			Wraps all known variants of the C-side variadic
+			sqlite3_db_config().
+			
+			Full docs: https://sqlite.org/c3ref/db_config.html
+			
+			Returns capi.SQLITE_MISUSE if op is not a valid operation ID.
+			
+			The variants which take `(int, int*)` arguments treat a
+			missing or falsy pointer argument as 0.
+			*/
 			capi.sqlite3_db_config = function(pDb, op, ...args) {
 				switch (op) {
 					case capi.SQLITE_DBCONFIG_ENABLE_FKEY:
@@ -3348,6 +4383,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 					case capi.SQLITE_DBCONFIG_ENABLE_ATTACH_CREATE:
 					case capi.SQLITE_DBCONFIG_ENABLE_ATTACH_WRITE:
 					case capi.SQLITE_DBCONFIG_ENABLE_COMMENTS:
+					case capi.SQLITE_DBCONFIG_FP_DIGITS:
 						if (!this.ip) this.ip = wasm.xWrap("sqlite3__wasm_db_config_ip", "int", [
 							"sqlite3*",
 							"int",
@@ -3373,7 +4409,29 @@ async function sqlite3InitModule(moduleArg = {}) {
 						return this.s(pDb, op, args[0]);
 					default: return capi.SQLITE_MISUSE;
 				}
-			}.bind(Object.create(null));
+			}.bind(nu());
+			/**
+			Given a (sqlite3_value*), this function attempts to convert it
+			to an equivalent JS value with as much fidelity as feasible and
+			return it.
+			
+			By default it throws if it cannot determine any sensible
+			conversion. If passed a falsy second argument, it instead returns
+			`undefined` if no suitable conversion is found.  Note that there
+			is no conversion from SQL to JS which results in the `undefined`
+			value, so `undefined` has an unambiguous meaning here.  It will
+			always throw a WasmAllocError if allocating memory for a
+			conversion fails.
+			
+			Caveats:
+			
+			- It does not support sqlite3_value_to_pointer() conversions
+			because those require a type name string which this function
+			does not have and cannot sensibly be given at the level of the
+			API where this is used (e.g. automatically converting UDF
+			arguments). Clients using sqlite3_value_to_pointer(), and its
+			related APIs, will need to manage those themselves.
+			*/
 			capi.sqlite3_value_to_js = function(pVal, throwIfCannotConvert = true) {
 				let arg;
 				const valType = capi.sqlite3_value_type(pVal);
@@ -3406,16 +4464,64 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 				return arg;
 			};
+			/**
+			Requires a C-style array of `sqlite3_value*` objects and the
+			number of entries in that array. Returns a JS array containing
+			the results of passing each C array entry to
+			sqlite3_value_to_js(). The 3rd argument to this function is
+			passed on as the 2nd argument to that one.
+			*/
 			capi.sqlite3_values_to_js = function(argc, pArgv, throwIfCannotConvert = true) {
 				let i;
 				const tgt = [];
-				for (i = 0; i < argc; ++i) tgt.push(capi.sqlite3_value_to_js(wasm.peekPtr(wasm.ptr.add(pArgv, wasm.ptr.size * i)), throwIfCannotConvert));
+				for (i = 0; i < argc; ++i)
+ /**
+				Curiously: despite ostensibly requiring 8-byte
+				alignment, the pArgv array is parcelled into chunks of
+				4 bytes (1 pointer each). The values those point to
+				have 8-byte alignment but the individual argv entries
+				do not.
+				*/
+				tgt.push(capi.sqlite3_value_to_js(wasm.peekPtr(wasm.ptr.add(pArgv, wasm.ptr.size * i)), throwIfCannotConvert));
 				return tgt;
 			};
+			/**
+			Calls either sqlite3_result_error_nomem(), if e is-a
+			WasmAllocError, or sqlite3_result_error(). In the latter case,
+			the second argument is coerced to a string to create the error
+			message.
+			
+			The first argument is a (sqlite3_context*). Returns void.
+			Does not throw.
+			*/
 			capi.sqlite3_result_error_js = function(pCtx, e) {
 				if (e instanceof WasmAllocError) capi.sqlite3_result_error_nomem(pCtx);
 				else capi.sqlite3_result_error(pCtx, "" + e, -1);
 			};
+			/**
+			This function passes its 2nd argument to one of the
+			sqlite3_result_xyz() routines, depending on the type of that
+			argument:
+			
+			- If (val instanceof Error), this function passes it to
+			sqlite3_result_error_js().
+			- `null`: `sqlite3_result_null()`
+			- `boolean`: `sqlite3_result_int()` with a value of 0 or 1.
+			- `number`: `sqlite3_result_int()`, `sqlite3_result_int64()`, or
+			`sqlite3_result_double()`, depending on the range of the number
+			and whether or not int64 support is enabled.
+			- `bigint`: similar to `number` but will trigger an error if the
+			value is too big to store in an int64.
+			- `string`: `sqlite3_result_text()`
+			- Uint8Array or Int8Array or ArrayBuffer: `sqlite3_result_blob()`
+			- `undefined`: is a no-op provided to simplify certain use cases.
+			
+			Anything else triggers `sqlite3_result_error()` with a
+			description of the problem.
+			
+			The first argument to this function is a `(sqlite3_context*)`.
+			Returns void. Does not throw.
+			*/
 			capi.sqlite3_result_js = function(pCtx, val) {
 				if (val instanceof Error) {
 					capi.sqlite3_result_error_js(pCtx, val);
@@ -3430,9 +4536,10 @@ async function sqlite3InitModule(moduleArg = {}) {
 						case "bigint":
 							if (util.bigIntFits32(val)) capi.sqlite3_result_int(pCtx, Number(val));
 							else if (util.bigIntFitsDouble(val)) capi.sqlite3_result_double(pCtx, Number(val));
-							else if (wasm.bigIntEnabled) if (util.bigIntFits64(val)) capi.sqlite3_result_int64(pCtx, val);
-							else toss3("BigInt value", val.toString(), "is too BigInt for int64.");
-							else toss3("BigInt value", val.toString(), "is too BigInt.");
+							else if (wasm.bigIntEnabled) {
+								if (util.bigIntFits64(val)) capi.sqlite3_result_int64(pCtx, val);
+								else toss3("BigInt value", val.toString(), "is too BigInt for int64.");
+							} else toss3("BigInt value", val.toString(), "is too BigInt.");
 							break;
 						case "number": {
 							let f;
@@ -3461,11 +4568,29 @@ async function sqlite3InitModule(moduleArg = {}) {
 					capi.sqlite3_result_error_js(pCtx, e);
 				}
 			};
+			/**
+			Returns the result sqlite3_column_value(pStmt,iCol) passed to
+			sqlite3_value_to_js(). The 3rd argument of this function is
+			ignored by this function except to pass it on as the second
+			argument of sqlite3_value_to_js(). If the sqlite3_column_value()
+			returns NULL (e.g. because the column index is out of range),
+			this function returns `undefined`, regardless of the 3rd
+			argument. If the 3rd argument is falsy and conversion fails,
+			`undefined` will be returned.
+			
+			Note that sqlite3_column_value() returns an "unprotected" value
+			object, but in a single-threaded environment (like this one)
+			there is no distinction between protected and unprotected values.
+			*/
 			capi.sqlite3_column_js = function(pStmt, iCol, throwIfCannotConvert = true) {
 				const v = capi.sqlite3_column_value(pStmt, iCol);
 				return 0 === v ? void 0 : capi.sqlite3_value_to_js(v, throwIfCannotConvert);
 			};
 			{
+				/**
+				Internal impl of sqlite3_preupdate_new/old_js() and
+				sqlite3changeset_new/old_js().
+				*/
 				const __newOldValue = function(pObj, iCol, impl) {
 					impl = capi[impl];
 					if (!this.ptr) this.ptr = wasm.allocPtr();
@@ -3474,12 +4599,83 @@ async function sqlite3InitModule(moduleArg = {}) {
 					if (rc) return SQLite3Error.toss(rc, arguments[2] + "() failed with code " + rc);
 					const pv = wasm.peekPtr(this.ptr);
 					return pv ? capi.sqlite3_value_to_js(pv, true) : void 0;
-				}.bind(Object.create(null));
+				}.bind(nu());
+				/**
+				A wrapper around sqlite3_preupdate_new() which fetches the
+				sqlite3_value at the given index and returns the result of
+				passing it to sqlite3_value_to_js(). Throws on error.
+				*/
 				capi.sqlite3_preupdate_new_js = (pDb, iCol) => __newOldValue(pDb, iCol, "sqlite3_preupdate_new");
+				/**
+				The sqlite3_preupdate_old() counterpart of
+				sqlite3_preupdate_new_js(), with an identical interface.
+				*/
 				capi.sqlite3_preupdate_old_js = (pDb, iCol) => __newOldValue(pDb, iCol, "sqlite3_preupdate_old");
+				/**
+				A wrapper around sqlite3changeset_new() which fetches the
+				sqlite3_value at the given index and returns the result of
+				passing it to sqlite3_value_to_js(). Throws on error.
+				
+				If sqlite3changeset_new() succeeds but has no value to report,
+				this function returns the undefined value, noting that
+				undefined is not a valid conversion from an `sqlite3_value`, so
+				is unambiguous.
+				*/
 				capi.sqlite3changeset_new_js = (pChangesetIter, iCol) => __newOldValue(pChangesetIter, iCol, "sqlite3changeset_new");
+				/**
+				The sqlite3changeset_old() counterpart of
+				sqlite3changeset_new_js(), with an identical interface.
+				*/
 				capi.sqlite3changeset_old_js = (pChangesetIter, iCol) => __newOldValue(pChangesetIter, iCol, "sqlite3changeset_old");
 			}
+			/**
+			sqlite3_js_retry_busy(maxTimes,callback[,beforeRetry])
+			
+			Calls the given _synchronous_ callback function. If that function
+			returns sqlite3.capi.SQLITE_BUSY _or_ throws an SQLite3Error
+			with a resultCode property of that value then it will suppress
+			that error and try again, up to the given maximum number of
+			times. If the callback returns any other value than that,
+			it is returned. If the maximum number of retries has been
+			reached, an SQLite3Error with a resultCode value of
+			sqlite3.capi.SQLITE_BUSY is thrown. If the callback throws any
+			exception other than the aforementioned BUSY exception, it is
+			propagated. If it throws a BUSY exception on its final attempt,
+			that is propagated as well.
+			
+			If the beforeRetry argument is given, it must be a _synchronous_
+			function.  It is called immediately before each retry of the
+			callback (not for the initial call), passed the attempt number
+			(so it starts with 2, not 1). If it throws, the exception is
+			handled as described above. Its result value is ignored.
+			
+			To effectively retry "forever", pass a huge maxTimes value such
+			as Number.MAX_SAFE_INTEGER, with the caveat that there is no
+			recovery from that unless the beforeRetry() can figure out when
+			to throw.
+			
+			Added in 3.53.0.
+			
+			TODO?: an async variant of this.
+			*/
+			capi.sqlite3_js_retry_busy = function(maxTimes, callback, beforeRetry) {
+				for (let n = 1; n <= maxTimes; ++n) try {
+					if (beforeRetry && n > 1) beforeRetry(n);
+					const rc = callback();
+					if (capi.SQLITE_BUSY === rc) {
+						if (n === maxTimes) throw new SQLite3Error(rc, [
+							"sqlite3_js_retry_busy() max retry attempts (",
+							maxTimes,
+							") reached."
+						].join(""));
+						continue;
+					}
+					return rc;
+				} catch (e) {
+					if (n < maxTimes && e instanceof SQLite3Error && e.resultCode === capi.SQLITE_BUSY) continue;
+					throw e;
+				}
+			};
 			const sqlite3 = {
 				WasmAllocError,
 				SQLite3Error,
@@ -3487,8 +4683,49 @@ async function sqlite3InitModule(moduleArg = {}) {
 				util,
 				wasm,
 				config,
-				version: Object.create(null),
+				/**
+				Holds the version info of the sqlite3 source tree from which
+				the generated sqlite3-api.js gets built. Its version may well
+				differ from that reported by sqlite3_libversion(), but that
+				should be considered a source file mismatch, as the JS and WASM
+				files are intended to be built and distributed together.
+				
+				This object is initially a placeholder which gets replaced by a
+				build-generated object.
+				*/
+				version: nu(),
+				/**
+				The library reserves the 'client' property for client-side use
+				and promises to never define a property with this name nor to
+				ever rely on specific contents of it. It makes no such guarantees
+				for other properties.
+				*/
 				client: void 0,
+				/**
+				This function is not part of the public interface, but a
+				piece of internal bootstrapping infrastructure.
+				
+				Performs any optional asynchronous library-level initialization
+				which might be required. This function returns a Promise which
+				resolves to the sqlite3 namespace object. Any error in the
+				async init will be fatal to the init as a whole, but init
+				routines are themselves welcome to install dummy catch()
+				handlers which are not fatal if their failure should be
+				considered non-fatal.
+				
+				Ideally this function is called as part of the Promise chain
+				which handles the loading and bootstrapping of the API.  If not
+				then it must be called by client-level code, which must not use
+				the library until the returned Promise resolves.
+				
+				If called multiple times it will return the same Promise on
+				subsequent calls. The current build setup precludes that
+				possibility, so it's only a hypothetical problem if/when this
+				function ever needs to be invoked by clients.
+				
+				In Emscripten-based builds, this function is called
+				automatically and deleted from this object.
+				*/
 				asyncPostInit: async function ff() {
 					if (ff.isReady instanceof Promise) return ff.isReady;
 					let lia = this.initializersAsync;
@@ -3497,6 +4734,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 						if (!sqlite3.__isUnderTest) {
 							delete sqlite3.util;
 							delete sqlite3.StructBinder;
+							delete sqlite3.opfs;
 						}
 						return sqlite3;
 					};
@@ -3513,6 +4751,20 @@ async function sqlite3InitModule(moduleArg = {}) {
 					while (lia.length) p = p.then(lia.shift());
 					return ff.isReady = p.catch(catcher);
 				}.bind(sqlite3ApiBootstrap),
+				/**
+				scriptInfo holds information about the currenty-loading script
+				so that we can locate the WASM file if it's somewhere other
+				than the build-time-defined directory. It ideally gets injected
+				into this object by the infrastructure which assembles the
+				JS/WASM module. It contains state which must be collected
+				before sqlite3ApiBootstrap() can be declared. It is not
+				necessarily available to any sqlite3ApiBootstrap.initializers
+				but "should" be in place (if it's added at all) by the time
+				that sqlite3ApiBootstrap.initializersAsync is processed.
+				
+				This state is not part of the public API, only intended for use
+				with the sqlite3 API bootstrapping and wasm-loading process.
+				*/
 				scriptInfo: void 0
 			};
 			if ("undefined" !== typeof sqlite3IsUnderTest) sqlite3.__isUnderTest = !!sqlite3IsUnderTest;
@@ -3539,6 +4791,11 @@ async function sqlite3InitModule(moduleArg = {}) {
 					sqlite3.wasm.imports = iw.imports;
 				}
 			}
+			/**
+			Eliminate any confusion about whether these config objects may
+			be used after library initialization by eliminating the outward-facing
+			objects...
+			*/
 			delete globalThis.sqlite3ApiConfig;
 			delete globalThis.sqlite3ApiBootstrap;
 			delete sqlite3ApiBootstrap.defaultConfig;
@@ -3550,27 +4807,83 @@ async function sqlite3InitModule(moduleArg = {}) {
 				return s;
 			});
 		};
+		/**
+		globalThis.sqlite3ApiBootstrap.initializers is an internal detail
+		used by the various pieces of the sqlite3 API's amalgamation
+		process. It must not be modified by client code except when plugging
+		such code into the amalgamation process.
+		
+		Each component of the amalgamation is expected to append a function
+		to this array. When sqlite3ApiBootstrap() is called for the first
+		time, each such function will be called (in their appended order)
+		and passed the sqlite3 namespace object, into which they can install
+		their features. At the end of that process, this array is deleted.
+		
+		The order of insertion into this array is significant for
+		some pieces. e.g. sqlite3.capi and sqlite3.wasm cannot be fully
+		utilized until the whwasmutil.js part is plugged in via
+		sqlite3-api-glue.js.
+		*/
 		globalThis.sqlite3ApiBootstrap.initializers = [];
+		/**
+		globalThis.sqlite3ApiBootstrap.initializersAsync is an internal detail
+		used by the sqlite3 API's amalgamation process. It must not be
+		modified by client code except when plugging such code into the
+		amalgamation process.
+		
+		The counterpart of globalThis.sqlite3ApiBootstrap.initializers,
+		specifically for initializers which are asynchronous. All entries in
+		this list must be either async functions, non-async functions which
+		return a Promise, or a Promise. Each function in the list is called
+		with the sqlite3 object as its only argument.
+		
+		The resolved value of any Promise is ignored and rejection will kill
+		the asyncPostInit() process (at an indeterminate point because all
+		of them are run asynchronously in parallel).
+		
+		This list is not processed until the client calls
+		sqlite3.asyncPostInit(). This means, for example, that intializers
+		added to globalThis.sqlite3ApiBootstrap.initializers may push entries to
+		this list.
+		*/
 		globalThis.sqlite3ApiBootstrap.initializersAsync = [];
+		/**
+		Client code may assign sqlite3ApiBootstrap.defaultConfig an
+		object-type value before calling sqlite3ApiBootstrap() (without
+		arguments) in order to tell that call to use this object as its
+		default config value. The intention of this is to provide
+		downstream clients with a reasonably flexible approach for plugging in
+		an environment-suitable configuration without having to define a new
+		global-scope symbol.
+		*/
 		globalThis.sqlite3ApiBootstrap.defaultConfig = Object.create(null);
+		/**
+		Placeholder: gets installed by the first call to
+		globalThis.sqlite3ApiBootstrap(). However, it is recommended that the
+		caller of sqlite3ApiBootstrap() capture its return value and delete
+		globalThis.sqlite3ApiBootstrap after calling it. It returns the same
+		value which will be stored here.
+		*/
 		globalThis.sqlite3ApiBootstrap.sqlite3 = void 0;
 		globalThis.sqlite3ApiBootstrap.initializers.push(function(sqlite3) {
 			sqlite3.version = {
-				"libVersion": "3.52.0",
-				"libVersionNumber": 3052e3,
-				"sourceId": "2026-01-20 18:30:48 2b3b36da9d60c265dceec5964ea51c752d81f41459fb6849c8faea658b253552",
-				"downloadVersion": 352e4,
+				"libVersion": "3.53.4",
+				"libVersionNumber": 3053004,
+				"sourceId": "2026-07-24 19:02:57 bf7c7f30031888f4e796e429ab3978879485813aaca6f641c7b33e4e09459bcc",
+				"downloadVersion": 3530400,
 				"scm": {
-					"sha3-256": "2b3b36da9d60c265dceec5964ea51c752d81f41459fb6849c8faea658b253552",
-					"branch": "trunk",
-					"tags": "",
-					"datetime": "2026-01-20T18:30:48.704Z"
+					"sha3-256": "bf7c7f30031888f4e796e429ab3978879485813aaca6f641c7b33e4e09459bcc",
+					"branch": "branch-3.53",
+					"tags": "release version-3.53.4",
+					"datetime": "2026-07-24T19:02:57.525Z"
 				}
 			};
 		});
 		globalThis.WhWasmUtilInstaller = function WhWasmUtilInstaller(target) {
 			"use strict";
 			if (void 0 === target.bigIntEnabled) target.bigIntEnabled = !!globalThis["BigInt64Array"];
+			/** Throws a new Error, the message of which is the concatenation of
+			all args with a space between each. */
 			const toss = (...args) => {
 				throw new Error(args.join(" "));
 			};
@@ -3579,6 +4892,10 @@ async function sqlite3InitModule(moduleArg = {}) {
 				target.pointerSize = "bigint" === typeof ptr ? 8 : 4;
 				target.dealloc(ptr);
 			}
+			/**
+			As of 2025-09-21, this library works with 64-bit WASM modules
+			built with Emscripten's -sMEMORY64=1.
+			*/
 			if (target.pointerSize && !target.pointerIR) target.pointerIR = 4 === target.pointerSize ? "i32" : "i64";
 			const __ptrIR = target.pointerIR ??= "i32";
 			const __ptrSize = target.pointerSize ??= "i32" === __ptrIR ? 4 : "i64" === __ptrIR ? 8 : 0;
@@ -3586,15 +4903,42 @@ async function sqlite3InitModule(moduleArg = {}) {
 			delete target.pointerIR;
 			if ("i32" !== __ptrIR && "i64" !== __ptrIR) toss("Invalid pointerIR:", __ptrIR);
 			else if (8 !== __ptrSize && 4 !== __ptrSize) toss("Invalid pointerSize:", __ptrSize);
+			/** Either BigInt or, if !target.bigIntEnabled, a function which
+			throws complaining that BigInt is not enabled. */
 			const __BigInt = target.bigIntEnabled ? (v) => BigInt(v || 0) : (v) => toss("BigInt support is disabled in this build.");
 			const __Number = (v) => Number(v || 0);
+			/**
+			If target.ptr.ir==='i32' then this is equivalent to
+			Number(v||0) else it's equivalent to BigInt(v||0), throwing
+			if BigInt support is disabled.
+			
+			Why? Because Number(null)===0, but BigInt(null) throws.  We
+			perform the same for Number to allow the undefined value to be
+			treated as a NULL WASM pointer, primarily to reduce friction in
+			many SQLite3 bindings which have long relied on that.
+			*/
 			const __asPtrType = 4 === __ptrSize ? __Number : __BigInt;
+			/**
+			The number 0 as either type Number or BigInt, depending on
+			target.ptr.ir.
+			*/
 			const __NullPtr = __asPtrType(0);
+			/**
+			Expects any number of numeric arguments, each one of either type
+			Number or BigInt. It sums them up (from an implicit starting
+			point of 0 or 0n) and returns them as a number of the same type
+			which target.ptr.coerce() uses.
+			
+			This is a workaround for not being able to mix Number/BigInt in
+			addition/subtraction expressions (which we frequently need for
+			calculating pointer offsets).
+			*/
 			const __ptrAdd = function(...args) {
 				let rc = __asPtrType(0);
 				for (const v of args) rc += __asPtrType(v);
 				return rc;
 			};
+			/** Set up target.ptr... */
 			{
 				const __ptr = Object.create(null);
 				Object.defineProperty(target, "ptr", {
@@ -3616,17 +4960,37 @@ async function sqlite3InitModule(moduleArg = {}) {
 				configurable: true,
 				get: () => target.instance?.exports
 			});
+			/** Stores various cached state. */
 			const cache = Object.create(null);
+			/** Previously-recorded size of cache.memory.buffer, noted so that
+			we can recreate the view objects if the heap grows. */
 			cache.heapSize = 0;
+			/** WebAssembly.Memory object extracted from target.memory or
+			target.exports.memory the first time heapWrappers() is
+			called. */
 			cache.memory = null;
+			/** uninstallFunction() puts table indexes in here for reuse and
+			installFunction() extracts them. */
 			cache.freeFuncIndexes = [];
+			/**
+			List-of-lists used by scopedAlloc() and friends.
+			*/
 			cache.scopedAlloc = [];
+			/** Push the pointer ptr to the current cache.scopedAlloc list
+			(which must already exist) and return ptr. */
 			cache.scopedAlloc.pushPtr = (ptr) => {
 				cache.scopedAlloc[cache.scopedAlloc.length - 1].push(ptr);
 				return ptr;
 			};
 			cache.utf8Decoder = new TextDecoder();
 			cache.utf8Encoder = new TextEncoder("utf-8");
+			/**
+			For the given IR-like string in the set ('i8', 'i16', 'i32',
+			'f32', 'float', 'i64', 'f64', 'double', '*'), or any string value
+			ending in '*', returns the sizeof for that value
+			(target.ptr.size in the latter case). For any other value, it
+			returns the undefined value.
+			*/
 			target.sizeofIR = (n) => {
 				switch (n) {
 					case "i8": return 1;
@@ -3641,6 +5005,11 @@ async function sqlite3InitModule(moduleArg = {}) {
 					default: return ("" + n).endsWith("*") ? __ptrSize : void 0;
 				}
 			};
+			/**
+			If (cache.heapSize !== cache.memory.buffer.byteLength), i.e. if
+			the heap has grown since the last call, updates cache.HEAPxyz.
+			Returns the cache object.
+			*/
 			const heapWrappers = function() {
 				if (!cache.memory) cache.memory = target.memory instanceof WebAssembly.Memory ? target.memory : target.exports.memory;
 				else if (cache.heapSize === cache.memory.buffer.byteLength) return cache;
@@ -3653,19 +5022,53 @@ async function sqlite3InitModule(moduleArg = {}) {
 				cache.HEAP32U = new Uint32Array(b);
 				cache.HEAP32F = new Float32Array(b);
 				cache.HEAP64F = new Float64Array(b);
-				if (target.bigIntEnabled) if ("undefined" !== typeof BigInt64Array) {
-					cache.HEAP64 = new BigInt64Array(b);
-					cache.HEAP64U = new BigUint64Array(b);
-				} else toss("BigInt support is enabled, but the BigInt64Array type is missing.");
+				if (target.bigIntEnabled) {
+					if ("undefined" !== typeof BigInt64Array) {
+						cache.HEAP64 = new BigInt64Array(b);
+						cache.HEAP64U = new BigUint64Array(b);
+					} else toss("BigInt support is enabled, but the BigInt64Array type is missing.");
+				}
 				cache.heapSize = b.byteLength;
 				return cache;
 			};
+			/** Convenience equivalent of this.heapForSize(8,false). */
 			target.heap8 = () => heapWrappers().HEAP8;
+			/** Convenience equivalent of this.heapForSize(8,true). */
 			target.heap8u = () => heapWrappers().HEAP8U;
+			/** Convenience equivalent of this.heapForSize(16,false). */
 			target.heap16 = () => heapWrappers().HEAP16;
+			/** Convenience equivalent of this.heapForSize(16,true). */
 			target.heap16u = () => heapWrappers().HEAP16U;
+			/** Convenience equivalent of this.heapForSize(32,false). */
 			target.heap32 = () => heapWrappers().HEAP32;
+			/** Convenience equivalent of this.heapForSize(32,true). */
 			target.heap32u = () => heapWrappers().HEAP32U;
+			/**
+			Requires n to be one of:
+			
+			- integer 8, 16, or 32.
+			- A integer-type TypedArray constructor: Int8Array, Int16Array,
+			Int32Array, or their Uint counterparts.
+			
+			If this.bigIntEnabled is true, it also accepts the value 64 or a
+			BigInt64Array/BigUint64Array, else it throws if passed 64 or one
+			of those constructors.
+			
+			Returns an integer-based TypedArray view of the WASM heap memory
+			buffer associated with the given block size. If passed an integer
+			as the first argument and unsigned is truthy then the "U"
+			(unsigned) variant of that view is returned, else the signed
+			variant is returned. If passed a TypedArray value, the 2nd
+			argument is ignored. Float32Array and Float64Array views are not
+			supported by this function.
+			
+			Growth of the heap will invalidate any references to this heap,
+			so do not hold a reference longer than needed and do not use a
+			reference after any operation which may allocate. Instead,
+			re-fetch the reference by calling this function again.
+			
+			Throws if passed an invalid n.
+			*/
 			target.heapForSize = function(n, unsigned = true) {
 				const c = cache.memory && cache.heapSize === cache.memory.buffer.byteLength ? cache : heapWrappers();
 				switch (n) {
@@ -3691,12 +5094,62 @@ async function sqlite3InitModule(moduleArg = {}) {
 			};
 			const __funcTable = target.functionTable;
 			delete target.functionTable;
+			/**
+			Returns the WASM-exported "indirect function table".
+			*/
 			target.functionTable = __funcTable ? () => __funcTable : () => target.exports.__indirect_function_table;
+			/**
+			Given a function pointer, returns the WASM function table entry
+			if found, else returns a falsy value: undefined if fptr is out of
+			range or null if it's in range but the table entry is empty.
+			*/
 			target.functionEntry = function(fptr) {
 				const ft = target.functionTable();
 				return fptr < ft.length ? ft.get(__asPtrType(fptr)) : void 0;
 			};
+			/**
+			Creates a WASM function which wraps the given JS function and
+			returns the JS binding of that WASM function. The signature
+			string must be the Jaccwabyt-format or Emscripten
+			addFunction()-format function signature string. In short: in may
+			have one of the following formats:
+			
+			- Emscripten: `"x..."`, where the first x is a letter representing
+			the result type and subsequent letters represent the argument
+			types. Functions with no arguments have only a single
+			letter.
+			
+			- Jaccwabyt: `"x(...)"` where `x` is the letter representing the
+			result type and letters in the parens (if any) represent the
+			argument types. Functions with no arguments use `x()`.
+			
+			Supported letters:
+			
+			- `i` = int32
+			- `p` = int32 or int64 ("pointer"), depending on target.ptr.size
+			- `j` = int64
+			- `f` = float32
+			- `d` = float64
+			- `v` = void, only legal for use as the result type
+			
+			It throws if an invalid signature letter is used.
+			
+			Jaccwabyt-format signatures support some additional letters which
+			have no special meaning here but (in this context) act as aliases
+			for other letters:
+			
+			- `s`, `P`: same as `p`
+			
+			Sidebar: this code is developed together with Jaccwabyt, thus the
+			support for its signature format.
+			
+			The arguments may be supplied in either order: (func,sig) or
+			(sig,func).
+			*/
 			target.jsFuncToWasm = function f(func, sig) {
+				/** Attribution: adapted up from Emscripten-generated glue code,
+				refactored primarily for efficiency's sake, eliminating
+				call-local functions and superfluous temporary arrays. */
 				if (!f._) f._ = {
 					sigTypes: Object.assign(Object.create(null), {
 						i: "i32",
@@ -3713,16 +5166,30 @@ async function sqlite3InitModule(moduleArg = {}) {
 						i64: 126,
 						i32: 127
 					}),
+					/** Encodes n, which must be <2^14 (16384), into target array
+					tgt, as a little-endian value, using the given method
+					('push' or 'unshift'). */
 					uleb128Encode: (tgt, method, n) => {
 						if (n < 128) tgt[method](n);
 						else tgt[method](n % 128 | 128, n >> 7);
 					},
+					/** Intentionally-lax pattern for Jaccwabyt-format function
+					pointer signatures, the intent of which is simply to
+					distinguish them from Emscripten-format signatures. The
+					downstream checks are less lax. */
 					rxJSig: /^(\w)\((\w*)\)$/,
-					sigParams: (sig$1) => {
-						const m = f._.rxJSig.exec(sig$1);
-						return m ? m[2] : sig$1.substr(1);
+					/** Returns the parameter-value part of the given signature
+					string. */
+					sigParams: (sig) => {
+						const m = f._.rxJSig.exec(sig);
+						return m ? m[2] : sig.substr(1);
 					},
+					/** Returns the IR value for the given letter or throws
+					if the letter is invalid. */
 					letterType: (x) => f._.sigTypes[x] || toss("Invalid signature letter:", x),
+					/** Pushes the WASM data type code for the given signature
+					letter to the given target array. Throws if letter is
+					invalid. */
 					pushSigType: (dest, letter) => dest.push(f._.typeCodes[f._.letterType(letter)])
 				};
 				if ("string" === typeof func) {
@@ -3745,6 +5212,13 @@ async function sqlite3InitModule(moduleArg = {}) {
 				wasmCode.push(2, 7, 1, 1, 101, 1, 102, 0, 0, 7, 5, 1, 1, 102, 0, 0);
 				return new WebAssembly.Instance(new WebAssembly.Module(new Uint8Array(wasmCode)), { e: { f: func } }).exports["f"];
 			};
+			/**
+			Documented as target.installFunction() except for the 3rd
+			argument: if truthy, the newly-created function pointer
+			is stashed in the current scoped-alloc scope and will be
+			cleaned up at the matching scopedAllocPop(), else it
+			is not stashed there.
+			*/
 			const __installFunction = function f(func, sig, scoped) {
 				if (scoped && !cache.scopedAlloc.length) toss("No scopedAllocPush() scope is active.");
 				if ("string" === typeof func) {
@@ -3784,8 +5258,59 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 				return ptr;
 			};
+			/**
+			Expects a JS function and signature, exactly as for
+			this.jsFuncToWasm(). It uses that function to create a
+			WASM-exported function, installs that function to the next
+			available slot of this.functionTable(), and returns the
+			function's index in that table (which acts as a pointer to that
+			function). The returned pointer can be passed to
+			uninstallFunction() to uninstall it and free up the table slot
+			for reuse.
+			
+			If passed (string,function) arguments then it treats the first
+			argument as the signature and second as the function.
+			
+			As a special case, if the passed-in function is a WASM-exported
+			function then the signature argument is ignored and func is
+			installed as-is, without requiring re-compilation/re-wrapping.
+			
+			This function will propagate an exception if
+			WebAssembly.Table.grow() throws or this.jsFuncToWasm() throws.
+			The former case can happen in an Emscripten-compiled environment
+			when building without Emscripten's `-sALLOW_TABLE_GROWTH` flag.
+			
+			Sidebar: this function differs from Emscripten's addFunction()
+			_primarily_ in that it does not share that function's
+			undocumented behavior of reusing a function if it's passed to
+			addFunction() more than once, which leads to uninstallFunction()
+			breaking clients which do not take care to avoid that case:
+			
+			https://github.com/emscripten-core/emscripten/issues/17323
+			*/
 			target.installFunction = (func, sig) => __installFunction(func, sig, false);
+			/**
+			Works exactly like installFunction() but requires that a
+			scopedAllocPush() is active and uninstalls the given function
+			when that alloc scope is popped via scopedAllocPop().
+			This is used for implementing JS/WASM function bindings which
+			should only persist for the life of a call into a single
+			C-side function.
+			*/
 			target.scopedInstallFunction = (func, sig) => __installFunction(func, sig, true);
+			/**
+			Requires a pointer value previously returned from
+			this.installFunction(). Removes that function from the WASM
+			function table, marks its table slot as free for re-use, and
+			returns that function. It is illegal to call this before
+			installFunction() has been called and results are undefined if
+			ptr was not returned by that function. The returned function
+			may be passed back to installFunction() to reinstall it.
+			
+			To simplify certain use cases, if passed a falsy non-0 value
+			(noting that 0 is a valid function table index), this function
+			has no side effects and returns undefined.
+			*/
 			target.uninstallFunction = function(ptr) {
 				if (!ptr && __NullPtr !== ptr) return void 0;
 				const ft = target.functionTable();
@@ -3794,6 +5319,67 @@ async function sqlite3InitModule(moduleArg = {}) {
 				ft.set(ptr, null);
 				return rc;
 			};
+			/**
+			Given a WASM heap memory address and a data type name in the form
+			(i8, i16, i32, i64, float (or f32), double (or f64)), this
+			fetches the numeric value from that address and returns it as a
+			number or, for the case of type='i64', a BigInt (with the caveat
+			BigInt will trigger an exception if this.bigIntEnabled is
+			falsy). Throws if given an invalid type.
+			
+			If the first argument is an array, it is treated as an array of
+			addresses and the result is an array of the values from each of
+			those address, using the same 2nd argument for determining the
+			value type to fetch.
+			
+			As a special case, if type ends with a `*`, it is considered to
+			be a pointer type and is treated as the WASM numeric type
+			appropriate for the pointer size (==this.ptr.ir).
+			
+			While possibly not obvious, this routine and its poke()
+			counterpart are how pointer-to-value _output_ parameters in
+			WASM-compiled C code can be interacted with:
+			
+			```
+			const ptr = alloc(4);
+			poke32(ptr, 0); // clear the ptr's value
+			aCFuncWithOutputPtrToInt32Arg(ptr); // e.g. void foo(int *x);
+			const result = peek32(ptr); // fetch ptr's value
+			dealloc(ptr);
+			```
+			
+			scopedAlloc() and friends can be used to make handling of
+			`ptr` safe against leaks in the case of an exception:
+			
+			```
+			let result;
+			const scope = scopedAllocPush();
+			try{
+			const ptr = scopedAlloc(4);
+			poke32(ptr, 0);
+			aCFuncWithOutputPtrArg(ptr);
+			result = peek32(ptr);
+			}finally{
+			scopedAllocPop(scope);
+			}
+			```
+			
+			As a rule poke() must be called to set (typically zero out) the
+			pointer's value, else it will contain an essentially random
+			value.
+			
+			ACHTUNG: calling this often, e.g. in a loop, can have a noticably
+			painful impact on performance. Rather than doing so, use
+			heapForSize() to fetch the heap object and read directly from it.
+			
+			ACHTUNG #2: ptr may be a BigInt (and generally will be in 64-bit
+			builds) but this function must coerce it into a Number in order
+			to access the heap's contents. Ergo: BitInts outside of the
+			(extrardinarily genereous) address range exposed to browser-side
+			WASM may cause misbehavior.
+			
+			See also: poke()
+			*/
 			target.peek = function f(ptr, type = "i8") {
 				if (type.endsWith("*")) type = __ptrIR;
 				const c = cache.memory && cache.heapSize === cache.memory.buffer.byteLength ? cache : heapWrappers();
@@ -3830,6 +5416,23 @@ async function sqlite3InitModule(moduleArg = {}) {
 				} while (list && arguments[0].length);
 				return list || rc;
 			};
+			/**
+			The counterpart of peek(), this sets a numeric value at the given
+			WASM heap address, using the 3rd argument to define how many
+			bytes are written. Throws if given an invalid type. See peek()
+			for details about the `type` argument. If the 3rd argument ends
+			with `*` then it is treated as a pointer type and this function
+			behaves as if the 3rd argument were this.ptr.ir.
+			
+			If the first argument is an array, it is treated like a list
+			of pointers and the given value is written to each one.
+			
+			Returns `this`. (Prior to 2022-12-09 it returned this function.)
+			
+			ACHTUNG #1: see peek()'s ACHTUNG #1.
+			
+			ACHTUNG #2: see peek()'s ACHTUNG #2.
+			*/
 			target.poke = function(ptr, value, type = "i8") {
 				if (type.endsWith("*")) type = __ptrIR;
 				const c = cache.memory && cache.heapSize === cache.memory.buffer.byteLength ? cache : heapWrappers();
@@ -3860,27 +5463,94 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 				return this;
 			};
+			/**
+			Convenience form of peek() intended for fetching
+			pointer-to-pointer values. If passed a single non-array argument
+			it returns the value of that one pointer address. If passed
+			multiple arguments, or a single array of arguments, it returns an
+			array of their values.
+			*/
 			target.peekPtr = (...ptr) => target.peek(1 === ptr.length ? ptr[0] : ptr, __ptrIR);
+			/**
+			A variant of poke() intended for setting pointer-to-pointer
+			values. Its differences from poke() are that (1) it defaults to a
+			value of 0 and (2) it always writes to the pointer-sized heap
+			view.
+			*/
 			target.pokePtr = (ptr, value = 0) => target.poke(ptr, value, __ptrIR);
+			/**
+			Convenience form of peek() intended for fetching i8 values. If
+			passed a single non-array argument it returns the value of that
+			one pointer address. If passed multiple arguments, or a single
+			array of arguments, it returns an array of their values.
+			*/
 			target.peek8 = (...ptr) => target.peek(1 === ptr.length ? ptr[0] : ptr, "i8");
+			/**
+			Convenience form of poke() intended for setting individual bytes.
+			Its difference from poke() is that it always writes to the
+			i8-sized heap view.
+			*/
 			target.poke8 = (ptr, value) => target.poke(ptr, value, "i8");
+			/** i16 variant of peek8(). */
 			target.peek16 = (...ptr) => target.peek(1 === ptr.length ? ptr[0] : ptr, "i16");
+			/** i16 variant of poke8(). */
 			target.poke16 = (ptr, value) => target.poke(ptr, value, "i16");
+			/** i32 variant of peek8(). */
 			target.peek32 = (...ptr) => target.peek(1 === ptr.length ? ptr[0] : ptr, "i32");
+			/** i32 variant of poke8(). */
 			target.poke32 = (ptr, value) => target.poke(ptr, value, "i32");
+			/** i64 variant of peek8(). Will throw if this build is not
+			configured for BigInt support. */
 			target.peek64 = (...ptr) => target.peek(1 === ptr.length ? ptr[0] : ptr, "i64");
+			/** i64 variant of poke8(). Will throw if this build is not
+			configured for BigInt support. Note that this returns
+			a BigInt-type value, not a Number-type value. */
 			target.poke64 = (ptr, value) => target.poke(ptr, value, "i64");
+			/** f32 variant of peek8(). */
 			target.peek32f = (...ptr) => target.peek(1 === ptr.length ? ptr[0] : ptr, "f32");
+			/** f32 variant of poke8(). */
 			target.poke32f = (ptr, value) => target.poke(ptr, value, "f32");
+			/** f64 variant of peek8(). */
 			target.peek64f = (...ptr) => target.peek(1 === ptr.length ? ptr[0] : ptr, "f64");
+			/** f64 variant of poke8(). */
 			target.poke64f = (ptr, value) => target.poke(ptr, value, "f64");
+			/** Deprecated alias for getMemValue() */
 			target.getMemValue = target.peek;
+			/** Deprecated alias for peekPtr() */
 			target.getPtrValue = target.peekPtr;
+			/** Deprecated alias for poke() */
 			target.setMemValue = target.poke;
+			/** Deprecated alias for pokePtr() */
 			target.setPtrValue = target.pokePtr;
+			/**
+			Returns true if the given value appears to be legal for use as
+			a WASM pointer value. Its _range_ of values is not (cannot be)
+			validated except to ensure that it is a 32-bit integer with a
+			value of 0 or greater. Likewise, it cannot verify whether the
+			value actually refers to allocated memory in the WASM heap.
+			
+			Whether or not null or undefined are legal are context-dependent.
+			They generally are legal but this function does not treat them as
+			such because they're not strictly legal for passing as-is as WASM
+			integer arguments.
+			*/
 			target.isPtr32 = (ptr) => "number" === typeof ptr && ptr >= 0 && ptr === (ptr | 0);
+			/** 64-bit counterpart of isPtr32() and falls back to that function
+			if ptr is not a BigInt. */
 			target.isPtr64 = (ptr) => "bigint" === typeof ptr ? ptr >= 0 : target.isPtr32(ptr);
+			/**
+			isPtr() is an alias for isPtr32() or isPtr64(), depending on the
+			value of target.ptr.size.
+			*/
 			target.isPtr = 4 === __ptrSize ? target.isPtr32 : target.isPtr64;
+			/**
+			Expects ptr to be a pointer into the WASM heap memory which
+			refers to a NUL-terminated C-style string encoded as UTF-8.
+			Returns the length, in bytes, of the string, as for `strlen(3)`.
+			As a special case, if !ptr or if it's not a pointer then it
+			returns `null`. Throws if ptr is out of range for
+			target.heap8u().
+			*/
 			target.cstrlen = function(ptr) {
 				if (!ptr || !target.isPtr(ptr)) return null;
 				ptr = Number(ptr);
@@ -3889,9 +5559,27 @@ async function sqlite3InitModule(moduleArg = {}) {
 				for (; h[pos] !== 0; ++pos);
 				return pos - ptr;
 			};
+			/** Internal helper to use in operations which need to distinguish
+			between TypedArrays which are backed by a SharedArrayBuffer
+			from those which are not. */
 			const __SAB = "undefined" === typeof SharedArrayBuffer ? function() {} : SharedArrayBuffer;
+			/** Returns true if the given TypedArray object is backed by a
+			SharedArrayBuffer, else false. */
 			const isSharedTypedArray = (aTypedArray) => aTypedArray.buffer instanceof __SAB;
 			target.isSharedTypedArray = isSharedTypedArray;
+			/**
+			Returns either aTypedArray.slice(begin,end) (if
+			aTypedArray.buffer is a SharedArrayBuffer) or
+			aTypedArray.subarray(begin,end) (if it's not).
+			
+			This distinction is important for APIs which don't like to
+			work on SABs, e.g. TextDecoder, and possibly for our
+			own APIs which work on memory ranges which "might" be
+			modified by other threads while they're working.
+			
+			begin and end may be of type Number or (in 64-bit builds) BigInt
+			(which get coerced to Numbers).
+			*/
 			const typedArrayPart = (aTypedArray, begin, end) => {
 				if (8 === __ptrSize) {
 					if ("bigint" === typeof begin) begin = Number(begin);
@@ -3900,13 +5588,35 @@ async function sqlite3InitModule(moduleArg = {}) {
 				return isSharedTypedArray(aTypedArray) ? aTypedArray.slice(begin, end) : aTypedArray.subarray(begin, end);
 			};
 			target.typedArrayPart = typedArrayPart;
+			/**
+			Uses TextDecoder to decode the given half-open range of the given
+			TypedArray to a string. This differs from a simple call to
+			TextDecoder in that it accounts for whether the first argument is
+			backed by a SharedArrayBuffer or not, and can work more
+			efficiently if it's not (TextDecoder refuses to act upon an SAB).
+			
+			If begin/end are not provided or are falsy then each defaults to
+			the start/end of the array.
+			*/
 			const typedArrayToString = (typedArray, begin, end) => cache.utf8Decoder.decode(typedArrayPart(typedArray, begin, end));
 			target.typedArrayToString = typedArrayToString;
+			/**
+			Expects ptr to be a pointer into the WASM heap memory which
+			refers to a NUL-terminated C-style string encoded as UTF-8. This
+			function counts its byte length using cstrlen() then returns a
+			JS-format string representing its contents. As a special case, if
+			ptr is falsy or not a pointer, `null` is returned.
+			*/
 			target.cstrToJs = function(ptr) {
 				const n = target.cstrlen(ptr);
 				return n ? typedArrayToString(heapWrappers().HEAP8U, Number(ptr), Number(ptr) + n) : null === n ? n : "";
 			};
+			/**
+			Given a JS string, this function returns its UTF-8 length in
+			bytes. Returns null if str is not a string.
+			*/
 			target.jstrlen = function(str) {
+				/** Attribution: derived from Emscripten's lengthBytesUTF8() */
 				if ("string" !== typeof str) return null;
 				const n = str.length;
 				let len = 0;
@@ -3920,7 +5630,49 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 				return len;
 			};
+			/**
+			Encodes the given JS string as UTF8 into the given TypedArray
+			tgt, starting at the given offset and writing, at most, maxBytes
+			bytes (including the NUL terminator if addNul is true, else no
+			NUL is added). If it writes any bytes at all and addNul is true,
+			it always NUL-terminates the output, even if doing so means that
+			the NUL byte is all that it writes.
+			
+			If maxBytes is negative (the default) then it is treated as the
+			remaining length of tgt, starting at the given offset.
+			
+			If writing the last character would surpass the maxBytes count
+			because the character is multi-byte, that character will not be
+			written (as opposed to writing a truncated multi-byte character).
+			This can lead to it writing as many as 3 fewer bytes than
+			maxBytes specifies.
+			
+			Returns the number of bytes written to the target, _including_
+			the NUL terminator (if any). If it returns 0, it wrote nothing at
+			all, which can happen if:
+			
+			- str is empty and addNul is false.
+			- offset < 0.
+			- maxBytes == 0.
+			- maxBytes is less than the byte length of a multi-byte str[0].
+			
+			Throws if tgt is not an Int8Array or Uint8Array.
+			
+			Design notes:
+			
+			- In C's strcpy(), the destination pointer is the first
+			argument. That is not the case here primarily because the 3rd+
+			arguments are all referring to the destination, so it seems to
+			make sense to have them grouped with it.
+			
+			- Emscripten's counterpart of this function (stringToUTF8Array())
+			returns the number of bytes written sans NUL terminator. That
+			is, however, ambiguous: str.length===0 or maxBytes===(0 or 1)
+			all cause 0 to be returned.
+			*/
 			target.jstrcpy = function(jstr, tgt, offset = 0, maxBytes = -1, addNul = true) {
+				/** Attribution: the encoding bits are taken from Emscripten's
+				stringToUTF8Array(). */
 				if (!tgt || !(tgt instanceof Int8Array) && !(tgt instanceof Uint8Array)) toss("jstrcpy() target must be an Int8Array or Uint8Array.");
 				maxBytes = Number(maxBytes);
 				offset = Number(offset);
@@ -3954,6 +5706,29 @@ async function sqlite3InitModule(moduleArg = {}) {
 				if (addNul) tgt[offset++] = 0;
 				return offset - begin;
 			};
+			/**
+			Works similarly to C's strncpy(), copying, at most, n bytes (not
+			characters) from srcPtr to tgtPtr. It copies until n bytes have
+			been copied or a 0 byte is reached in src. _Unlike_ strncpy(), it
+			returns the number of bytes it assigns in tgtPtr, _including_ the
+			NUL byte (if any). If n is reached before a NUL byte in srcPtr,
+			tgtPtr will _not_ be NULL-terminated. If a NUL byte is reached
+			before n bytes are copied, tgtPtr will be NUL-terminated.
+			
+			If n is negative, cstrlen(srcPtr)+1 is used to calculate it, the
+			+1 being for the NUL byte.
+			
+			Throws if tgtPtr or srcPtr are falsy. Results are undefined if:
+			
+			- either is not a pointer into the WASM heap or
+			
+			- srcPtr is not NUL-terminated AND n is less than srcPtr's
+			logical length.
+			
+			ACHTUNG: it is possible to copy partial multi-byte characters
+			this way, and converting such strings back to JS strings will
+			have undefined results.
+			*/
 			target.cstrncpy = function(tgtPtr, srcPtr, n) {
 				if (!tgtPtr || !srcPtr) toss("cstrncpy() does not accept NULL strings.");
 				if (n < 0) n = target.cstrlen(strPtr) + 1;
@@ -3965,6 +5740,11 @@ async function sqlite3InitModule(moduleArg = {}) {
 				if (i < n) heap[tgtNumber + i++] = 0;
 				return i;
 			};
+			/**
+			For the given JS string, returns a Uint8Array of its contents
+			encoded as UTF-8. If addNul is true, the returned array will have
+			a trailing 0 entry, else it will not.
+			*/
 			target.jstrToUintArray = (str, addNul = false) => {
 				return cache.utf8Encoder.encode(addNul ? str + "\0" : str);
 			};
@@ -3986,13 +5766,83 @@ async function sqlite3InitModule(moduleArg = {}) {
 					if (toFree) target.dealloc(toFree);
 				}
 			};
+			/**
+			Uses target.alloc() to allocate enough memory for jstrlen(jstr)+1
+			bytes of memory, copies jstr to that memory using jstrcpy(),
+			NUL-terminates it, and returns the pointer to that C-string.
+			Ownership of the pointer is transfered to the caller, who must
+			eventually pass the pointer to dealloc() to free it.
+			
+			If passed a truthy 2nd argument then its return semantics change:
+			it returns [ptr,n], where ptr is the C-string's pointer and n is
+			its cstrlen().
+			
+			Throws if `target.alloc` or `target.dealloc` are not functions.
+			*/
 			target.allocCString = (jstr, returnWithLength = false) => __allocCStr(jstr, returnWithLength, target.alloc, "allocCString()");
+			/**
+			Starts an "allocation scope." All allocations made using
+			scopedAlloc() are recorded in this scope and are freed when the
+			value returned from this function is passed to
+			scopedAllocPop().
+			
+			This family of functions requires that the API's object have both
+			`alloc()` and `dealloc()` methods, else this function will throw.
+			
+			Intended usage:
+			
+			```
+			const scope = scopedAllocPush();
+			try {
+			const ptr1 = scopedAlloc(100);
+			const ptr2 = scopedAlloc(200);
+			const ptr3 = scopedAlloc(300);
+			...
+			// Note that only allocations made via scopedAlloc()
+			// are managed by this allocation scope.
+			}finally{
+			scopedAllocPop(scope);
+			}
+			```
+			
+			The value returned by this function must be treated as opaque by
+			the caller, suitable _only_ for passing to scopedAllocPop().
+			Its type and value are not part of this function's API and may
+			change in any given version of this code.
+			
+			`scopedAlloc.level` can be used to determine how many scoped
+			alloc levels are currently active.
+			*/
 			target.scopedAllocPush = function() {
 				__affirmAlloc(target, "scopedAllocPush");
 				const a = [];
 				cache.scopedAlloc.push(a);
 				return a;
 			};
+			/**
+			Cleans up all allocations made using scopedAlloc() in the context
+			of the given opaque state object, which must be a value returned
+			by scopedAllocPush(). See that function for an example of how to
+			use this function. It also uninstalls any WASM functions
+			installed with scopedInstallFunction().
+			
+			Though scoped allocations are managed like a stack, this API
+			behaves properly if allocation scopes are popped in an order
+			other than the order they were pushed. The intent is that it
+			_always_ be used in a stack-like manner.
+			
+			If called with no arguments, it pops the most recent
+			scopedAllocPush() result:
+			
+			```
+			scopedAllocPush();
+			try{ ... } finally { scopedAllocPop(); }
+			```
+			
+			It's generally recommended that it be passed an explicit argument
+			to help ensure that push/push are used in matching pairs, but in
+			trivial code that may be a non-issue.
+			*/
 			target.scopedAllocPop = function(state) {
 				__affirmAlloc(target, "scopedAllocPop");
 				const n = arguments.length ? cache.scopedAlloc.indexOf(state) : cache.scopedAlloc.length - 1;
@@ -4002,6 +5852,22 @@ async function sqlite3InitModule(moduleArg = {}) {
 				for (let p; p = state.pop();) if (target.functionEntry(p)) target.uninstallFunction(p);
 				else target.dealloc(p);
 			};
+			/**
+			Allocates n bytes of memory using this.alloc() and records that
+			fact in the state for the most recent call of scopedAllocPush().
+			Ownership of the memory is given to scopedAllocPop(), which
+			will clean it up when it is called. The memory _must not_ be
+			passed to this.dealloc(). Throws if this API object is missing
+			the required `alloc()` or `dealloc()` functions or no scoped
+			alloc is active.
+			
+			See scopedAllocPush() for an example of how to use this function.
+			
+			The `level` property of this function can be queried to query how
+			many scoped allocation levels are currently active.
+			
+			See also: scopedAllocPtr(), scopedAllocCString()
+			*/
 			target.scopedAlloc = function(n) {
 				if (!cache.scopedAlloc.length) toss("No scopedAllocPush() scope is active.");
 				const p = __asPtrType(target.alloc(n));
@@ -4013,6 +5879,12 @@ async function sqlite3InitModule(moduleArg = {}) {
 				get: () => cache.scopedAlloc.length,
 				set: () => toss("The 'active' property is read-only.")
 			});
+			/**
+			Works identically to allocCString() except that it allocates the
+			memory using scopedAlloc().
+			
+			Will throw if no scopedAllocPush() call is active.
+			*/
 			target.scopedAllocCString = (jstr, returnWithLength = false) => __allocCStr(jstr, returnWithLength, target.scopedAlloc, "scopedAllocCString()");
 			const __allocMainArgv = function(isScoped, list) {
 				const pList = target[isScoped ? "scopedAlloc" : "alloc"]((list.length + 1) * target.ptr.size);
@@ -4023,8 +5895,42 @@ async function sqlite3InitModule(moduleArg = {}) {
 				target.pokePtr(__ptrAdd(pList, target.ptr.size * i), 0);
 				return pList;
 			};
+			/**
+			Creates an array, using scopedAlloc(), suitable for passing to a
+			C-level main() routine. The input is a collection with a length
+			property and a forEach() method. A block of memory
+			(list.length+1) entries long is allocated and each pointer-sized
+			block of that memory is populated with a scopedAllocCString()
+			conversion of the (""+value) of each element, with the exception
+			that the final entry is a NULL pointer. Returns a pointer to the
+			start of the list, suitable for passing as the 2nd argument to a
+			C-style main() function.
+			
+			Throws if scopedAllocPush() is not active.
+			
+			Design note: the returned array is allocated with an extra NULL
+			pointer entry to accommodate certain APIs, but client code which
+			does not need that functionality should treat the returned array
+			as list.length entries long.
+			*/
 			target.scopedAllocMainArgv = (list) => __allocMainArgv(true, list);
+			/**
+			Identical to scopedAllocMainArgv() but uses alloc() instead of
+			scopedAlloc().
+			*/
 			target.allocMainArgv = (list) => __allocMainArgv(false, list);
+			/**
+			Expects to be given a C-style string array and its length. It
+			returns a JS array of strings and/or nulls: any entry in the
+			pArgv array which is NULL results in a null entry in the result
+			array. If argc is 0 then an empty array is returned.
+			
+			Results are undefined if any entry in the first argc entries of
+			pArgv are neither 0 (NULL) nor legal UTF-format C strings.
+			
+			To be clear, the expected C-style arguments to be passed to this
+			function are `(int, char **)` (optionally const-qualified).
+			*/
 			target.cArgvToJs = (argc, pArgv) => {
 				const list = [];
 				for (let i = 0; i < argc; ++i) {
@@ -4033,6 +5939,14 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 				return list;
 			};
+			/**
+			Wraps function call func() in a scopedAllocPush() and
+			scopedAllocPop() block, such that all calls to scopedAlloc() and
+			friends from within that call will have their memory freed
+			automatically when func() returns. If func throws or propagates
+			an exception, the scope is still popped, otherwise it returns the
+			result of calling func().
+			*/
 			target.scopedAllocCall = function(func) {
 				target.scopedAllocPush();
 				try {
@@ -4041,6 +5955,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 					target.scopedAllocPop();
 				}
 			};
+			/** Internal impl for allocPtr() and scopedAllocPtr(). */
 			const __allocPtr = function(howMany, safePtrSize, method) {
 				__affirmAlloc(target, method);
 				const pIr = safePtrSize ? "i64" : __ptrIR;
@@ -4055,22 +5970,86 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 				return a;
 			};
+			/**
+			Allocates one or more pointers as a single chunk of memory and
+			zeroes them out.
+			
+			The first argument is the number of pointers to allocate. The
+			second specifies whether they should use a "safe" pointer size (8
+			bytes) or whether they may use the default pointer size
+			(typically 4 but also possibly 8).
+			
+			How the result is returned depends on its first argument: if
+			passed 1, it returns the allocated memory address. If passed more
+			than one then an array of pointer addresses is returned, which
+			can optionally be used with "destructuring assignment" like this:
+			
+			```
+			const [p1, p2, p3] = allocPtr(3);
+			```
+			
+			ACHTUNG: when freeing the memory, pass only the _first_ result
+			value to dealloc(). The others are part of the same memory chunk
+			and must not be freed separately.
+			
+			The reason for the 2nd argument is...
+			
+			When one of the returned pointers will refer to a 64-bit value,
+			e.g. a double or int64, and that value must be written or fetched,
+			e.g. using poke() or peek(), it is important that
+			the pointer in question be aligned to an 8-byte boundary or else
+			it will not be fetched or written properly and will corrupt or
+			read neighboring memory. It is only safe to pass false when the
+			client code is certain that it will only get/fetch 4-byte values
+			(or smaller).
+			*/
 			target.allocPtr = (howMany = 1, safePtrSize = true) => __allocPtr(howMany, safePtrSize, "alloc");
+			/**
+			Identical to allocPtr() except that it allocates using scopedAlloc()
+			instead of alloc().
+			*/
 			target.scopedAllocPtr = (howMany = 1, safePtrSize = true) => __allocPtr(howMany, safePtrSize, "scopedAlloc");
+			/**
+			If target.exports[name] exists, it is returned, else an
+			exception is thrown.
+			*/
 			target.xGet = function(name) {
 				return target.exports[name] || toss("Cannot find exported symbol:", name);
 			};
 			const __argcMismatch = (f, n) => toss(f + "() requires", n, "argument(s).");
+			/**
+			Looks up a WASM-exported function named fname from
+			target.exports. If found, it is called, passed all remaining
+			arguments, and its return value is returned to xCall's caller. If
+			not found, an exception is thrown. This function does no
+			conversion of argument or return types, but see xWrap() and
+			xCallWrapped() for variants which do.
+			
+			If the first argument is a function is is assumed to be
+			a WASM-bound function and is used as-is instead of looking up
+			the function via xGet().
+			
+			As a special case, if passed only 1 argument after the name and
+			that argument in an Array, that array's entries become the
+			function arguments. (This is not an ambiguous case because it's
+			not legal to pass an Array object to a WASM function.)
+			*/
 			target.xCall = function(fname, ...args) {
 				const f = fname instanceof Function ? fname : target.xGet(fname);
 				if (!(f instanceof Function)) toss("Exported symbol", fname, "is not a function.");
 				if (f.length !== args.length) __argcMismatch(f === fname ? f.name : fname, f.length);
 				return 2 === arguments.length && Array.isArray(arguments[1]) ? f.apply(null, arguments[1]) : f.apply(null, args);
 			};
+			/**
+			State for use with xWrap().
+			*/
 			cache.xWrap = Object.create(null);
 			cache.xWrap.convert = Object.create(null);
+			/** Map of type names to argument conversion functions. */
 			cache.xWrap.convert.arg = /* @__PURE__ */ new Map();
+			/** Map of type names to return result conversion functions. */
 			cache.xWrap.convert.result = /* @__PURE__ */ new Map();
+			/** Scope-local convenience aliases. */
 			const xArg = cache.xWrap.convert.arg, xResult = cache.xWrap.convert.result;
 			const __xArgPtr = __asPtrType;
 			xArg.set("i64", __BigInt).set("i32", (i) => i | 0).set("i16", (i) => (i | 0) & 65535).set("i8", (i) => (i | 0) & 255).set("f32", (i) => Number(i).valueOf()).set("float", xArg.get("f32")).set("f64", xArg.get("f32")).set("double", xArg.get("f64")).set("int", xArg.get("i32")).set("null", (i) => i).set(null, xArg.get("null")).set("**", __xArgPtr).set("*", __xArgPtr);
@@ -4090,6 +6069,24 @@ async function sqlite3InitModule(moduleArg = {}) {
 				xResult.set(t + "*", __xArgPtr);
 				xResult.set(t, xArg.get(t) || toss("Maintenance required: missing arg converter for", t));
 			}
+			/**
+			In order for args of type string to work in various contexts in
+			the sqlite3 API, we need to pass them on as, variably, a C-string
+			or a pointer value. Thus for ARGs of type 'string' and
+			'*'/'pointer' we behave differently depending on whether the
+			argument is a string or not:
+			
+			- If v is a string, scopeAlloc() a new C-string from it and return
+			that temp string's pointer.
+			
+			- Else return the value from the arg adapter defined for
+			target.ptr.ir.
+			
+			TODO? Permit an Int8Array/Uint8Array and convert it to a string?
+			Would that be too much magic concentrated in one place, ready to
+			backfire? We handle that at the client level in sqlite3 with a
+			custom argument converter.
+			*/
 			const __xArgString = (v) => {
 				return "string" === typeof v ? target.scopedAllocCString(v) : __asPtrType(v);
 			};
@@ -4107,14 +6104,154 @@ async function sqlite3InitModule(moduleArg = {}) {
 					target.dealloc(i);
 				}
 			});
+			/**
+			Internal-use-only base class for FuncPtrAdapter and potentially
+			additional stateful argument adapter classes.
+			
+			Its main interface (convertArg()) is strictly internal, not to be
+			exposed to client code, as it may still need re-shaping. Only the
+			constructors of concrete subclasses should be exposed to clients,
+			and those in such a way that does not hinder internal redesign of
+			the convertArg() interface.
+			*/
 			const AbstractArgAdapter = class {
 				constructor(opt) {
 					this.name = opt.name || "unnamed adapter";
 				}
+				/**
+				Gets called via xWrap() to "convert" v to whatever type
+				this specific class supports.
+				
+				argIndex is the argv index of _this_ argument in the
+				being-xWrap()'d call. argv is the current argument list
+				undergoing xWrap() argument conversion. argv entries to the
+				left of argIndex will have already undergone transformation and
+				those to the right will not have (they will have the values the
+				client-level code passed in, awaiting conversion). The RHS
+				indexes must never be relied upon for anything because their
+				types are indeterminate, whereas the LHS values will be
+				WASM-compatible values by the time this is called.
+				
+				The reason for the argv and argIndex arguments is that we
+				frequently need more context than v for a specific conversion,
+				and that context invariably lies in the LHS arguments of v.
+				Examples of how this is useful can be found in FuncPtrAdapter.
+				*/
 				convertArg(v, argv, argIndex) {
 					toss("AbstractArgAdapter must be subclassed.");
 				}
 			};
+			/**
+			This type is recognized by xWrap() as a proxy for converting a JS
+			function to a C-side function, either permanently, for the
+			duration of a single call into the C layer, or semi-contextual,
+			where it may keep track of a single binding for a given context
+			and uninstall the binding if it's replaced.
+			
+			The constructor requires an options object with these properties:
+			
+			- name (optional): string describing the function binding. This
+			is solely for debugging and error-reporting purposes. If not
+			provided, an empty string is assumed.
+			
+			- signature: a function signature string compatible with
+			jsFuncToWasm().
+			
+			- bindScope (string): one of ('transient', 'context',
+			'singleton', 'permanent'). Bind scopes are:
+			
+			- 'transient': it will convert JS functions to WASM only for
+			the duration of the xWrap()'d function call, using
+			scopedInstallFunction(). Before that call returns, the
+			WASM-side binding will be uninstalled.
+			
+			- 'singleton': holds one function-pointer binding for this
+			instance. If it's called with a different function pointer,
+			it uninstalls the previous one after converting the new
+			value. This is only useful for use with "global" functions
+			which do not rely on any state other than this function
+			pointer. If the being-converted function pointer is intended
+			to be mapped to some sort of state object (e.g. an
+			`sqlite3*`) then "context" (see below) is the proper mode.
+			
+			- 'context': similar to singleton mode but for a given
+			"context", where the context is a key provided by the user
+			and possibly dependent on a small amount of call-time
+			context. This mode is the default if bindScope is _not_ set
+			but a property named contextKey (described below) is.
+			
+			- 'permanent': the function is installed and left there
+			forever. There is no way to recover its pointer address
+			later on for cleanup purposes. i.e. it effectively leaks.
+			
+			- callProxy (function): if set, this must be a function which
+			will act as a proxy for any "converted" JS function. It is
+			passed the being-converted function value and must return
+			either that function or a function which acts on its
+			behalf. The returned function will be the one which gets
+			installed into the WASM function table. The proxy must perform
+			any required argument conversion (it will be called from C
+			code, so will receive C-format arguments) before passing them
+			on to the being-converted function. Whether or not the proxy
+			itself must return a value depends on the context. If it does,
+			it must be a WASM-friendly value, as it will be returning from
+			a call made from WASM code.
+			
+			- contextKey (function): is only used if bindScope is 'context'
+			or if bindScope is not set and this function is, in which case
+			a bindScope of 'context' is assumed. This function gets bound
+			to this object, so its "this" is this object. It gets passed
+			(argv,argIndex), where argIndex is the index of _this_ function
+			in its _wrapping_ function's arguments, and argv is the
+			_current_ still-being-xWrap()-processed args array. (Got all
+			that?) When thisFunc(argv,argIndex) is called by xWrap(), all
+			arguments in argv to the left of argIndex will have been
+			processed by xWrap() by the time this is called. argv[argIndex]
+			will be the value the user passed in to the xWrap()'d function
+			for the argument this FuncPtrAdapter is mapped to. Arguments to
+			the right of argv[argIndex] will not yet have been converted
+			before this is called. The function must return a key which
+			uniquely identifies this function mapping context for _this_
+			FuncPtrAdapter instance (other instances are not considered),
+			taking into account that C functions often take some sort of
+			state object as one or more of their arguments. As an example,
+			if the xWrap()'d function takes `(int,T*,functionPtr,X*)` then
+			this FuncPtrAdapter instance is argv[2], and contextKey(argv,2)
+			might return 'T@'+argv[1], or even just argv[1].  Note,
+			however, that the (`X*`) argument will not yet have been
+			processed by the time this is called and should not be used as
+			part of that key because its pre-conversion data type might be
+			unpredictable. Similarly, care must be taken with C-string-type
+			arguments: those to the left in argv will, when this is called,
+			be WASM pointers, whereas those to the right might (and likely
+			do) have another data type. When using C-strings in keys, never
+			use their pointers in the key because most C-strings in this
+			constellation are transient. Conversely, the pointer address
+			makes an ideal key for longer-lived native pointer types.
+			
+			Yes, that ^^^ is quite awkward, but it's what we have. In
+			context, as it were, it actually makes some sense, but one must
+			look under its hook a bit to understand why it's shaped the
+			way it is.
+			
+			The constructor only saves the above state for later, and does
+			not actually bind any functions. The conversion, if any, is
+			performed when its convertArg() method is called via xWrap().
+			
+			Shortcomings:
+			
+			- These "reverse" bindings, i.e. calling into a JS-defined
+			function from a WASM-defined function (the generated proxy
+			wrapper), lack all type conversion support. That means, for
+			example, that...
+			
+			- Function pointers which include C-string arguments may still
+			need a level of hand-written wrappers around them, depending on
+			how they're used, in order to provide the client with JS
+			strings. Alternately, clients will need to perform such
+			conversions on their own, e.g. using cstrToJs(). The purpose of
+			the callProxy() method is to account for such cases.
+			*/
 			xArg.FuncPtrAdapter = class FuncPtrAdapter extends AbstractArgAdapter {
 				constructor(opt) {
 					super(opt);
@@ -4133,15 +6270,50 @@ async function sqlite3InitModule(moduleArg = {}) {
 					this.singleton = "singleton" === this.bindScope ? [] : void 0;
 					this.callProxy = opt.callProxy instanceof Function ? opt.callProxy : void 0;
 				}
+				/**
+				The static class members are defined outside of the class to
+				work around an emcc toolchain build problem: one of the tools
+				in emsdk v3.1.42 does not support the static keyword.
+				*/
 				contextKey(argv, argIndex) {
 					return this;
 				}
+				/**
+				Returns this object's mapping for the given context key, in the
+				form of an an array, creating the mapping if needed. The key
+				may be anything suitable for use in a Map.
+				
+				The returned array is intended to be used as a pair of
+				[JSValue, WasmFuncPtr], where the first element is one passed
+				to this.convertArg() and the second is its WASM form.
+				*/
 				contextMap(key) {
 					const cm = this.__cmap || (this.__cmap = /* @__PURE__ */ new Map());
 					let rc = cm.get(key);
 					if (void 0 === rc) cm.set(key, rc = []);
 					return rc;
 				}
+				/**
+				Gets called via xWrap() to "convert" v to a WASM-bound function
+				pointer. If v is one of (a WASM pointer, null, undefined) then
+				(v||0) is returned and any earlier function installed by this
+				mapping _might_, depending on how it's bound, be uninstalled.
+				If v is not one of those types, it must be a Function, for
+				which this method creates (if needed) a WASM function binding
+				and returns the WASM pointer to that binding.
+				
+				If this instance is not in 'transient' mode, it will remember
+				the binding for at least the next call, to avoid recreating the
+				function binding unnecessarily.
+				
+				If it's passed a pointer(ish) value for v, it assumes it's a
+				WASM function pointer and does _not_ perform any function
+				binding, so this object's bindMode is irrelevant/ignored for
+				such cases.
+				
+				See the parent class's convertArg() docs for details on what
+				exactly the 2nd and 3rd arguments are.
+				*/
 				convertArg(v, argv, argIndex) {
 					let pair = this.singleton;
 					if (!pair && this.isContext) pair = this.contextMap(this.contextKey(argv, argIndex));
@@ -4173,21 +6345,229 @@ async function sqlite3InitModule(moduleArg = {}) {
 					} else throw new TypeError("Invalid FuncPtrAdapter argument type. Expecting a function pointer or a " + (this.name ? this.name + " " : "") + "function matching signature " + this.signature + ".");
 				}
 			};
+			/** If true, the constructor emits a warning. The intent is that
+			this be set to true after bootstrapping of the higher-level
+			client library is complete, to warn downstream clients that
+			they shouldn't be relying on this implementation detail which
+			does not have a stable interface. */
 			xArg.FuncPtrAdapter.warnOnUse = false;
+			/** If true, convertArg() will call FuncPtrAdapter.debugOut() when
+			it (un)installs a function binding to/from WASM. Note that
+			deinstallation of bindScope=transient bindings happens via
+			scopedAllocPop() so will not be output. */
 			xArg.FuncPtrAdapter.debugFuncInstall = false;
+			/** Function used for debug output. */
 			xArg.FuncPtrAdapter.debugOut = console.debug.bind(console);
+			/**
+			List of legal values for the FuncPtrAdapter bindScope config
+			option.
+			*/
 			xArg.FuncPtrAdapter.bindScopes = [
 				"transient",
 				"context",
 				"singleton",
 				"permanent"
 			];
+			/** Throws if xArg.get(t) returns falsy. */
 			const __xArgAdapterCheck = (t) => xArg.get(t) || toss("Argument adapter not found:", t);
+			/** Throws if xResult.get(t) returns falsy. */
 			const __xResultAdapterCheck = (t) => xResult.get(t) || toss("Result adapter not found:", t);
+			/**
+			Fetches the xWrap() argument adapter mapped to t, calls it,
+			passing in all remaining arguments, and returns the result.
+			Throws if t is not mapped to an argument converter.
+			*/
 			cache.xWrap.convertArg = (t, ...args) => __xArgAdapterCheck(t)(...args);
+			/**
+			Identical to convertArg() except that it does not perform
+			an is-defined check on the mapping to t before invoking it.
+			*/
 			cache.xWrap.convertArgNoCheck = (t, ...args) => xArg.get(t)(...args);
+			/**
+			Fetches the xWrap() result adapter mapped to t, calls it, passing
+			it v, and returns the result.  Throws if t is not mapped to an
+			argument converter.
+			*/
 			cache.xWrap.convertResult = (t, v) => null === t ? v : t ? __xResultAdapterCheck(t)(v) : void 0;
+			/**
+			Identical to convertResult() except that it does not perform an
+			is-defined check on the mapping to t before invoking it.
+			*/
 			cache.xWrap.convertResultNoCheck = (t, v) => null === t ? v : t ? xResult.get(t)(v) : void 0;
+			/**
+			Creates a wrapper for another function which converts the arguments
+			of the wrapper to argument types accepted by the wrapped function,
+			then converts the wrapped function's result to another form
+			for the wrapper.
+			
+			The first argument must be one of:
+			
+			- A JavaScript function.
+			- The name of a WASM-exported function. xGet() is used to fetch
+			the exported function, which throws if it's not found.
+			- A pointer into the indirect function table. e.g. a pointer
+			returned from target.installFunction().
+			
+			It returns either the passed-in function or a wrapper for that
+			function which converts the JS-side argument types into WASM-side
+			types and converts the result type.
+			
+			The second argument, `resultType`, describes the conversion for
+			the wrapped functions result. A literal `null` or the string
+			`'null'` both mean to return the original function's value as-is
+			(mnemonic: there is "null" conversion going on). Literal
+			`undefined` or the string `"void"` both mean to ignore the
+			function's result and return `undefined`. Aside from those two
+			special cases, the `resultType` value may be one of the values
+			described below or any mapping installed by the client using
+			xWrap.resultAdapter().
+			
+			If passed 3 arguments and the final one is an array, that array
+			must contain a list of type names (see below) for adapting the
+			arguments from JS to WASM.  If passed 2 arguments, more than 3,
+			or the 3rd is not an array, all arguments after the 2nd (if any)
+			are treated as type names. i.e.:
+			
+			```
+			xWrap('funcname', 'i32', 'string', 'f64');
+			// is equivalent to:
+			xWrap('funcname', 'i32', ['string', 'f64']);
+			```
+			
+			This function enforces that the given list of arguments has the
+			same arity as the being-wrapped function (as defined by its
+			`length` property) and it will throw if that is not the case.
+			Similarly, the created wrapper will throw if passed a differing
+			argument count. The intent of that strictness is to help catch
+			coding errors in using JS-bound WASM functions earlier rather
+			than laer.
+			
+			Type names are symbolic names which map the arguments to an
+			adapter function to convert, if needed, the value before passing
+			it on to WASM or to convert a return result from WASM. The list
+			of pre-defined names:
+			
+			- `i8`, `i16`, `i32` (args and results): all integer conversions
+			which convert their argument to an integer and truncate it to
+			the given bit length.
+			
+			- `*`, `**`, and `pointer` (args): are assumed to be WASM pointer
+			values and are returned coerced to an appropriately-sized
+			pointer value (i32 or i64). Non-numeric values will coerce to 0
+			and out-of-range values will have undefined results (just as
+			with any pointer misuse).
+			
+			- `*` and `pointer` (results): aliases for the current
+			WASM pointer numeric type.
+			
+			- `**` (args): is simply a descriptive alias for the WASM pointer
+			type. It's primarily intended to mark output-pointer arguments,
+			noting that JS's view of WASM does not distinguish between
+			pointers and pointers-to-pointers, so all such interpretation
+			of `**`, as distinct from `*`, necessarily happens at the
+			client level.
+			
+			- `NumType*` (args): a type name in this form, where T is
+			the name of a numeric mapping, e.g. 'int16' or 'double',
+			is treated like `*`.
+			
+			- `i64` (args and results): passes the value to BigInt() to
+			convert it to an int64. This conversion will if bigIntEnabled
+			is falsy.
+			
+			- `f32` (`float`), `f64` (`double`) (args and results): pass
+			their argument to Number(). i.e. the adapter does not currently
+			distinguish between the two types of floating-point numbers.
+			
+			- `number` (results): converts the result to a JS Number using
+			Number(theValue). This is for result conversions only, as it's
+			not possible to generically know which type of number to
+			convert arguments to.
+			
+			Non-numeric conversions include:
+			
+			- `null` literal or `"null"` string (args and results): perform
+			no translation and pass the arg on as-is. This is primarily
+			useful for results but may have a use or two for arguments.
+			
+			- `string` or `utf8` (args): has two different semantics in order
+			to accommodate various uses of certain C APIs
+			(e.g. output-style strings)...
+			
+			- If the arg is a JS string, it creates a _temporary_
+			UTF-8-encoded C-string to pass to the exported function,
+			cleaning it up before the wrapper returns. If a long-lived
+			C-string pointer is required, that requires client-side code
+			to create the string then pass its pointer to the function.
+			
+			- Else the arg is assumed to be a pointer to a string the
+			client has already allocated and it's passed on as
+			a WASM pointer.
+			
+			- `string` or `utf8` (results): treats the result value as a
+			const C-string, encoded as UTF-8, copies it to a JS string,
+			and returns that JS string.
+			
+			- `string:dealloc` or `utf8:dealloc` (results): treats the result
+			value as a non-const UTF-8 C-string, ownership of which has
+			just been transfered to the caller. It copies the C-string to a
+			JS string, frees the C-string using dealloc(), and returns the
+			JS string. If such a result value is NULL, the JS result is
+			`null`. Achtung: when using an API which returns results from a
+			specific allocator, e.g. `my_malloc()`, this conversion _is not
+			legal_. Instead, an equivalent conversion which uses the
+			appropriate deallocator is required. For example:
+			
+			```js
+			target.xWrap.resultAdapter('string:my_free',(i)=>{
+			try { return i ? target.cstrToJs(i) : null; }
+			finally{ target.exports.my_free(i); }
+			};
+			```
+			
+			- `json` (results): treats the result as a const C-string and
+			returns the result of passing the converted-to-JS string to
+			JSON.parse(). Returns `null` if the C-string is a NULL pointer.
+			
+			- `json:dealloc` (results): works exactly like `string:dealloc` but
+			returns the same thing as the `json` adapter. Note the
+			warning in `string:dealloc` regarding matching allocators and
+			deallocators.
+			
+			The type names for results and arguments are validated when
+			xWrap() is called and any unknown names will trigger an
+			exception.
+			
+			Clients may map their own result and argument adapters using
+			xWrap.resultAdapter() and xWrap.argAdapter(), noting that not all
+			type conversions are valid for both arguments _and_ result types
+			as they often have different memory ownership requirements.
+			
+			Design note: the ability to pass in a JS function as the first
+			argument is of relatively limited use, primarily for testing
+			argument and result converters. JS functions, by and large, will
+			not want to deal with C-type arguments.
+			
+			TODOs:
+			
+			- Figure out how/whether we can (semi-)transparently handle
+			pointer-type _output_ arguments. Those currently require
+			explicit handling by allocating pointers, assigning them before
+			the call using poke(), and fetching them with
+			peek() after the call. We may be able to automate some
+			or all of that.
+			
+			- Figure out whether it makes sense to extend the arg adapter
+			interface such that each arg adapter gets an array containing
+			the results of the previous arguments in the current call. That
+			might allow some interesting type-conversion feature. Use case:
+			handling of the final argument to sqlite3_prepare_v2() depends
+			on the type (pointer vs JS string) of its 2nd
+			argument. Currently that distinction requires hand-writing a
+			wrapper for that function. That case is unusual enough that
+			abstracting it into this API (and taking on the associated
+			costs) may well not make good sense.
+			*/
 			target.xWrap = function callee(fArg, resultType, ...argTypes) {
 				if (3 === arguments.length && Array.isArray(arguments[2])) argTypes = arguments[2];
 				if (target.isPtr(fArg)) fArg = target.functionEntry(fArg) || toss("Function pointer not found in WASM function table.");
@@ -4215,6 +6595,28 @@ async function sqlite3InitModule(moduleArg = {}) {
 					}
 				};
 			};
+			/**
+			Internal impl for xWrap.resultAdapter() and argAdapter().
+			
+			func = one of xWrap.resultAdapter or xWrap.argAdapter.
+			
+			argc = the number of args in the wrapping call to this
+			function.
+			
+			typeName = the first arg to the wrapping function.
+			
+			adapter = the second arg to the wrapping function.
+			
+			modeName = a descriptive name of the wrapping function for
+			error-reporting purposes.
+			
+			xcvPart = one of xResult or xArg.
+			
+			This acts as either a getter (if 1===argc) or setter (if
+			2===argc) for the given adapter. Returns func on success or
+			throws if (A) called with 2 args but adapter is-not-a Function or
+			(B) typeName is not a string or (C) argc is not one of (1, 2).
+			*/
 			const __xAdapter = function(func, argc, typeName, adapter, modeName, xcvPart) {
 				if ("string" === typeof typeName) {
 					if (1 === argc) return xcvPart.get(typeName);
@@ -4229,21 +6631,170 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 				toss("Invalid arguments to", modeName);
 			};
+			/**
+			Gets, sets, or removes a result value adapter for use with
+			xWrap(). If passed only 1 argument, the adapter function for the
+			given type name is returned.  If the second argument is explicit
+			falsy (as opposed to defaulted), the adapter named by the first
+			argument is removed. If the 2nd argument is not falsy, it must be
+			a function which takes one value and returns a value appropriate
+			for the given type name. The adapter may throw if its argument is
+			not of a type it can work with. This function throws for invalid
+			arguments.
+			
+			Example:
+			
+			```
+			xWrap.resultAdapter('twice',(v)=>v+v);
+			```
+			
+			Result adapters MUST NOT use the scopedAlloc() family of APIs to
+			allocate a result value. xWrap()-generated wrappers run in the
+			context of scopedAllocPush() so that argument adapters can easily
+			convert, e.g., to C-strings, and have them cleaned up
+			automatically before the wrapper returns to the caller. Likewise,
+			if a _result_ adapter uses scoped allocation, the result will be
+			freed before the wrapper returns, leading to chaos and undefined
+			behavior.
+			
+			When called as a setter, this function returns itself.
+			*/
 			target.xWrap.resultAdapter = function f(typeName, adapter) {
 				return __xAdapter(f, arguments.length, typeName, adapter, "resultAdapter()", xResult);
 			};
+			/**
+			Functions identically to xWrap.resultAdapter() but applies to
+			call argument conversions instead of result value conversions.
+			
+			xWrap()-generated wrappers perform argument conversion in the
+			context of a scopedAllocPush(), so any memory allocation
+			performed by argument adapters really, really, really should be
+			made using the scopedAlloc() family of functions unless
+			specifically necessary. For example:
+			
+			```
+			xWrap.argAdapter('my-string', function(v){
+			return ('string'===typeof v)
+			? myWasmObj.scopedAllocCString(v) : null;
+			};
+			```
+			
+			Contrariwise, _result_ adapters _must not_ use scopedAlloc() to
+			allocate results because they would be freed before the
+			xWrap()-created wrapper returns.
+			
+			It is perfectly legitimate to use these adapters to perform
+			argument validation, as opposed (or in addition) to conversion.
+			When used that way, they should throw for invalid arguments.
+			*/
 			target.xWrap.argAdapter = function f(typeName, adapter) {
 				return __xAdapter(f, arguments.length, typeName, adapter, "argAdapter()", xArg);
 			};
 			target.xWrap.FuncPtrAdapter = xArg.FuncPtrAdapter;
+			/**
+			Functions like xCall() but performs argument and result type
+			conversions as for xWrap(). The first, second, and third
+			arguments are as documented for xWrap(), except that the 3rd
+			argument may be either a falsy value or empty array to represent
+			nullary functions. The 4th+ arguments are arguments for the call,
+			with the special case that if the 4th argument is an array, it is
+			used as the arguments for the call. Returns the converted result
+			of the call.
+			
+			This is just a thin wrapper around xWrap(). If the given function
+			is to be called more than once, it's more efficient to use
+			xWrap() to create a wrapper, then to call that wrapper as many
+			times as needed. For one-shot calls, however, this variant is
+			simpler.
+			*/
 			target.xCallWrapped = function(fArg, resultType, argTypes, ...args) {
 				if (Array.isArray(arguments[3])) args = arguments[3];
 				return target.xWrap(fArg, resultType, argTypes || []).apply(null, args || []);
 			};
+			/**
+			This function is ONLY exposed in the public API to facilitate
+			testing. It should not be used in application-level code, only
+			in test code.
+			
+			Expects to be given (typeName, value) and returns a conversion
+			of that value as has been registered using argAdapter().
+			It throws if no adapter is found.
+			
+			ACHTUNG: the adapter may require that a scopedAllocPush() is
+			active and it may allocate memory within that scope. It may also
+			require additional arguments, depending on the type of
+			conversion.
+			*/
 			target.xWrap.testConvertArg = cache.xWrap.convertArg;
+			/**
+			This function is ONLY exposed in the public API to facilitate
+			testing. It should not be used in application-level code, only
+			in test code.
+			
+			Expects to be given (typeName, value) and returns a conversion
+			of that value as has been registered using resultAdapter().
+			It throws if no adapter is found.
+			
+			ACHTUNG: the adapter may allocate memory which the caller may need
+			to know how to free.
+			*/
 			target.xWrap.testConvertResult = cache.xWrap.convertResult;
 			return target;
 		};
+		/**
+		yawl (Yet Another Wasm Loader) provides very basic wasm loader.
+		It requires a config object:
+		
+		- `uri`: required URI of the WASM file to load.
+		
+		- `onload(loadResult)`: optional callback. Its argument is an
+		object described in more detail below.
+		
+		- `imports`: optional imports object for
+		WebAssembly.instantiate[Streaming]().  The default is an empty
+		set of imports. If the module requires any imports, this object
+		must include them.
+		
+		- `wasmUtilTarget`: optional object suitable for passing to
+		WhWasmUtilInstaller(). If set, it gets passed to that function
+		before the returned promise resolves. This function sets several
+		properties on it before passing it on to that function (which
+		sets many more):
+		
+		- `module`, `instance`: the properties from the
+		instantiate[Streaming]() result.
+		
+		- If `instance.exports.memory` is _not_ set then it requires that
+		`config.imports.env.memory` be set (else it throws), and
+		assigns that to `wasmUtilTarget.memory`.
+		
+		- If `wasmUtilTarget.alloc` is not set and
+		`instance.exports.malloc` is, it installs
+		`wasmUtilTarget.alloc()` and `wasmUtilTarget.dealloc()`
+		wrappers for the exports' `malloc` and `free` functions
+		if exports.malloc exists.
+		
+		It returns a function which, when called, initiates loading of the
+		module and returns a Promise. When that Promise resolves, it calls
+		the `config.onload` callback (if set) and passes it `(loadResult)`,
+		where `loadResult` is derived from the result of
+		WebAssembly.instantiate[Streaming](), an object in the form:
+		
+		```
+		{
+		module: a WebAssembly.Module,
+		instance: a WebAssembly.Instance,
+		config: the config arg to this function
+		}
+		```
+		
+		(The initial `then()` attached to the promise gets only that
+		object, and not the `config` object, thus the potential need for a
+		`config.onload` handler.)
+		
+		Error handling is up to the caller, who may attach a `catch()` call
+		to the promise.
+		*/
 		globalThis.WhWasmUtilInstaller.yawl = function yawl(config) {
 			"use strict";
 			const wfetch = () => fetch(config.uri, { credentials: "same-origin" });
@@ -4256,7 +6807,13 @@ async function sqlite3InitModule(moduleArg = {}) {
 					const tgt = config.wasmUtilTarget;
 					tgt.module = arg.module;
 					tgt.instance = arg.instance;
-					if (!tgt.instance.exports.memory) tgt.memory = config?.imports?.env?.memory || toss("Missing 'memory' object!");
+					if (!tgt.instance.exports.memory)
+ /**
+					WhWasmUtilInstaller requires either tgt.exports.memory
+					(exported from WASM) or tgt.memory (JS-provided memory
+					imported into WASM).
+					*/
+					tgt.memory = config?.imports?.env?.memory || toss("Missing 'memory' object!");
 					if (!tgt.alloc && arg.instance.exports.malloc) {
 						const exports = arg.instance.exports;
 						tgt.alloc = function(n) {
@@ -4276,6 +6833,8 @@ async function sqlite3InitModule(moduleArg = {}) {
 		}.bind(globalThis.WhWasmUtilInstaller);
 		globalThis.Jaccwabyt = function StructBinderFactory(config) {
 			"use strict";
+			/** Throws a new Error, the message of which is the concatenation
+			all args with a space between each. */
 			const toss = (...args) => {
 				throw new Error(args.join(" "));
 			};
@@ -4302,9 +6861,21 @@ async function sqlite3InitModule(moduleArg = {}) {
 			}
 			if (ptrSize !== 4 && ptrSize !== 8) toss("Invalid pointer size:", ptrSize);
 			if (ptrIR !== "i32" && ptrIR !== "i64") toss("Invalid pointer representation:", ptrIR);
+			/** Either BigInt or, if !bigIntEnabled, a function which
+			throws complaining that BigInt is not enabled. */
 			const __BigInt = bigIntEnabled && BigInt ? (v) => BigInt(v || 0) : (v) => toss("BigInt support is disabled in this build.");
 			const __asPtrType = "i32" == ptrIR ? Number : __BigInt;
 			const __NullPtr = __asPtrType(0);
+			/**
+			Expects any number of numeric arguments, each one of either type
+			Number or BigInt. It sums them up (from an implicit starting
+			point of 0 or 0n) and returns them as a number of the same type
+			which target.asPtrType() uses.
+			
+			This is a workaround for not being able to mix Number/BigInt in
+			addition/subtraction expressions (which we frequently need for
+			calculating pointer offsets).
+			*/
 			const __ptrAdd = function(...args) {
 				let rc = __NullPtr;
 				for (let i = 0; i < args.length; ++i) rc += __asPtrType(args[i]);
@@ -4316,20 +6887,20 @@ async function sqlite3InitModule(moduleArg = {}) {
 			if (!SBF.debugFlags) {
 				SBF.__makeDebugFlags = function(deriveFrom = null) {
 					if (deriveFrom && deriveFrom.__flags) deriveFrom = deriveFrom.__flags;
-					const f = function f$1(flags) {
-						if (0 === arguments.length) return f$1.__flags;
+					const f = function f(flags) {
+						if (0 === arguments.length) return f.__flags;
 						if (flags < 0) {
-							delete f$1.__flags.getter;
-							delete f$1.__flags.setter;
-							delete f$1.__flags.alloc;
-							delete f$1.__flags.dealloc;
+							delete f.__flags.getter;
+							delete f.__flags.setter;
+							delete f.__flags.alloc;
+							delete f.__flags.dealloc;
 						} else {
-							f$1.__flags.getter = 0 !== (1 & flags);
-							f$1.__flags.setter = 0 !== (2 & flags);
-							f$1.__flags.alloc = 0 !== (4 & flags);
-							f$1.__flags.dealloc = 0 !== (8 & flags);
+							f.__flags.getter = 0 !== (1 & flags);
+							f.__flags.setter = 0 !== (2 & flags);
+							f.__flags.alloc = 0 !== (4 & flags);
+							f.__flags.dealloc = 0 !== (8 & flags);
 						}
-						return f$1._flags;
+						return f._flags;
 					};
 					Object.defineProperty(f, "__flags", {
 						iterable: false,
@@ -4342,10 +6913,26 @@ async function sqlite3InitModule(moduleArg = {}) {
 				SBF.debugFlags = SBF.__makeDebugFlags();
 			}
 			const isLittleEndian = true;
+			/**
+			Some terms used in the internal docs:
+			
+			StructType: a struct-wrapping class generated by this
+			framework.
+			
+			DEF: struct description object.
+			
+			SIG: struct member signature string.
+			*/
+			/** True if SIG s looks like a function signature, else
+			false. */
 			const isFuncSig = (s) => "(" === s[1];
+			/** True if SIG s is-a pointer-type signature. */
 			const isPtrSig = (s) => "p" === s || "P" === s || "s" === s;
 			const isAutoPtrSig = (s) => "P" === s;
+			/** Returns p if SIG s is a function SIG, else returns s[0]. */
 			const sigLetter = (s) => s ? isFuncSig(s) ? "p" : s[0] : void 0;
+			/** Returns the WASM IR form of the letter at SIG s[0]. Throws for
+			an unknown SIG. */
 			const sigIR = function(s) {
 				switch (sigLetter(s)) {
 					case "c":
@@ -4360,6 +6947,8 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 				toss("Unhandled signature IR:", s);
 			};
+			/** Returns the WASM sizeof of the letter at SIG s[0]. Throws for an
+			unknown SIG. */
 			const sigSize = function(s) {
 				switch (sigLetter(s)) {
 					case "c":
@@ -4375,6 +6964,8 @@ async function sqlite3InitModule(moduleArg = {}) {
 				toss("Unhandled signature sizeof:", s);
 			};
 			const affirmBigIntArray = BigInt64Array ? () => true : () => toss("BigInt64Array is not available.");
+			/** Returns the name of a DataView getter method corresponding
+			to the given SIG. */
 			const sigDVGetter = function(s) {
 				switch (sigLetter(s)) {
 					case "p":
@@ -4394,6 +6985,8 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 				toss("Unhandled DataView getter for signature:", s);
 			};
+			/** Returns the name of a DataView setter method corresponding
+			to the given SIG. */
 			const sigDVSetter = function(s) {
 				switch (sigLetter(s)) {
 					case "p":
@@ -4413,6 +7006,11 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 				toss("Unhandled DataView setter for signature:", s);
 			};
+			/**
+			Returns a factory for either Number or BigInt, depending on the
+			given SIG. This constructor is used in property setters to coerce
+			the being-set value to the correct pointer size.
+			*/
 			const sigDVSetWrapper = function(s) {
 				switch (sigLetter(s)) {
 					case "i":
@@ -4423,19 +7021,36 @@ async function sqlite3InitModule(moduleArg = {}) {
 					case "j": return __BigInt;
 					case "p":
 					case "P":
-					case "s":
-						switch (ptrSize) {
-							case 4: return Number;
-							case 8: return __BigInt;
-						}
-						break;
+					case "s": switch (ptrSize) {
+						case 4: return Number;
+						case 8: return __BigInt;
+					}
 				}
 				toss("Unhandled DataView set wrapper for signature:", s);
 			};
+			/** Returns the given struct and member name in a form suitable for
+			debugging and error output. */
 			const sPropName = (s, k) => s + "::" + k;
 			const __propThrowOnSet = function(structName, propName) {
 				return () => toss(sPropName(structName, propName), "is read-only.");
 			};
+			/**
+			In order to completely hide StructBinder-bound struct pointers
+			from JS code, we store them in a scope-local WeakMap which maps
+			the struct-bound objects to an object with their metadata:
+			
+			{
+			.p = the native pointer,
+			.o = self (for an eventual reverse-mapping),
+			.xb = extra bytes allocated for p,
+			.zod = zeroOnDispose,
+			.ownsPointer = true if this object owns p
+			}
+			
+			The .p data are accessible via obj.pointer, which is gated behind
+			a property interceptor, but are not exposed anywhere else in the
+			public API.
+			*/
 			const getInstanceHandle = function f(obj, create = true) {
 				let ii = f.map.get(obj);
 				if (!ii && create) f.map.set(obj, ii = f.create(obj));
@@ -4451,11 +7066,20 @@ async function sqlite3InitModule(moduleArg = {}) {
 					xb: 0
 				});
 			};
+			/**
+			Remove the getInstanceHandle() mapping for obj.
+			*/
 			const rmInstanceHandle = (obj) => getInstanceHandle.map.delete(obj);
-			const __isPtr32 = (ptr$1) => "number" === typeof ptr$1 && ptr$1 === (ptr$1 | 0) && ptr$1 >= 0;
-			const __isPtr64 = (ptr$1) => "bigint" === typeof ptr$1 && ptr$1 >= 0 || __isPtr32(ptr$1);
+			const __isPtr32 = (ptr) => "number" === typeof ptr && ptr === (ptr | 0) && ptr >= 0;
+			const __isPtr64 = (ptr) => "bigint" === typeof ptr && ptr >= 0 || __isPtr32(ptr);
+			/**
+			isPtr() is an alias for isPtr32() or isPtr64(), depending on
+			ptrSize.
+			*/
 			const __isPtr = 4 === ptrSize ? __isPtr32 : __isPtr64;
 			const __isNonNullPtr = (v) => __isPtr(v) && v > 0;
+			/** Frees the obj.pointer memory (a.k.a. m), handles obj.ondispose,
+			and unmaps obj from its native resources. */
 			const __freeStruct = function(ctor, obj, m) {
 				const ii = getInstanceHandle(obj, false);
 				if (!ii) return;
@@ -4485,6 +7109,8 @@ async function sqlite3InitModule(moduleArg = {}) {
 					dealloc(m);
 				}
 			};
+			/** Returns a skeleton for a read-only, non-iterable property
+			* descriptor. */
 			const rop0 = () => {
 				return {
 					configurable: false,
@@ -4492,25 +7118,30 @@ async function sqlite3InitModule(moduleArg = {}) {
 					iterable: false
 				};
 			};
+			/** Returns a skeleton for a read-only property accessor wrapping
+			value v. */
 			const rop = (v) => {
 				return {
 					...rop0(),
 					value: v
 				};
 			};
+			/** Allocates obj's memory buffer based on the size defined in
+			ctor.structInfo.sizeof. */
 			const __allocStruct = function f(ctor, obj, xm) {
 				let opt;
-				const checkPtr = (ptr$1) => {
-					__isNonNullPtr(ptr$1) || toss("Invalid pointer value", arguments[0], "for", ctor.structName, "constructor.");
+				const checkPtr = (ptr) => {
+					__isNonNullPtr(ptr) || toss("Invalid pointer value", arguments[0], "for", ctor.structName, "constructor.");
 				};
-				if (arguments.length >= 3) if (xm && "object" === typeof xm) {
-					opt = xm;
-					xm = opt?.wrap;
-				} else {
-					checkPtr(xm);
-					opt = { wrap: xm };
-				}
-				else opt = {};
+				if (arguments.length >= 3) {
+					if (xm && "object" === typeof xm) {
+						opt = xm;
+						xm = opt?.wrap;
+					} else {
+						checkPtr(xm);
+						opt = { wrap: xm };
+					}
+				} else opt = {};
 				const fill = !xm;
 				let nAlloc = 0;
 				let ownsPointer = false;
@@ -4539,11 +7170,15 @@ async function sqlite3InitModule(moduleArg = {}) {
 					throw e;
 				}
 			};
+			/** True if sig looks like an emscripten/jaccwabyt
+			type signature, else false. */
 			const looksLikeASig = function f(sig) {
 				f.rxSig1 ??= /^[ipPsjfdcC]$/;
 				f.rxSig2 ??= /^[vipPsjfdcC]\([ipPsjfdcC]*\)$/;
 				return f.rxSig1.test(sig) || f.rxSig2.test(sig);
 			};
+			/** Returns a pair of adaptor maps (objects) in a length-3
+			array specific to the given object. */
 			const __adaptorsFor = function(who) {
 				let x = this.get(who);
 				if (!x) {
@@ -4556,6 +7191,8 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 				return x;
 			}.bind(/* @__PURE__ */ new WeakMap());
+			/** Code de-duplifier for __adaptGet(), __adaptSet(), and
+			__adaptStruct(). */
 			const __adaptor = function(who, which, key, proxy) {
 				const a = __adaptorsFor(who)[which];
 				if (3 === arguments.length) return a[key];
@@ -4576,6 +7213,13 @@ async function sqlite3InitModule(moduleArg = {}) {
 				__affirmNotASig("Struct adaptor", key);
 				return __adaptor(this, 2, key, ...args);
 			};
+			/**
+			An internal counterpart of __adaptStruct().  If key is-a string,
+			uses __adaptor(who) to fetch the struct-adaptor entry for key,
+			else key is assumed to be a struct description object. If it
+			resolves to an object, that's returned, else an exception is
+			thrown.
+			*/
 			const __adaptStruct2 = function(who, key) {
 				const si = "string" === typeof key ? __adaptor(who, 2, key) : key;
 				if ("object" !== typeof si) toss("Invalid struct mapping object. Arg =", key, JSON.stringify(si));
@@ -4583,6 +7227,13 @@ async function sqlite3InitModule(moduleArg = {}) {
 			};
 			const __memberKey = (k) => memberPrefix + k + memberSuffix;
 			const __memberKeyProp = rop(__memberKey);
+			/**
+			Looks up a struct member in structInfo.members. Throws if found
+			if tossIfNotFound is true, else returns undefined if not
+			found. The given name may be either the name of the
+			structInfo.members key (faster) or the key as modified by the
+			memberPrefix and memberSuffix settings.
+			*/
 			const __lookupMember = function(structInfo, memberName, tossIfNotFound = true) {
 				let m = structInfo.members[memberName];
 				if (!m && (memberPrefix || memberSuffix)) {
@@ -4594,11 +7245,17 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 				return m;
 			};
+			/**
+			Uses __lookupMember(obj.structInfo,memberName) to find a member,
+			throwing if not found. Returns its signature, either in this
+			framework's native format or in Emscripten format.
+			*/
 			const __memberSignature = function f(obj, memberName, emscriptenFormat = false) {
 				if (!f._) f._ = (x) => x.replace(/[^vipPsjrdcC]/g, "").replace(/[pPscC]/g, "i");
 				const m = __lookupMember(obj.structInfo, memberName, true);
 				return emscriptenFormat ? f._(m.signature) : m.signature;
 			};
+			/** Impl of X.memberKeys() for StructType and struct ctors. */
 			const __structMemberKeys = rop(function() {
 				const a = [];
 				for (const k of Object.keys(this.structInfo.members)) a.push(this.memberKey(k));
@@ -4606,6 +7263,8 @@ async function sqlite3InitModule(moduleArg = {}) {
 			});
 			const __utf8Decoder = new TextDecoder("utf-8");
 			const __utf8Encoder = new TextEncoder();
+			/** Internal helper to use in operations which need to distinguish
+			between SharedArrayBuffer heap memory and non-shared heap. */
 			const __SAB = "undefined" === typeof SharedArrayBuffer ? function() {} : SharedArrayBuffer;
 			const __utf8Decode = function(arrayBuffer, begin, end) {
 				if (8 === ptrSize) {
@@ -4614,14 +7273,33 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 				return __utf8Decoder.decode(arrayBuffer.buffer instanceof __SAB ? arrayBuffer.slice(begin, end) : arrayBuffer.subarray(begin, end));
 			};
+			/**
+			Uses __lookupMember() to find the given obj.structInfo key.
+			Returns that member if it is a string, else returns false. If the
+			member is not found, throws if tossIfNotFound is true, else
+			returns false.
+			*/
 			const __memberIsString = function(obj, memberName, tossIfNotFound = false) {
 				const m = __lookupMember(obj.structInfo, memberName, tossIfNotFound);
 				return m && 1 === m.signature.length && "s" === m.signature[0] ? m : false;
 			};
+			/**
+			Given a member description object, throws if member.signature is
+			not valid for assigning to or interpretation as a C-style string.
+			It optimistically assumes that any signature of (i,p,s) is
+			C-string compatible.
+			*/
 			const __affirmCStringSignature = function(member) {
 				if ("s" === member.signature) return;
 				toss("Invalid member type signature for C-string value:", JSON.stringify(member));
 			};
+			/**
+			Looks up the given member in obj.structInfo. If it has a
+			signature of 's' then it is assumed to be a C-style UTF-8 string
+			and a decoded copy of the string at its address is returned. If
+			the signature is of any other type, it throws. If an s-type
+			member's address is 0, `null` is returned.
+			*/
 			const __memberToJsString = function f(obj, memberName) {
 				const m = __lookupMember(obj.structInfo, memberName, true);
 				__affirmCStringSignature(m);
@@ -4632,12 +7310,23 @@ async function sqlite3InitModule(moduleArg = {}) {
 				for (; mem[pos] !== 0; ++pos);
 				return addr === pos ? "" : __utf8Decode(mem, addr, pos);
 			};
+			/**
+			Adds value v to obj.ondispose, creating ondispose,
+			or converting it to an array, if needed.
+			*/
 			const __addOnDispose = function(obj, ...v) {
 				if (obj.ondispose) {
 					if (!Array.isArray(obj.ondispose)) obj.ondispose = [obj.ondispose];
 				} else obj.ondispose = [];
 				obj.ondispose.push(...v);
 			};
+			/**
+			Allocates a new UTF-8-encoded, NUL-terminated copy of the given
+			JS string and returns its address relative to heap(). If
+			allocation returns 0 this function throws. Ownership of the
+			memory is transfered to the caller, who must eventually pass it
+			to the configured dealloc() function.
+			*/
 			const __allocCString = function(str) {
 				const u = __utf8Encoder.encode(str);
 				const mem = alloc(u.length + 1);
@@ -4647,6 +7336,17 @@ async function sqlite3InitModule(moduleArg = {}) {
 				h[__ptrAdd(mem, u.length)] = 0;
 				return mem;
 			};
+			/**
+			Sets the given struct member of obj to a dynamically-allocated,
+			UTF-8-encoded, NUL-terminated copy of str. It is up to the caller
+			to free any prior memory, if appropriate. The newly-allocated
+			string is added to obj.ondispose so will be freed when the object
+			is disposed.
+			
+			The given name may be either the name of the structInfo.members
+			key (faster) or the key as modified by the memberPrefix and
+			memberSuffix settings.
+			*/
 			const __setMemberCString = function(obj, memberName, str) {
 				const m = __lookupMember(obj.structInfo, memberName, true);
 				__affirmCStringSignature(m);
@@ -4655,13 +7355,21 @@ async function sqlite3InitModule(moduleArg = {}) {
 				__addOnDispose(obj, mem);
 				return obj;
 			};
-			const StructType = function StructType$1(structName, structInfo) {
+			/**
+			Prototype for all StructFactory instances (the constructors
+			returned from StructBinder).
+			*/
+			const StructType = function StructType(structName, structInfo) {
 				if (arguments[2] !== rop) toss("Do not call the StructType constructor", "from client-level code.");
 				Object.defineProperties(this, {
 					structName: rop(structName),
 					structInfo: rop(structInfo)
 				});
 			};
+			/**
+			Properties inherited by struct-type-specific StructType instances
+			and (indirectly) concrete struct-type instances.
+			*/
 			StructType.prototype = Object.create(null, {
 				dispose: rop(function() {
 					__freeStruct(this.constructor, this);
@@ -4714,6 +7422,9 @@ async function sqlite3InitModule(moduleArg = {}) {
 				__addOnDispose(this, ...v);
 				return this;
 			} });
+			/**
+			"Static" properties for StructType.
+			*/
 			Object.defineProperties(StructType, {
 				allocCString: rop(__allocCString),
 				isA: rop((v) => v instanceof StructType),
@@ -4723,13 +7434,50 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}),
 				memberKey: __memberKeyProp
 			});
+			/**
+			If struct description object si has a getter proxy, return it (a
+			function), else return undefined.
+			*/
 			const memberGetterProxy = function(si) {
 				return si.get || (si.adaptGet ? StructBinder.adaptGet(si.adaptGet) : void 0);
 			};
+			/**
+			If struct description object si has a setter proxy, return it (a
+			function), else return undefined.
+			*/
 			const memberSetterProxy = function(si) {
 				return si.set || (si.adaptSet ? StructBinder.adaptSet(si.adaptSet) : void 0);
 			};
+			/**
+			To be called by makeMemberWrapper() when si has a 'members'
+			member, i.e. is an embedded struct. This function sets up that
+			struct like any other and also sets up property accessor for
+			ctor.memberKey(name) which returns an instance of that new
+			StructType when the member is accessed. That instance wraps the
+			memory of the member's part of the containing C struct instance.
+			
+			That is, if struct Foo has member bar which is an inner struct
+			then:
+			
+			const f = new Foo;
+			const b = f.bar;
+			assert( b is-a StructType object );
+			assert( b.pointer === f.b.pointer );
+			
+			b will be disposed of when f() is. Calling b.dispose() will not
+			do any permanent harm, as the wrapper object will be recreated
+			when accessing f.bar, pointing to the same memory in f.
+			
+			The si.zeroOnDispose flag has no effect on embedded structs because
+			they wrap "external" memory, so do not own it, and are thus never
+			freed, as such.
+			*/
 			const makeMemberStructWrapper = function callee(ctor, name, si) {
+				/**
+				Where we store inner-struct member proxies. Keys are a
+				combination of the parent object's pointer address and the
+				property's name. The values are StructType instances.
+				*/
 				const __innerStructs = callee.innerStructs ??= /* @__PURE__ */ new Map();
 				const key = ctor.memberKey(name);
 				if (void 0 !== si.signature) toss("'signature' cannot be used on an embedded struct (", ctor.structName, ".", key, ").");
@@ -4762,6 +7510,15 @@ async function sqlite3InitModule(moduleArg = {}) {
 				});
 				Object.defineProperty(ctor.prototype, key, prop);
 			};
+			/**
+			This is where most of the magic happens.
+			
+			Pass this a StructBinderImpl-generated constructor, a member
+			property name, and the struct member description object. It will
+			define property accessors for proto[memberKey] which read
+			from/write to memory in this.pointer. It modifies si to make
+			certain downstream operations simpler.
+			*/
 			const makeMemberWrapper = function f(ctor, name, si) {
 				si = __adaptStruct2(this, si);
 				if (si.members) return makeMemberStructWrapper.call(this, ctor, name, si);
@@ -4788,9 +7545,9 @@ async function sqlite3InitModule(moduleArg = {}) {
 						f.cache.setters[v] = sigDVSetter(v);
 						f.cache.sw[v] = sigDVSetWrapper(v);
 					});
-					f.sigCheck = function(obj, name$1, key$1, sig) {
-						if (Object.prototype.hasOwnProperty.call(obj, key$1)) toss(obj.structName, "already has a property named", key$1 + ".");
-						looksLikeASig(sig) || toss("Malformed signature for", sPropName(obj.structName, name$1) + ":", sig);
+					f.sigCheck = function(obj, name, key, sig) {
+						if (Object.prototype.hasOwnProperty.call(obj, key)) toss(obj.structName, "already has a property named", key + ".");
+						looksLikeASig(sig) || toss("Malformed signature for", sPropName(obj.structName, name) + ":", sig);
 					};
 				}
 				const key = ctor.memberKey(name);
@@ -4805,6 +7562,11 @@ async function sqlite3InitModule(moduleArg = {}) {
 				prop.configurable = false;
 				prop.enumerable = false;
 				prop.get = function() {
+					/**
+					This getter proxy reads its value from the appropriate pointer
+					address in the heap. It knows where and how much to read based on
+					this.pointer, si.offset, and si.sizeof.
+					*/
 					if (dbg.getter) log("debug.getter:", f.cache.getters[sigGlyph], "for", sigIR(sigGlyph), xPropName, "@", this.pointer, "+", si.offset, "sz", si.sizeof);
 					let rc = new DataView(heap().buffer, Number(this.pointer) + si.offset, si.sizeof)[f.cache.getters[sigGlyph]](0, isLittleEndian);
 					if (getterProxy) rc = getterProxy.apply(this, [key, rc]);
@@ -4815,25 +7577,97 @@ async function sqlite3InitModule(moduleArg = {}) {
 				else {
 					const setterProxy = memberSetterProxy(si);
 					prop.set = function(v) {
+						/**
+						The converse of prop.get(), this encodes v into the appropriate
+						spot in the WASM heap.
+						*/
 						if (dbg.setter) log("debug.setter:", f.cache.setters[sigGlyph], "for", sigIR(sigGlyph), xPropName, "@", this.pointer, "+", si.offset, "sz", si.sizeof, v);
 						if (!this.pointer) toss("Cannot set native property on a disposed", this.structName, "instance.");
 						if (setterProxy) v = setterProxy.apply(this, [key, v]);
 						if (null === v || void 0 === v) v = __NullPtr;
-						else if (isPtrSig(si.signature) && !__isPtr(v)) if (isAutoPtrSig(si.signature) && v instanceof StructType) {
-							v = v.pointer || __NullPtr;
-							if (dbg.setter) log("debug.setter:", xPropName, "resolved to", v);
-						} else toss("Invalid value for pointer-type", xPropName + ".");
+						else if (isPtrSig(si.signature) && !__isPtr(v)) {
+							if (isAutoPtrSig(si.signature) && v instanceof StructType) {
+								v = v.pointer || __NullPtr;
+								if (dbg.setter) log("debug.setter:", xPropName, "resolved to", v);
+							} else toss("Invalid value for pointer-type", xPropName + ".");
+						}
 						new DataView(heap().buffer, Number(this.pointer) + si.offset, si.sizeof)[f.cache.setters[sigGlyph]](0, f.cache.sw[sigGlyph](v), isLittleEndian);
 					};
 				}
 				Object.defineProperty(ctor.prototype, key, prop);
 			};
-			const StructBinderImpl = function StructBinderImpl$1(structName, si, opt = Object.create(null)) {
-				const StructCtor = function StructCtor$1(arg) {
-					if (!(this instanceof StructCtor$1)) toss("The", structName, "constructor may only be called via 'new'.");
-					__allocStruct(StructCtor$1, this, ...arguments);
+			/**
+			The main factory function which will be returned to the
+			caller. The third argument is structly for internal use.
+			
+			This level of indirection is to avoid that clients can pass a
+			third argument to this, as that's only for internal use.
+			
+			internalOpt options:
+			
+			- None right now. This is for potential use in recursion.
+			
+			Usages:
+			
+			StructBinder(string, obj [,optObj]);
+			StructBinder(obj);
+			*/
+			const StructBinderImpl = function StructBinderImpl(structName, si, opt = Object.create(null)) {
+				/**
+				StructCtor is the eventual return value of this function. We
+				need to populate this early on so that we can do some trickery
+				in feeding it through recursion.
+				
+				Uses:
+				
+				// heap-allocated:
+				const x = new StructCtor;
+				// externally-managed memory:
+				const y = new StructCtor( aPtrToACompatibleCStruct );
+				
+				or, more recently:
+				
+				const z = new StructCtor({
+				extraBytes: [int=0] extra bytes to allocate after the struct
+				
+				wrap: [aPtrToACompatibleCStruct=undefined]. If provided, this
+				instance waps, but does not (by default) own the memory, else
+				a new instance is allocated from the WASM heap.
+				
+				ownsPointer: true if this object takes over ownership of
+				wrap.
+				
+				zeroOnDispose: [bool=StructCtor.structInfo.zeroOnDispose]
+				
+				autoCalcSizeOffset: [bool=false] Automatically calculate
+				sizeof an offset. This is fine for pure-JS structs (which
+				probably aren't useful beyond testing of Jaccwabyt) but it's
+				dangerous to use with actual WASM objects because we cannot
+				be guaranteed to have the same memory layout as an ostensibly
+				matching C struct. This applies recursively to all children
+				of the struct description.
+				
+				// TODO? Per-instance overrides of the struct-level flags?
+				
+				get: (k,v)=>v,
+				set: (k,v)=>v,
+				adaptGet: string,
+				adaptSet: string
+				
+				// That wouldn't fit really well right now, apparently.
+				});
+				
+				*/
+				const StructCtor = function StructCtor(arg) {
+					if (!(this instanceof StructCtor)) toss("The", structName, "constructor may only be called via 'new'.");
+					__allocStruct(StructCtor, this, ...arguments);
 				};
 				const self = this;
+				/**
+				"Convert" struct description x to a struct description, if
+				needed. This expands adaptStruct() mappings and transforms
+				{memberName:signatureString} signature syntax to object form.
+				*/
 				const ads = (x) => {
 					return "string" === typeof x && looksLikeASig(x) ? { signature: x } : __adaptStruct2(self, x);
 				};
@@ -4849,13 +7683,13 @@ async function sqlite3InitModule(moduleArg = {}) {
 				if (!structName) toss("One of 'name' or 'structName' are required.");
 				if (si.adapt) {
 					Object.keys(si.adapt.struct || {}).forEach((k) => {
-						__adaptStruct.call(StructBinderImpl$1, k, si.adapt.struct[k]);
+						__adaptStruct.call(StructBinderImpl, k, si.adapt.struct[k]);
 					});
 					Object.keys(si.adapt.set || {}).forEach((k) => {
-						__adaptSet.call(StructBinderImpl$1, k, si.adapt.set[k]);
+						__adaptSet.call(StructBinderImpl, k, si.adapt.set[k]);
 					});
 					Object.keys(si.adapt.get || {}).forEach((k) => {
-						__adaptGet.call(StructBinderImpl$1, k, si.adapt.get[k]);
+						__adaptGet.call(StructBinderImpl, k, si.adapt.get[k]);
 					});
 				}
 				if (!si.members && !si.sizeof) si.sizeof = sigSize(si.signature);
@@ -4888,8 +7722,10 @@ async function sqlite3InitModule(moduleArg = {}) {
 						m.sizeof = sigSize(m.signature);
 						if (!m.sizeof) toss(sPropName(structName, k), "is missing a sizeof property.", m);
 					}
-					if (void 0 === m.offset) if (autoCalc) m.offset = offset;
-					else toss(sPropName(structName, k), "is missing its offset.", JSON.stringify(m));
+					if (void 0 === m.offset) {
+						if (autoCalc) m.offset = offset;
+						else toss(sPropName(structName, k), "is missing its offset.", JSON.stringify(m));
+					}
 					si.members[k] = m;
 					if (!lastMember || lastMember.offset < m.offset) lastMember = m;
 					const oldAutoCalc = !!m.autoCalc;
@@ -4919,8 +7755,8 @@ async function sqlite3InitModule(moduleArg = {}) {
 				delete si.autoCalcSizeOffset;
 				return StructCtor;
 			};
-			const StructBinder = function StructBinder$1(structName, structInfo) {
-				return 1 == arguments.length ? StructBinderImpl.call(StructBinder$1, structName) : StructBinderImpl.call(StructBinder$1, structName, structInfo);
+			const StructBinder = function StructBinder(structName, structInfo) {
+				return 1 == arguments.length ? StructBinderImpl.call(StructBinder, structName) : StructBinderImpl.call(StructBinder, structName, structInfo);
 			};
 			StructBinder.StructType = StructType;
 			StructBinder.config = config;
@@ -4940,6 +7776,21 @@ async function sqlite3InitModule(moduleArg = {}) {
 			const capi = sqlite3.capi, wasm = sqlite3.wasm, util = sqlite3.util;
 			globalThis.WhWasmUtilInstaller(wasm);
 			delete globalThis.WhWasmUtilInstaller;
+			/**
+			Signatures for the WASM-exported C-side functions. Each entry
+			is an array with 2+ elements:
+			
+			[ "c-side name",
+			"result type" (wasm.xWrap() syntax),
+			[arg types in xWrap() syntax]
+			// ^^^ this needn't strictly be an array: it can be subsequent
+			// elements instead: [x,y,z] is equivalent to x,y,z
+			]
+			
+			Support for the API-specific data types in the result/argument
+			type strings gets plugged in at a later phase in the API
+			initialization process.
+			*/
 			const bindingSignatures = {
 				core: [
 					[
@@ -4993,6 +7844,13 @@ async function sqlite3InitModule(moduleArg = {}) {
 						"*",
 						"string:static",
 						"*"
+					],
+					[
+						"sqlite3_bind_zeroblob",
+						"int",
+						"sqlite3_stmt*",
+						"int",
+						"int"
 					],
 					[
 						"sqlite3_busy_handler",
@@ -5623,6 +8481,17 @@ async function sqlite3InitModule(moduleArg = {}) {
 						"sqlite3_vfs*"
 					]
 				],
+				/**
+				Functions which require BigInt (int64) support are separated
+				from the others because we need to conditionally bind them or
+				apply dummy impls, depending on the capabilities of the
+				environment.  (That said: we never actually build without
+				BigInt support, and such builds are untested.)
+				
+				Not all of these functions directly require int64 but are only
+				for use with APIs which require int64. For example, the
+				vtab-related functions.
+				*/
 				int64: [
 					[
 						"sqlite3_bind_int64",
@@ -5763,6 +8632,17 @@ async function sqlite3InitModule(moduleArg = {}) {
 						"sqlite3_value*"
 					]
 				],
+				/**
+				Functions which are intended solely for API-internal use by the
+				WASM components, not client code. These get installed into
+				sqlite3.util. Some of them get exposed to clients via variants
+				in sqlite3_js_...().
+				
+				2024-01-11: these were renamed, with two underscores in the
+				prefix, to ensure that clients do not accidentally depend on
+				them.  They have always been documented as internal-use-only,
+				so no clients "should" be depending on the old names.
+				*/
 				wasmInternal: [
 					[
 						"sqlite3__wasm_db_reset",
@@ -5838,6 +8718,11 @@ async function sqlite3InitModule(moduleArg = {}) {
 						name: "sqlite3_set_authorizer::xAuth",
 						signature: "i(pissss)",
 						contextKey: (argv, argIndex) => argv[0],
+						/**
+						We use callProxy here to ensure (A) that exceptions
+						thrown from callback() have well-defined behavior and (B)
+						that its result is coerced to an integer.
+						*/
 						callProxy: (callback) => {
 							return (pV, iCode, s0, s1, s2, s3) => {
 								try {
@@ -5985,6 +8870,12 @@ async function sqlite3InitModule(moduleArg = {}) {
 				]
 			]);
 			if (wasm.bigIntEnabled && !!wasm.exports.sqlite3changegroup_add && !!wasm.exports.sqlite3session_create && !!wasm.exports.sqlite3_preupdate_hook) {
+				/**
+				FuncPtrAdapter options for session-related callbacks with the
+				native signature "i(ps)". This proxy converts the 2nd argument
+				from a C string to a JS string before passing the arguments on
+				to the client-provided JS callback.
+				*/
 				const __ipsProxy = {
 					signature: "i(ps)",
 					callProxy: (callback) => {
@@ -6446,6 +9337,10 @@ async function sqlite3InitModule(moduleArg = {}) {
 					]
 				]);
 			}
+			/**
+			Prepare JS<->C struct bindings for the non-opaque struct types we
+			need...
+			*/
 			sqlite3.StructBinder = globalThis.Jaccwabyt({
 				heap: wasm.heap8u,
 				alloc: wasm.alloc,
@@ -6458,11 +9353,40 @@ async function sqlite3InitModule(moduleArg = {}) {
 			{
 				const __xString = wasm.xWrap.argAdapter("string");
 				wasm.xWrap.argAdapter("string:flexible", (v) => __xString(util.flexibleString(v)));
+				/**
+				The 'string:static' argument adapter treats its argument as
+				either...
+				
+				- WASM pointer: assumed to be a long-lived C-string which gets
+				returned as-is.
+				
+				- Anything else: gets coerced to a JS string for use as a map
+				key. If a matching entry is found (as described next), it is
+				returned, else wasm.allocCString() is used to create a a new
+				string, map its pointer to a copy of (''+v) for the remainder
+				of the application's life, and returns that pointer value for
+				this call and all future calls which are passed a
+				string-equivalent argument.
+				
+				Use case: sqlite3_bind_pointer(), sqlite3_result_pointer(), and
+				sqlite3_value_pointer() call for "a static string and
+				preferably a string literal". This converter is used to ensure
+				that the string value seen by those functions is long-lived and
+				behaves as they need it to, at the cost of a one-time leak of
+				each distinct key.
+				*/
 				wasm.xWrap.argAdapter("string:static", function(v) {
 					if (wasm.isPtr(v)) return v;
 					v = "" + v;
 					return this[v] || (this[v] = wasm.allocCString(v));
 				}.bind(Object.create(null)));
+				/**
+				Add some descriptive xWrap() aliases for '*' intended to (A)
+				improve readability/correctness of bindingSignatures and (B)
+				provide automatic conversion from higher-level representations,
+				e.g. capi.sqlite3_vfs to `sqlite3_vfs*` via (capi.sqlite3_vfs
+				instance).pointer.
+				*/
 				const __xArgPtr = wasm.xWrap.argAdapter("*");
 				const nilType = function() {};
 				wasm.xWrap.argAdapter("sqlite3_filename", __xArgPtr)("sqlite3_context*", __xArgPtr)("sqlite3_value*", __xArgPtr)("void*", __xArgPtr)("sqlite3_changegroup*", __xArgPtr)("sqlite3_changeset_iter*", __xArgPtr)("sqlite3_session*", __xArgPtr)("sqlite3_stmt*", (v) => __xArgPtr(v instanceof (sqlite3?.oo1?.Stmt || nilType) ? v.pointer : v))("sqlite3*", (v) => __xArgPtr(v instanceof (sqlite3?.oo1?.DB || nilType) ? v.pointer : v))("sqlite3_vfs*", (v) => {
@@ -6470,14 +9394,44 @@ async function sqlite3InitModule(moduleArg = {}) {
 					return __xArgPtr(v instanceof (capi.sqlite3_vfs || nilType) ? v.pointer : v);
 				});
 				if (wasm.exports.sqlite3_declare_vtab) wasm.xWrap.argAdapter("sqlite3_index_info*", (v) => __xArgPtr(v instanceof (capi.sqlite3_index_info || nilType) ? v.pointer : v))("sqlite3_module*", (v) => __xArgPtr(v instanceof (capi.sqlite3_module || nilType) ? v.pointer : v));
+				/**
+				Alias `T*` to `*` for return type conversions for common T
+				types, primarily to improve legibility of their binding
+				signatures.
+				*/
 				const __xRcPtr = wasm.xWrap.resultAdapter("*");
 				wasm.xWrap.resultAdapter("sqlite3*", __xRcPtr)("sqlite3_context*", __xRcPtr)("sqlite3_stmt*", __xRcPtr)("sqlite3_value*", __xRcPtr)("sqlite3_vfs*", __xRcPtr)("void*", __xRcPtr);
+				/**
+				Populate api object with sqlite3_...() by binding the "raw" wasm
+				exports into type-converting proxies using wasm.xWrap().
+				*/
 				for (const e of bindingSignatures.core) capi[e[0]] = wasm.xWrap.apply(null, e);
 				for (const e of bindingSignatures.wasmInternal) util[e[0]] = wasm.xWrap.apply(null, e);
 				for (const e of bindingSignatures.int64) capi[e[0]] = wasm.bigIntEnabled ? wasm.xWrap.apply(null, e) : () => toss(e[0] + "() is unavailable due to lack", "of BigInt support in this build.");
 				delete bindingSignatures.core;
 				delete bindingSignatures.int64;
 				delete bindingSignatures.wasmInternal;
+				/**
+				Sets the given db's error state. Accepts:
+				
+				- (sqlite3*, int code, string msg)
+				- (sqlite3*, Error e [,string msg = ''+e])
+				
+				If passed a WasmAllocError, the message is ignored and the
+				result code is SQLITE_NOMEM. If passed any other Error type,
+				the result code defaults to SQLITE_ERROR unless the Error
+				object has a resultCode property, in which case that is used
+				(e.g. SQLite3Error has that). If passed a non-WasmAllocError
+				exception, the message string defaults to ''+theError.
+				
+				Returns either the final result code, capi.SQLITE_NOMEM if
+				setting the message string triggers an OOM, or
+				capi.SQLITE_MISUSE if pDb is NULL or invalid (with the caveat
+				that behavior in the later case is undefined if pDb is not
+				"valid enough").
+				
+				Pass (pDb,0,0) to clear the error state.
+				*/
 				util.sqlite3__wasm_db_error = function(pDb, resultCode, message) {
 					if (!pDb) return capi.SQLITE_MISUSE;
 					if (resultCode instanceof sqlite3.WasmAllocError) {
@@ -6524,6 +9478,10 @@ async function sqlite3InitModule(moduleArg = {}) {
 				if (!wasm.functionEntry(capi.SQLITE_WASM_DEALLOC)) toss("Internal error: cannot resolve exported function", "entry SQLITE_WASM_DEALLOC (==" + capi.SQLITE_WASM_DEALLOC + ").");
 				const __rcMap = Object.create(null);
 				for (const e of Object.entries(wasm.ctype["resultCodes"])) __rcMap[e[1]] = e[0];
+				/**
+				For the given integer, returns the SQLITE_xxx result code as a
+				string, or undefined if no such mapping is found.
+				*/
 				capi.sqlite3_js_rc_str = (rc) => __rcMap[rc];
 				const notThese = Object.assign(Object.create(null), {
 					WasmTestStruct: true,
@@ -6549,12 +9507,26 @@ async function sqlite3InitModule(moduleArg = {}) {
 					]);
 				}
 			}
+			/**
+			Internal helper to assist in validating call argument counts in
+			the hand-written sqlite3_xyz() wrappers. We do this only for
+			consistency with non-special-case wrappings.
+			*/
 			const __dbArgcMismatch = (pDb, f, n) => {
 				return util.sqlite3__wasm_db_error(pDb, capi.SQLITE_MISUSE, f + "() requires " + n + " argument" + (1 === n ? "" : "s") + ".");
 			};
+			/** Code duplication reducer for functions which take an encoding
+			argument and require SQLITE_UTF8.  Sets the db error code to
+			SQLITE_FORMAT, installs a descriptive error message,
+			and returns SQLITE_FORMAT. */
 			const __errEncoding = (pDb) => {
 				return util.sqlite3__wasm_db_error(pDb, capi.SQLITE_FORMAT, "SQLITE_UTF8 is the only supported encoding.");
 			};
+			/**
+			__dbCleanupMap is infrastructure for recording registration of
+			UDFs and collations so that sqlite3_close_v2() can clean up any
+			automated JS-to-WASM function conversions installed by those.
+			*/
 			const __argPDb = (pDb) => wasm.xWrap.argAdapter("sqlite3*")(pDb);
 			const __argStr = (str) => wasm.isPtr(str) ? wasm.cstrToJs(str) : str;
 			const __dbCleanupMap = function(pDb, mode) {
@@ -6587,8 +9559,36 @@ async function sqlite3InitModule(moduleArg = {}) {
 				if (!m.wudf) m.wudf = /* @__PURE__ */ new Map();
 				this._addUDF(pDb, name, arity, m.wudf);
 			};
+			/**
+			Intended to be called _only_ from sqlite3_close_v2(),
+			passed its non-0 db argument.
+			
+			This function frees up certain automatically-installed WASM
+			function bindings which were installed on behalf of the given db,
+			as those may otherwise leak.
+			
+			Notable caveat: this is only ever run via
+			sqlite3.capi.sqlite3_close_v2(). If a client, for whatever
+			reason, uses sqlite3.wasm.exports.sqlite3_close_v2() (the
+			function directly exported from WASM), this cleanup will not
+			happen.
+			
+			This is not a silver bullet for avoiding automation-related
+			leaks but represents "an honest effort."
+			
+			The issue being addressed here is covered at:
+			
+			https://sqlite.org/wasm/doc/trunk/api-c-style.md#convert-func-ptr
+			*/
 			__dbCleanupMap.cleanup = function(pDb) {
 				pDb = __argPDb(pDb);
+				/**
+				Installing NULL functions in the C API will remove those
+				bindings. The FuncPtrAdapter which sits between us and the C
+				API will also treat that as an opportunity to
+				wasm.uninstallFunction() any WASM function bindings it has
+				installed for pDb.
+				*/
 				for (const obj of [
 					["sqlite3_busy_handler", 3],
 					["sqlite3_commit_hook", 3],
@@ -6617,8 +9617,8 @@ async function sqlite3InitModule(moduleArg = {}) {
 					} catch (e) {}
 					delete m.collation;
 				}
-				let i;
-				for (i = 0; i < 2; ++i) {
+				let i = 0;
+				for (; i < 2; ++i) {
 					const fmap = i ? m.wudf : m.udf;
 					if (!fmap) continue;
 					const func = i ? capi.sqlite3_create_window_function : capi.sqlite3_create_function_v2;
@@ -6639,7 +9639,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 						for (const arity of arities) try {
 							fargs[2] = arity;
 							func.apply(null, fargs);
-						} catch (e$1) {}
+						} catch (e) {}
 						arities.clear();
 					}
 					fmap.clear();
@@ -6685,6 +9685,31 @@ async function sqlite3InitModule(moduleArg = {}) {
 						contextKey
 					})
 				]);
+				/**
+				Works exactly like C's sqlite3_create_collation_v2() except that:
+				
+				1) It returns capi.SQLITE_FORMAT if the 3rd argument contains
+				any encoding-related value other than capi.SQLITE_UTF8.  No
+				other encodings are supported. As a special case, if the
+				bottom 4 bits of that argument are 0, SQLITE_UTF8 is
+				assumed.
+				
+				2) It accepts JS functions for its function-pointer arguments,
+				for which it will install WASM-bound proxies. The bindings
+				are "permanent," in that they will stay in the WASM
+				environment until it shuts down unless the client calls this
+				again with the same collation name and a value of 0 or null
+				for the the function pointer(s). sqlite3_close_v2() will
+				also clean up such automatically-installed WASM functions.
+				
+				For consistency with the C API, it requires the same number of
+				arguments. It returns capi.SQLITE_MISUSE if passed any other
+				argument count.
+				
+				Returns 0 on success, non-0 on error, in which case the error
+				state of pDb (of type `sqlite3*` or argument-convertible to it)
+				may contain more information.
+				*/
 				capi.sqlite3_create_collation_v2 = function(pDb, zName, eTextRep, pArg, xCompare, xDestroy) {
 					if (6 !== arguments.length) return __dbArgcMismatch(pDb, "sqlite3_create_collation_v2", 6);
 					else if (0 === (eTextRep & 15)) eTextRep |= capi.SQLITE_UTF8;
@@ -6702,9 +9727,15 @@ async function sqlite3InitModule(moduleArg = {}) {
 				};
 			}
 			{
+				/** FuncPtrAdapter for contextKey() for sqlite3_create_function()
+				and friends. */
 				const contextKey = function(argv, argIndex) {
 					return argv[0] + ":" + (argv[2] < 0 ? -1 : argv[2]) + ":" + argIndex + ":" + wasm.cstrToJs(argv[1]).toLowerCase();
 				};
+				/**
+				JS proxies for the various sqlite3_create[_window]_function()
+				callbacks, structured in a form usable by wasm.xWrap.FuncPtrAdapter.
+				*/
 				const __cfProxy = Object.assign(Object.create(null), {
 					xInverseAndStep: {
 						signature: "v(pip)",
@@ -6839,14 +9870,35 @@ async function sqlite3InitModule(moduleArg = {}) {
 					}
 				};
 				else delete capi.sqlite3_create_window_function;
+				/**
+				A _deprecated_ alias for capi.sqlite3_result_js() which
+				predates the addition of that function in the public API.
+				*/
 				capi.sqlite3_create_function_v2.udfSetResult = capi.sqlite3_create_function.udfSetResult = capi.sqlite3_result_js;
 				if (capi.sqlite3_create_window_function) capi.sqlite3_create_window_function.udfSetResult = capi.sqlite3_result_js;
+				/**
+				A _deprecated_ alias for capi.sqlite3_values_to_js() which
+				predates the addition of that function in the public API.
+				*/
 				capi.sqlite3_create_function_v2.udfConvertArgs = capi.sqlite3_create_function.udfConvertArgs = capi.sqlite3_values_to_js;
 				if (capi.sqlite3_create_window_function) capi.sqlite3_create_window_function.udfConvertArgs = capi.sqlite3_values_to_js;
+				/**
+				A _deprecated_ alias for capi.sqlite3_result_error_js() which
+				predates the addition of that function in the public API.
+				*/
 				capi.sqlite3_create_function_v2.udfSetError = capi.sqlite3_create_function.udfSetError = capi.sqlite3_result_error_js;
 				if (capi.sqlite3_create_window_function) capi.sqlite3_create_window_function.udfSetError = capi.sqlite3_result_error_js;
 			}
 			{
+				/**
+				Helper for string:flexible conversions which requires a
+				byte-length counterpart argument. Passed a value and its
+				ostensible length, this function returns [V,N], where V is
+				either v or a to-string transformed copy of v and N is either n
+				(if v is a WASM pointer, in which case n might be a BigInt), -1
+				(if v is a string or Array), or the byte length of v (if it's a
+				byte array or ArrayBuffer).
+				*/
 				const __flexiString = (v, n) => {
 					if ("string" === typeof v) n = -1;
 					else if (util.isSQLableTypedArray(v)) {
@@ -6858,7 +9910,16 @@ async function sqlite3InitModule(moduleArg = {}) {
 					}
 					return [v, n];
 				};
+				/**
+				Scope-local holder of the two impls of sqlite3_prepare_v2/v3().
+				*/
 				const __prepare = {
+					/**
+					This binding expects a JS string as its 2nd argument and
+					null as its final argument. In order to compile multiple
+					statements from a single string, the "full" impl (see
+					below) must be used.
+					*/
 					basic: wasm.xWrap("sqlite3_prepare_v3", "int", [
 						"sqlite3*",
 						"string",
@@ -6867,6 +9928,16 @@ async function sqlite3InitModule(moduleArg = {}) {
 						"**",
 						"**"
 					]),
+					/**
+					Impl which requires that the 2nd argument be a pointer to the
+					SQL string, instead of being converted to a JS string. This
+					variant is necessary for cases where we require a non-NULL
+					value for the final argument (prepare/step of multiple
+					statements from one input string). For simpler cases, where
+					only the first statement in the SQL string is required, the
+					wrapper named sqlite3_prepare_v2() is sufficient and easier
+					to use because it doesn't require dealing with pointers.
+					*/
 					full: wasm.xWrap("sqlite3_prepare_v3", "int", [
 						"sqlite3*",
 						"*",
@@ -6904,6 +9975,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 					"int",
 					"*"
 				]);
+				/** Documented in the capi object's initializer. */
 				capi.sqlite3_bind_text = function f(pStmt, iCol, text, nText, xDestroy) {
 					if (f.length !== arguments.length) return __dbArgcMismatch(capi.sqlite3_db_handle(pStmt), "sqlite3_bind_text", f.length);
 					else if (wasm.isPtr(text) || null === text) return __bindText(pStmt, iCol, text, nText, xDestroy);
@@ -6922,6 +9994,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 						return util.sqlite3__wasm_db_error(capi.sqlite3_db_handle(pStmt), e);
 					}
 				};
+				/** Documented in the capi object's initializer. */
 				capi.sqlite3_bind_blob = function f(pStmt, iCol, pMem, nMem, xDestroy) {
 					if (f.length !== arguments.length) return __dbArgcMismatch(capi.sqlite3_db_handle(pStmt), "sqlite3_bind_blob", f.length);
 					else if (wasm.isPtr(pMem) || null === pMem) return __bindBlob(pStmt, iCol, pMem, nMem, xDestroy);
@@ -6954,6 +10027,12 @@ async function sqlite3InitModule(moduleArg = {}) {
 					return cstr ? newStr(cstr, wasm.exports.sqlite3_value_bytes(a0)) : null;
 				};
 			}
+			/**
+			Wraps a small subset of the C API's sqlite3_config() options.
+			Unsupported options trigger the return of capi.SQLITE_NOTFOUND.
+			Passing fewer than 2 arguments triggers return of
+			capi.SQLITE_MISUSE.
+			*/
 			capi.sqlite3_config = function(op, ...args) {
 				if (arguments.length < 2) return capi.SQLITE_MISUSE;
 				switch (op) {
@@ -6993,8 +10072,10 @@ async function sqlite3InitModule(moduleArg = {}) {
 					if (fPtr instanceof Function) fPtr = wasm.installFunction("i(ppp)", fPtr);
 					else if (1 !== arguments.length || !wasm.isPtr(fPtr)) return capi.SQLITE_MISUSE;
 					const rc = wasm.exports.sqlite3_auto_extension(fPtr);
-					if (fPtr !== arguments[0]) if (0 === rc) __autoExtFptr.add(fPtr);
-					else wasm.uninstallFunction(fPtr);
+					if (fPtr !== arguments[0]) {
+						if (0 === rc) __autoExtFptr.add(fPtr);
+						else wasm.uninstallFunction(fPtr);
+					}
 					return rc;
 				};
 				capi.sqlite3_cancel_auto_extension = function(fPtr) {
@@ -7009,15 +10090,56 @@ async function sqlite3InitModule(moduleArg = {}) {
 			}
 			wasm.xWrap.FuncPtrAdapter.warnOnUse = true;
 			const StructBinder = sqlite3.StructBinder;
+			/**
+			Installs a StructBinder-bound function pointer member of the
+			given name and function in the given StructBinder.StructType
+			target object.
+			
+			It creates a WASM proxy for the given function and arranges for
+			that proxy to be cleaned up when tgt.dispose() is called. Throws
+			on the slightest hint of error, e.g. tgt is-not-a StructType,
+			name does not map to a struct-bound member, etc.
+			
+			As a special case, if the given function is a pointer, then
+			`wasm.functionEntry()` is used to validate that it is a known
+			function. If so, it is used as-is with no extra level of proxying
+			or cleanup, else an exception is thrown. It is legal to pass a
+			value of 0, indicating a NULL pointer, with the caveat that 0
+			_is_ a legal function pointer in WASM but it will not be accepted
+			as such _here_. (Justification: the function at address zero must
+			be one which initially came from the WASM module, not a method we
+			want to bind to a virtual table or VFS.)
+			
+			This function returns a proxy for itself which is bound to tgt
+			and takes 2 args (name,func). That function returns the same
+			thing as this one, permitting calls to be chained.
+			
+			If called with only 1 arg, it has no side effects but returns a
+			func with the same signature as described above.
+			
+			ACHTUNG: because we cannot generically know how to transform JS
+			exceptions into result codes, the installed functions do no
+			automatic catching of exceptions. It is critical, to avoid
+			undefined behavior in the C layer, that methods mapped via
+			this function do not throw. The exception, as it were, to that
+			rule is...
+			
+			If applyArgcCheck is true then each JS function (as opposed to
+			function pointers) gets wrapped in a proxy which asserts that it
+			is passed the expected number of arguments, throwing if the
+			argument count does not match expectations. That is only intended
+			for dev-time usage for sanity checking, and may leave the C
+			environment in an undefined state.
+			*/
 			const installMethod = function callee(tgt, name, func, applyArgcCheck = callee.installMethodArgcCheck) {
 				if (!(tgt instanceof StructBinder.StructType)) toss("Usage error: target object is-not-a StructType.");
 				else if (!(func instanceof Function) && !wasm.isPtr(func)) toss("Usage error: expecting a Function or WASM pointer to one.");
 				if (1 === arguments.length) return (n, f) => callee(tgt, n, f, applyArgcCheck);
 				if (!callee.argcProxy) {
-					callee.argcProxy = function(tgt$1, funcName, func$1, sig) {
+					callee.argcProxy = function(tgt, funcName, func, sig) {
 						return function(...args) {
-							if (func$1.length !== arguments.length) toss("Argument mismatch for", tgt$1.structInfo.name + "::" + funcName + ": Native signature is:", sig);
-							return func$1.apply(this, args);
+							if (func.length !== arguments.length) toss("Argument mismatch for", tgt.structInfo.name + "::" + funcName + ": Native signature is:", sig);
+							return func.apply(this, args);
 						};
 					};
 					callee.removeFuncList = function() {
@@ -7050,6 +10172,23 @@ async function sqlite3InitModule(moduleArg = {}) {
 				return (n, f) => callee(tgt, n, f, applyArgcCheck);
 			};
 			installMethod.installMethodArgcCheck = false;
+			/**
+			Installs methods into the given StructBinder.StructType-type
+			instance. Each entry in the given methods object must map to a
+			known member of the given StructType, else an exception will be
+			triggered.  See installMethod() for more details, including the
+			semantics of the 3rd argument.
+			
+			As an exception to the above, if any two or more methods in the
+			2nd argument are the exact same function, installMethod() is
+			_not_ called for the 2nd and subsequent instances, and instead
+			those instances get assigned the same method pointer which is
+			created for the first instance. This optimization is primarily to
+			accommodate special handling of sqlite3_module::xConnect and
+			xCreate methods.
+			
+			On success, returns its first argument. Throws on error.
+			*/
 			const installMethods = function(structInstance, methods, applyArgcCheck = installMethod.installMethodArgcCheck) {
 				const seen = /* @__PURE__ */ new Map();
 				for (const k of Object.keys(methods)) {
@@ -7065,9 +10204,19 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 				return structInstance;
 			};
+			/**
+			Equivalent to calling installMethod(this,...arguments) with a
+			first argument of this object. If called with 1 or 2 arguments
+			and the first is an object, it's instead equivalent to calling
+			installMethods(this,...arguments).
+			*/
 			StructBinder.StructType.prototype.installMethod = function callee(name, func, applyArgcCheck = installMethod.installMethodArgcCheck) {
 				return arguments.length < 3 && name && "object" === typeof name ? installMethods(this, ...arguments) : installMethod(this, ...arguments);
 			};
+			/**
+			Equivalent to calling installMethods() with a first argument
+			of this object.
+			*/
 			StructBinder.StructType.prototype.installMethods = function(methods, applyArgcCheck = installMethod.installMethodArgcCheck) {
 				return installMethods(this, methods, applyArgcCheck);
 			};
@@ -7077,15 +10226,42 @@ async function sqlite3InitModule(moduleArg = {}) {
 				throw new sqlite3.SQLite3Error(...args);
 			};
 			const capi = sqlite3.capi, wasm = sqlite3.wasm, util = sqlite3.util;
-			const outWrapper = function(f) {
-				return (...args) => f("sqlite3.oo1:", ...args);
-			};
-			sqlite3.__isUnderTest ? outWrapper(console.debug.bind(console)) : outWrapper(sqlite3.config.debug);
-			sqlite3.__isUnderTest ? outWrapper(console.warn.bind(console)) : outWrapper(sqlite3.config.warn);
-			sqlite3.__isUnderTest ? outWrapper(console.error.bind(console)) : outWrapper(sqlite3.config.error);
+			sqlite3.__isUnderTest ? console.debug.bind(console) : sqlite3.config.debug;
+			sqlite3.__isUnderTest ? console.warn.bind(console) : sqlite3.config.warn;
+			sqlite3.__isUnderTest ? console.error.bind(console) : sqlite3.config.error;
+			/**
+			In order to keep clients from manipulating, perhaps
+			inadvertently, the underlying pointer values of DB and Stmt
+			instances, we'll gate access to them via the `pointer` property
+			accessor and store their real values in this map. Keys = DB/Stmt
+			objects, values = pointer values. This also unifies how those are
+			accessed, for potential use downstream via custom
+			wasm.xWrap() function signatures which know how to extract
+			it.
+			*/
 			const __ptrMap = /* @__PURE__ */ new WeakMap();
+			/**
+			A Set of oo1.DB or oo1.Stmt objects which are proxies for
+			(sqlite3*) resp. (sqlite3_stmt*) pointers which themselves are
+			owned elsewhere. Objects in this Set do not own their underlying
+			handle and that handle must be guaranteed (by the client) to
+			outlive the proxy. DB.close()/Stmt.finalize() methods will remove
+			the object from this Set _instead_ of closing/finalizing the
+			pointer. These proxies are primarily intended as a way to briefly
+			wrap an (sqlite3[_stmt]*) object as an oo1.DB/Stmt without taking
+			over ownership, to take advantage of simplifies usage compared to
+			the C API while not imposing any change of ownership.
+			
+			See DB.wrapHandle() and Stmt.wrapHandle().
+			*/
 			const __doesNotOwnHandle = /* @__PURE__ */ new Set();
+			/**
+			Map of DB instances to objects, each object being a map of Stmt
+			wasm pointers to Stmt objects.
+			*/
 			const __stmtMap = /* @__PURE__ */ new WeakMap();
+			/** If object opts has _its own_ property named p then that
+			property's value is returned, else dflt is returned. */
 			const getOwnOption = (opts, p, dflt) => {
 				const d = Object.getOwnPropertyDescriptor(opts, p);
 				return d ? d.value : dflt;
@@ -7097,10 +10273,43 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 				return arguments[0];
 			};
+			/**
+			sqlite3_trace_v2() callback which gets installed by the DB ctor
+			if its open-flags contain "t".
+			*/
 			const __dbTraceToConsole = wasm.installFunction("i(ippp)", function(t, c, p, x) {
 				if (capi.SQLITE_TRACE_STMT === t) console.log("SQL TRACE #" + ++this.counter, "via sqlite3@" + c + "[" + capi.sqlite3_db_filename(c, null) + "]", wasm.cstrToJs(x));
 			}.bind({ counter: 0 }));
+			/**
+			A map of sqlite3_vfs pointers to SQL code or a callback function
+			to run when the DB constructor opens a database with the given
+			VFS. In the latter case, the call signature is
+			(theDbObject,sqlite3Namespace) and the callback is expected to
+			throw on error.
+			*/
 			const __vfsPostOpenCallback = Object.create(null);
+			/**
+			A proxy for DB class constructors. It must be called with the
+			being-construct DB object as its "this". See the DB constructor
+			for the argument docs. This is split into a separate function
+			in order to enable simple creation of special-case DB constructors,
+			e.g. JsStorageDb and OpfsDb.
+			
+			Expects to be passed a configuration object with the following
+			properties:
+			
+			- `.filename`: the db filename. It may be a special name like ":memory:"
+			or "". It may also be a URI-style name.
+			
+			- `.flags`: as documented in the DB constructor.
+			
+			- `.vfs`: as documented in the DB constructor.
+			
+			It also accepts those as the first 3 arguments.
+			
+			In non-default builds it may accept additional configuration
+			options.
+			*/
 			const dbCtorHelper = function ctor(...args) {
 				const opt = ctor.normalizeArgs(...args);
 				let pDb;
@@ -7137,18 +10346,55 @@ async function sqlite3InitModule(moduleArg = {}) {
 				__ptrMap.set(this, pDb);
 				__stmtMap.set(this, Object.create(null));
 				if (!opt["sqlite3*"]) try {
-					const postInitSql = __vfsPostOpenCallback[capi.sqlite3_js_db_vfs(pDb) || toss3("Internal error: cannot get VFS for new db handle.")];
-					if (postInitSql) if (postInitSql instanceof Function) postInitSql(this, sqlite3);
-					else checkSqlite3Rc(pDb, capi.sqlite3_exec(pDb, postInitSql, 0, 0, 0));
+					const pVfs = capi.sqlite3_js_db_vfs(pDb) || toss3("Internal error: cannot get VFS for new db handle.");
+					const postInitSql = __vfsPostOpenCallback[pVfs];
+					if (postInitSql) {
+						/**
+						Reminder: if this db is encrypted and the client did _not_ pass
+						in the key, any init code will fail, causing the ctor to throw.
+						We don't actually know whether the db is encrypted, so we cannot
+						sensibly apply any heuristics which skip the init code only for
+						encrypted databases for which no key has yet been supplied.
+						*/
+						if (postInitSql instanceof Function) postInitSql(this, sqlite3);
+						else checkSqlite3Rc(pDb, capi.sqlite3_exec(pDb, postInitSql, 0, 0, 0));
+					}
 				} catch (e) {
 					this.close();
 					throw e;
 				}
 			};
+			/**
+			Sets a callback which should be called after a db is opened with
+			the given sqlite3_vfs pointer. The 2nd argument must be a
+			function, which gets called with
+			(theOo1DbObject,sqlite3Namespace) at the end of the DB()
+			constructor. The function must throw on error, in which case the
+			db is closed and the exception is propagated.  This function is
+			intended only for use by DB subclasses or sqlite3_vfs
+			implementations.
+			
+			Prior to 2024-07-22, it was legal to pass SQL code as the second
+			argument, but that can interfere with a client's ability to run
+			pragmas which must be run before anything else, namely (pragma
+			locking_mode=exclusive) for use with WAL mode.  That capability
+			had only ever been used as an internal detail of the two OPFS
+			VFSes, and they no longer use it that way.
+			*/
 			dbCtorHelper.setVfsPostOpenCallback = function(pVfs, callback) {
 				if (!(callback instanceof Function)) toss3("dbCtorHelper.setVfsPostOpenCallback() should not be used with a non-function argument.", arguments);
 				__vfsPostOpenCallback[pVfs] = callback;
 			};
+			/**
+			A helper for DB constructors. It accepts either a single
+			config-style object or up to 3 arguments (filename, dbOpenFlags,
+			dbVfsName). It returns a new object containing:
+			
+			{ filename: ..., flags: ..., vfs: ... }
+			
+			If passed an object, any additional properties it has are copied
+			as-is into the new object.
+			*/
 			dbCtorHelper.normalizeArgs = function(filename = ":memory:", flags = "c", vfs = null) {
 				const arg = {};
 				if (1 === arguments.length && arguments[0] && "object" === typeof arguments[0]) {
@@ -7163,10 +10409,83 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 				return arg;
 			};
+			/**
+			The DB class provides a high-level OO wrapper around an sqlite3
+			db handle.
+			
+			The given db filename must be resolvable using whatever
+			filesystem layer (virtual or otherwise) is set up for the default
+			sqlite3 VFS or a VFS which can resolve it must be specified.
+			
+			The special sqlite3 db names ":memory:" and "" (temporary db)
+			have their normal special meanings here and need not resolve to
+			real filenames, but "" uses an on-storage temporary database and
+			requires that the VFS support that.
+			
+			The second argument specifies the open/create mode for the
+			database. It must be string containing a sequence of letters (in
+			any order, but case sensitive) specifying the mode:
+			
+			- "c": create if it does not exist, else fail if it does not
+			exist. Implies the "w" flag.
+			
+			- "w": write. Implies "r": a db cannot be write-only.
+			
+			- "r": read-only if neither "w" nor "c" are provided, else it
+			is ignored.
+			
+			- "t": enable tracing of SQL executed on this database handle,
+			sending it to `console.log()`. To disable it later, call
+			`sqlite3.capi.sqlite3_trace_v2(thisDb.pointer, 0, 0, 0)`.
+			
+			If "w" is not provided, the db is implicitly read-only, noting
+			that "rc" is meaningless
+			
+			Any other letters are currently ignored. The default is
+			"c". These modes are ignored for the special ":memory:" and ""
+			names and _may_ be ignored altogether for certain VFSes.
+			
+			The final argument is analogous to the final argument of
+			sqlite3_open_v2(): the name of an sqlite3 VFS. Pass a falsy value,
+			or none at all, to use the default. If passed a value, it must
+			be the string name of a VFS.
+			
+			The constructor optionally (and preferably) takes its arguments
+			in the form of a single configuration object with the following
+			properties:
+			
+			- `filename`: database file name
+			- `flags`: open-mode flags
+			- `vfs`: the VFS fname
+			
+			
+			The `filename` and `vfs` arguments may be either JS strings or
+			C-strings allocated via WASM. `flags` is required to be a JS
+			string (because it's specific to this API, which is specific
+			to JS).
+			
+			For purposes of passing a DB instance to C-style sqlite3
+			functions, the DB object's read-only `pointer` property holds its
+			`sqlite3*` pointer value. That property can also be used to check
+			whether this DB instance is still open: it will evaluate to
+			`undefined` after the DB object's close() method is called.
+			
+			In the main window thread, the filenames `":localStorage:"` and
+			`":sessionStorage:"` are special: they cause the db to use either
+			localStorage or sessionStorage for storing the database using
+			the kvvfs. If one of these names are used, they trump
+			any vfs name set in the arguments.
+			*/
 			const DB = function(...args) {
 				dbCtorHelper.apply(this, args);
 			};
 			DB.dbCtorHelper = dbCtorHelper;
+			/**
+			Internal-use enum for mapping JS types to DB-bindable types.
+			These do not (and need not) line up with the SQLITE_type
+			values. All values in this enum must be truthy and (mostly)
+			distinct but they need not be numbers.
+			*/
 			const BindTypes = {
 				null: 1,
 				number: 2,
@@ -7175,63 +10494,116 @@ async function sqlite3InitModule(moduleArg = {}) {
 				blob: 5
 			};
 			if (wasm.bigIntEnabled) BindTypes.bigint = BindTypes.number;
+			/**
+			This class wraps sqlite3_stmt. Calling this constructor
+			directly will trigger an exception. Use DB.prepare() to create
+			new instances.
+			
+			For purposes of passing a Stmt instance to C-style sqlite3
+			functions, its read-only `pointer` property holds its `sqlite3_stmt*`
+			pointer value.
+			
+			Other non-function properties include:
+			
+			- `db`: the DB object which created the statement.
+			
+			- `columnCount`: the number of result columns in the query, or 0
+			for queries which cannot return results. This property is a
+			read-only proxy for sqlite3_column_count() and its use in loops
+			should be avoided because of the call overhead associated with
+			that. The `columnCount` is not cached when the Stmt is created
+			because a schema change made between this statement's preparation
+			and when it is stepped may invalidate it.
+			
+			- `parameterCount`: the number of bindable parameters in the
+			query.  Like `columnCount`, this property is ready-only and is a
+			proxy for a C API call.
+			
+			As a general rule, most methods of this class will throw if
+			called on an instance which has been finalized. For brevity's
+			sake, the method docs do not all repeat this warning.
+			*/
 			const Stmt = function() {
 				if (BindTypes !== arguments[2]) toss3(capi.SQLITE_MISUSE, "Do not call the Stmt constructor directly. Use DB.prepare().");
 				this.db = arguments[0];
 				__ptrMap.set(this, arguments[1]);
 				if (arguments.length > 3 && !arguments[3]) __doesNotOwnHandle.add(this);
 			};
+			/** Throws if the given DB has been closed, else it is returned. */
 			const affirmDbOpen = function(db) {
 				if (!db.pointer) toss3("DB has been closed.");
 				return db;
 			};
+			/** Throws if ndx is not an integer or if it is out of range
+			for stmt.columnCount, else returns stmt.
+			
+			Reminder: this will also fail after the statement is finalized
+			but the resulting error will be about an out-of-bounds column
+			index rather than a statement-is-finalized error.
+			*/
 			const affirmColIndex = function(stmt, ndx) {
 				if (ndx !== (ndx | 0) || ndx < 0 || ndx >= stmt.columnCount) toss3("Column index", ndx, "is out of range.");
 				return stmt;
 			};
+			/**
+			Expects to be passed the `arguments` object from DB.exec(). Does
+			the argument processing/validation, throws on error, and returns
+			a new object on success:
+			
+			{ sql: the SQL, opt: optionsObj, cbArg: function}
+			
+			The opt object is a normalized copy of any passed to this
+			function. The sql will be converted to a string if it is provided
+			in one of the supported non-string formats.
+			
+			cbArg is only set if the opt.callback or opt.resultRows are set,
+			in which case it's a function which expects to be passed the
+			current Stmt and returns the callback argument of the type
+			indicated by the input arguments.
+			*/
 			const parseExecArgs = function(db, args) {
-				const out$1 = Object.create(null);
-				out$1.opt = Object.create(null);
+				const out = Object.create(null);
+				out.opt = Object.create(null);
 				switch (args.length) {
 					case 1:
-						if ("string" === typeof args[0] || util.isSQLableTypedArray(args[0])) out$1.sql = args[0];
-						else if (Array.isArray(args[0])) out$1.sql = args[0];
+						if ("string" === typeof args[0] || util.isSQLableTypedArray(args[0])) out.sql = args[0];
+						else if (Array.isArray(args[0])) out.sql = args[0];
 						else if (args[0] && "object" === typeof args[0]) {
-							out$1.opt = args[0];
-							out$1.sql = out$1.opt.sql;
+							out.opt = args[0];
+							out.sql = out.opt.sql;
 						}
 						break;
 					case 2:
-						out$1.sql = args[0];
-						out$1.opt = args[1];
+						out.sql = args[0];
+						out.opt = args[1];
 						break;
 					default: toss3("Invalid argument count for exec().");
 				}
-				out$1.sql = util.flexibleString(out$1.sql);
-				if ("string" !== typeof out$1.sql) toss3("Missing SQL argument or unsupported SQL value type.");
-				const opt = out$1.opt;
+				out.sql = util.flexibleString(out.sql);
+				if ("string" !== typeof out.sql) toss3("Missing SQL argument or unsupported SQL value type.");
+				const opt = out.opt;
 				switch (opt.returnValue) {
 					case "resultRows":
 						if (!opt.resultRows) opt.resultRows = [];
-						out$1.returnVal = () => opt.resultRows;
+						out.returnVal = () => opt.resultRows;
 						break;
 					case "saveSql":
 						if (!opt.saveSql) opt.saveSql = [];
-						out$1.returnVal = () => opt.saveSql;
+						out.returnVal = () => opt.saveSql;
 						break;
 					case void 0:
 					case "this":
-						out$1.returnVal = () => db;
+						out.returnVal = () => db;
 						break;
 					default: toss3("Invalid returnValue value:", opt.returnValue);
 				}
 				if (!opt.callback && !opt.returnValue && void 0 !== opt.rowMode) {
 					if (!opt.resultRows) opt.resultRows = [];
-					out$1.returnVal = () => opt.resultRows;
+					out.returnVal = () => opt.resultRows;
 				}
 				if (opt.callback || opt.resultRows) switch (void 0 === opt.rowMode ? "array" : opt.rowMode) {
 					case "object":
-						out$1.cbArg = (stmt, cache) => {
+						out.cbArg = (stmt, cache) => {
 							if (!cache.columnNames) cache.columnNames = stmt.getColumnNames([]);
 							const row = stmt.get([]);
 							const rv = Object.create(null);
@@ -7240,19 +10612,19 @@ async function sqlite3InitModule(moduleArg = {}) {
 						};
 						break;
 					case "array":
-						out$1.cbArg = (stmt) => stmt.get([]);
+						out.cbArg = (stmt) => stmt.get([]);
 						break;
 					case "stmt":
 						if (Array.isArray(opt.resultRows)) toss3("exec(): invalid rowMode for a resultRows array: must", "be one of 'array', 'object',", "a result column number, or column name reference.");
-						out$1.cbArg = (stmt) => stmt;
+						out.cbArg = (stmt) => stmt;
 						break;
 					default:
 						if (util.isInt32(opt.rowMode)) {
-							out$1.cbArg = (stmt) => stmt.get(opt.rowMode);
+							out.cbArg = (stmt) => stmt.get(opt.rowMode);
 							break;
 						} else if ("string" === typeof opt.rowMode && opt.rowMode.length > 1 && "$" === opt.rowMode[0]) {
 							const $colName = opt.rowMode.substr(1);
-							out$1.cbArg = (stmt) => {
+							out.cbArg = (stmt) => {
 								const rc = stmt.get(Object.create(null))[$colName];
 								return void 0 === rc ? toss3(capi.SQLITE_NOTFOUND, "exec(): unknown result column:", $colName) : rc;
 							};
@@ -7260,8 +10632,12 @@ async function sqlite3InitModule(moduleArg = {}) {
 						}
 						toss3("Invalid rowMode:", opt.rowMode);
 				}
-				return out$1;
+				return out;
 			};
+			/**
+			Internal impl of the DB.selectValue(), selectArray(), and
+			selectObject() methods.
+			*/
 			const __selectFirstRow = (db, sql, bind, ...getArgs) => {
 				const stmt = db.prepare(sql);
 				try {
@@ -7272,20 +10648,72 @@ async function sqlite3InitModule(moduleArg = {}) {
 					stmt.finalize();
 				}
 			};
+			/**
+			Internal impl of the DB.selectArrays() and selectObjects()
+			methods.
+			*/
 			const __selectAll = (db, sql, bind, rowMode) => db.exec({
 				sql,
 				bind,
 				rowMode,
 				returnValue: "resultRows"
 			});
+			/**
+			Expects to be given a DB instance or an `sqlite3*` pointer (may
+			be null) and an sqlite3 API result code. If the result code is
+			not falsy, this function throws an SQLite3Error with an error
+			message from sqlite3_errmsg(), using db (or, if db is-a DB,
+			db.pointer) as the db handle, or sqlite3_errstr() if db is
+			falsy. Note that if it's passed a non-error code like SQLITE_ROW
+			or SQLITE_DONE, it will still throw but the error string might be
+			"Not an error."  The various non-0 non-error codes need to be
+			checked for in client code where they are expected.
+			
+			The thrown exception's `resultCode` property will be the value of
+			the second argument to this function.
+			
+			If it does not throw, it returns its first argument.
+			*/
 			DB.checkRc = (db, resultCode) => checkSqlite3Rc(db, resultCode);
 			DB.prototype = {
+				/** Returns true if this db handle is open, else false. */
 				isOpen: function() {
 					return !!this.pointer;
 				},
+				/** Throws if this given DB has been closed, else returns `this`. */
 				affirmOpen: function() {
 					return affirmDbOpen(this);
 				},
+				/**
+				Finalizes all open statements and closes this database
+				connection (with one exception noted below). This is a no-op if
+				the db has already been closed. After calling close(),
+				`this.pointer` will resolve to `undefined`, and that can be
+				used to check whether the db instance is still opened.
+				
+				If this.onclose.before is a function then it is called before
+				any close-related cleanup.
+				
+				If this.onclose.after is a function then it is called after the
+				db is closed but before auxiliary state like this.filename is
+				cleared.
+				
+				Both onclose handlers are passed this object, with the onclose
+				object as their "this," noting that the db will have been
+				closed when onclose.after is called. If this db is not opened
+				when close() is called, neither of the handlers are called. Any
+				exceptions the handlers throw are ignored because "destructors
+				must not throw".
+				
+				Garbage collection of a db handle, if it happens at all, will
+				never trigger close(), so onclose handlers are not a reliable
+				way to implement close-time cleanup or maintenance of a db.
+				
+				If this instance was created using DB.wrapHandle() and does not
+				own this.pointer then it does not close the db handle but it
+				does perform all other work, such as calling onclose callbacks
+				and disassociating this object from this.pointer.
+				*/
 				close: function() {
 					const pDb = this.pointer;
 					if (pDb) {
@@ -7306,17 +10734,45 @@ async function sqlite3InitModule(moduleArg = {}) {
 						delete this.filename;
 					}
 				},
+				/**
+				Returns the number of changes, as per sqlite3_changes()
+				(if the first argument is false) or sqlite3_total_changes()
+				(if it's true). If the 2nd argument is true, it uses
+				sqlite3_changes64() or sqlite3_total_changes64(), which
+				will trigger an exception if this build does not have
+				BigInt support enabled.
+				*/
 				changes: function(total = false, sixtyFour = false) {
 					const p = affirmDbOpen(this).pointer;
 					if (total) return sixtyFour ? capi.sqlite3_total_changes64(p) : capi.sqlite3_total_changes(p);
 					else return sixtyFour ? capi.sqlite3_changes64(p) : capi.sqlite3_changes(p);
 				},
+				/**
+				Similar to the this.filename but returns the
+				sqlite3_db_filename() value for the given database name,
+				defaulting to "main".  The argument may be either a JS string
+				or a pointer to a WASM-allocated C-string.
+				
+				this.filename may be in the form of a URI-style string, whereas
+				the returned string contains only the filename part.
+				*/
 				dbFilename: function(dbName = "main") {
 					return capi.sqlite3_db_filename(affirmDbOpen(this).pointer, dbName);
 				},
+				/**
+				Returns the name of the given 0-based db number, as documented
+				for sqlite3_db_name().
+				*/
 				dbName: function(dbNumber = 0) {
 					return capi.sqlite3_db_name(affirmDbOpen(this).pointer, dbNumber);
 				},
+				/**
+				Returns the name of the sqlite3_vfs used by the given database
+				of this connection (defaulting to 'main'). The argument may be
+				either a JS string or a WASM C-string. Returns undefined if the
+				given db name is invalid. Throws if this object has been
+				close()d.
+				*/
 				dbVfsName: function(dbName = 0) {
 					let rc;
 					const pVfs = capi.sqlite3_js_db_vfs(affirmDbOpen(this).pointer, dbName);
@@ -7330,6 +10786,28 @@ async function sqlite3InitModule(moduleArg = {}) {
 					}
 					return rc;
 				},
+				/**
+				Compiles the given SQL and returns a prepared Stmt. This is
+				the only way to create new Stmt objects. Throws on error.
+				
+				The given SQL must be a string, a Uint8Array holding SQL, a
+				WASM pointer to memory holding the NUL-terminated SQL string,
+				or an array of strings. In the latter case, the array is
+				concatenated together, with no separators, to form the SQL
+				string (arrays are often a convenient way to formulate long
+				statements).  If the SQL contains no statements, an
+				SQLite3Error is thrown.
+				
+				Design note: the C API permits empty SQL, reporting it as a 0
+				result code and a NULL stmt pointer. Supporting that case here
+				would cause extra work for all clients: any use of the Stmt API
+				on such a statement will necessarily throw, so clients would be
+				required to check `stmt.pointer` after calling `prepare()` in
+				order to determine whether the Stmt instance is empty or not.
+				Long-time practice (with other sqlite3 script bindings)
+				suggests that the empty-prepare case is sufficiently rare that
+				supporting it here would simply hurt overall usability.
+				*/
 				prepare: function(sql) {
 					affirmDbOpen(this);
 					const stack = wasm.pstack.pointer;
@@ -7346,6 +10824,157 @@ async function sqlite3InitModule(moduleArg = {}) {
 					__stmtMap.get(this)[pStmt] = stmt;
 					return stmt;
 				},
+				/**
+				Executes one or more SQL statements in the form of a single
+				string. Its arguments must be either (sql,optionsObject) or
+				(optionsObject). In the latter case, optionsObject.sql must
+				contain the SQL to execute. By default it returns this object
+				but that can be changed via the `returnValue` option as
+				described below. Throws on error.
+				
+				If no SQL is provided, or a non-string is provided, an
+				exception is triggered. Empty SQL, on the other hand, is
+				simply a no-op.
+				
+				The optional options object may contain any of the following
+				properties:
+				
+				- `sql` = the SQL to run (unless it's provided as the first
+				argument). This must be of type string, Uint8Array, or an array
+				of strings. In the latter case they're concatenated together
+				as-is, _with no separator_ between elements, before evaluation.
+				The array form is often simpler for long hand-written queries.
+				
+				- `bind` = a single value valid as an argument for
+				Stmt.bind(). This is _only_ applied to the _first_ non-empty
+				statement in the SQL which has any bindable parameters. (Empty
+				statements are skipped entirely.)
+				
+				- `saveSql` = an optional array. If set, the SQL of each
+				executed statement is appended to this array before the
+				statement is executed (but after it is prepared - we don't have
+				the string until after that). Empty SQL statements are elided
+				but can have odd effects in the output. e.g. SQL of: `"select
+				1; -- empty\n; select 2"` will result in an array containing
+				`["select 1;", "--empty \n; select 2"]`. That's simply how
+				sqlite3 records the SQL for the 2nd statement.
+				
+				==================================================================
+				The following options apply _only_ to the _first_ statement
+				which has a non-zero result column count, regardless of whether
+				the statement actually produces any result rows.
+				==================================================================
+				
+				- `columnNames`: if this is an array, the column names of the
+				result set are stored in this array before the callback (if
+				any) is triggered (regardless of whether the query produces any
+				result rows). If no statement has result columns, this value is
+				unchanged. Achtung: an SQL result may have multiple columns
+				with identical names.
+				
+				- `callback` = a function which gets called for each row of the
+				result set, but only if that statement has any result rows. The
+				callback's "this" is the options object, noting that this
+				function synthesizes one if the caller does not pass one to
+				exec(). The first argument passed to the callback is described
+				below. The second argument is always the current Stmt object,
+				as it's needed if the caller wants to fetch the column names or
+				some such (noting that they could also be fetched via
+				`this.columnNames`, if the client provides the `columnNames`
+				option). If the callback returns a literal `false` (as opposed
+				to any other falsy value, e.g. an implicit `undefined` return),
+				any ongoing statement-`step()` iteration stops without an
+				error. The return value of the callback is otherwise ignored.
+				
+				ACHTUNG: The callback MUST NOT modify the Stmt object. Calling
+				any of the Stmt.get() variants, Stmt.getColumnName(), or
+				similar, is legal, but calling step() or finalize() is
+				not. Member methods which are illegal in this context will
+				trigger an exception, but clients must also refrain from using
+				any lower-level (C-style) APIs which might modify the
+				statement.
+				
+				The first argument passed to the callback defaults to an array of
+				values from the current result row but may be changed with ...
+				
+				- `rowMode` = specifies the type of he callback's first argument.
+				It may be any of...
+				
+				A) A string describing what type of argument should be passed
+				as the first argument to the callback:
+				
+				A.1) `'array'` (the default) causes the results of
+				`stmt.get([])` to be passed to the `callback` and/or appended
+				to `resultRows`.
+				
+				A.2) `'object'` causes the results of
+				`stmt.get(Object.create(null))` to be passed to the
+				`callback` and/or appended to `resultRows`.  Achtung: an SQL
+				result may have multiple columns with identical names. In
+				that case, the right-most column will be the one set in this
+				object!
+				
+				A.3) `'stmt'` causes the current Stmt to be passed to the
+				callback, but this mode will trigger an exception if
+				`resultRows` is an array because appending the transient
+				statement to the array would be downright unhelpful.  This
+				option is a legacy feature, retained for backwards
+				compatibility.  The statement object is passed as the second
+				argument to the callback, as described above.
+				
+				B) An integer, indicating a zero-based column in the result
+				row. Only that one single value, in JS form, will be passed on.
+				
+				C) A string with a minimum length of 2 and leading character of
+				'$' will fetch the row as an object, extract that one field,
+				and pass that field's value to the callback. These keys are
+				case-sensitive so must match the case used in the
+				SQL. e.g. `"select a A from t"` with a `rowMode` of `'$A'`
+				would work but `'$a'` would not. A reference to a column not in
+				the result set will trigger an exception on the first row (as
+				the check is not performed until rows are fetched).  Note that
+				`$` is a legal identifier character in JS so need not be
+				quoted.
+				
+				Any other `rowMode` value triggers an exception.
+				
+				- `resultRows`: if this is an array, it functions similarly to
+				the `callback` option: each row of the result set (if any),
+				with the exception that the `rowMode` 'stmt' is not legal. It
+				is legal to use both `resultRows` and `callback`, but
+				`resultRows` is likely much simpler to use for small data sets
+				and can be used over a WebWorker-style message interface.
+				exec() throws if `resultRows` is set and `rowMode` is 'stmt'.
+				
+				- `returnValue`: is a string specifying what this function
+				should return:
+				
+				A) The default value is (usually) `"this"`, meaning that the
+				DB object itself should be returned. The exception is if
+				the caller passes neither of `callback` nor `returnValue`
+				but does pass an explicit `rowMode` then the default
+				`returnValue` is `"resultRows"`, described below.
+				
+				B) `"resultRows"` means to return the value of the
+				`resultRows` option. If `resultRows` is not set, this
+				function behaves as if it were set to an empty array.
+				
+				C) `"saveSql"` means to return the value of the
+				`saveSql` option. If `saveSql` is not set, this
+				function behaves as if it were set to an empty array.
+				
+				Potential TODOs:
+				
+				- `bind`: permit an array of arrays/objects to bind. The first
+				sub-array would act on the first statement which has bindable
+				parameters (as it does now). The 2nd would act on the next such
+				statement, etc.
+				
+				- `callback` and `resultRows`: permit an array entries with
+				semantics similar to those described for `bind` above.
+				
+				OTOH, this function already does too much.
+				*/
 				exec: function() {
 					affirmDbOpen(this);
 					const arg = parseExecArgs(this, arguments);
@@ -7409,22 +11038,106 @@ async function sqlite3InitModule(moduleArg = {}) {
 					}
 					return arg.returnVal();
 				},
+				/**
+				Creates a new UDF (User-Defined Function) which is accessible
+				via SQL code. This function may be called in any of the
+				following forms:
+				
+				- (name, function)
+				- (name, function, optionsObject)
+				- (name, optionsObject)
+				- (optionsObject)
+				
+				In the final two cases, the function must be defined as the
+				`callback` property of the options object (optionally called
+				`xFunc` to align with the C API documentation). In the final
+				case, the function's name must be the 'name' property.
+				
+				The first two call forms can only be used for creating scalar
+				functions. Creating an aggregate or window function requires
+				the options-object form (see below for details).
+				
+				UDFs can be removed as documented for
+				sqlite3_create_function_v2() and
+				sqlite3_create_window_function(), but doing so will "leak" the
+				JS-created WASM binding of those functions (meaning that their
+				entries in the WASM indirect function table still
+				exist). Eliminating that potential leak is a pending TODO.
+				
+				On success, returns this object. Throws on error.
+				
+				When called from SQL arguments to the UDF, and its result,
+				will be converted between JS and SQL with as much fidelity as
+				is feasible, triggering an exception if a type conversion
+				cannot be determined. The docs for sqlite3_create_function_v2()
+				describe the conversions in more detail.
+				
+				The values set in the options object differ for scalar and
+				aggregate functions:
+				
+				- Scalar: set the `xFunc` function-type property to the UDF
+				function.
+				
+				- Aggregate: set the `xStep` and `xFinal` function-type
+				properties to the "step" and "final" callbacks for the
+				aggregate. Do not set the `xFunc` property.
+				
+				- Window: set the `xStep`, `xFinal`, `xValue`, and `xInverse`
+				function-type properties. Do not set the `xFunc` property.
+				
+				The options object may optionally have an `xDestroy`
+				function-type property, as per sqlite3_create_function_v2().
+				Its argument will be the WASM-pointer-type value of the `pApp`
+				property, and this function will throw if `pApp` is defined but
+				is not null, undefined, or a numeric (WASM pointer)
+				value. i.e. `pApp`, if set, must be value suitable for use as a
+				WASM pointer argument, noting that `null` or `undefined` will
+				translate to 0 for that purpose.
+				
+				The options object may contain flags to modify how
+				the function is defined:
+				
+				- `arity`: the number of arguments which SQL calls to this
+				function expect or require. The default value is `xFunc.length`
+				or `xStep.length` (i.e. the number of declared parameters it
+				has) **MINUS 1** (see below for why). As a special case, if the
+				`length` is 0, its arity is also 0 instead of -1. A negative
+				arity value means that the function is variadic and may accept
+				any number of arguments, up to sqlite3's compile-time
+				limits. sqlite3 will enforce the argument count if is zero or
+				greater. The callback always receives a pointer to an
+				`sqlite3_context` object as its first argument. Any arguments
+				after that are from SQL code. The leading context argument does
+				_not_ count towards the function's arity. See the docs for
+				sqlite3.capi.sqlite3_create_function_v2() for why that argument
+				is needed in the interface.
+				
+				The following options-object properties correspond to flags
+				documented at:
+				
+				https://sqlite.org/c3ref/create_function.html
+				
+				- `deterministic` = sqlite3.capi.SQLITE_DETERMINISTIC
+				- `directOnly` = sqlite3.capi.SQLITE_DIRECTONLY
+				- `innocuous` = sqlite3.capi.SQLITE_INNOCUOUS
+				
+				Sidebar: the ability to add new WASM-accessible functions to
+				the runtime requires that the WASM build is compiled with the
+				equivalent functionality as that provided by Emscripten's
+				`-sALLOW_TABLE_GROWTH` flag.
+				*/
 				createFunction: function f(name, xFunc, opt) {
-					const isFunc = (f$1) => f$1 instanceof Function;
+					const isFunc = (f) => f instanceof Function;
 					switch (arguments.length) {
 						case 1:
 							opt = name;
 							name = opt.name;
 							xFunc = opt.xFunc || 0;
 							break;
-						case 2:
-							if (!isFunc(xFunc)) {
-								opt = xFunc;
-								xFunc = opt.xFunc || 0;
-							}
-							break;
-						case 3: break;
-						default: break;
+						case 2: if (!isFunc(xFunc)) {
+							opt = xFunc;
+							xFunc = opt.xFunc || 0;
+						}
 					}
 					if (!opt) opt = {};
 					if ("string" !== typeof name) toss3("Invalid arguments: missing function name.");
@@ -7466,9 +11179,36 @@ async function sqlite3InitModule(moduleArg = {}) {
 					DB.checkRc(this, rc);
 					return this;
 				},
+				/**
+				Prepares the given SQL, step()s it one time, and returns
+				the value of the first result column. If it has no results,
+				undefined is returned.
+				
+				If passed a second argument, it is treated like an argument
+				to Stmt.bind(), so may be any type supported by that
+				function. Passing the undefined value is the same as passing
+				no value, which is useful when...
+				
+				If passed a 3rd argument, it is expected to be one of the
+				SQLITE_{typename} constants. Passing the undefined value is
+				the same as not passing a value.
+				
+				Throws on error (e.g. malformed SQL).
+				*/
 				selectValue: function(sql, bind, asType) {
 					return __selectFirstRow(this, sql, bind, 0, asType);
 				},
+				/**
+				Runs the given query and returns an array of the values from
+				the first result column of each row of the result set. The 2nd
+				argument is an optional value for use in a single-argument call
+				to Stmt.bind(). The 3rd argument may be any value suitable for
+				use as the 2nd argument to Stmt.get(). If a 3rd argument is
+				desired but no bind data are needed, pass `undefined` for the 2nd
+				argument.
+				
+				If there are no result rows, an empty array is returned.
+				*/
 				selectValues: function(sql, bind, asType) {
 					const stmt = this.prepare(sql), rc = [];
 					try {
@@ -7480,21 +11220,84 @@ async function sqlite3InitModule(moduleArg = {}) {
 					}
 					return rc;
 				},
+				/**
+				Prepares the given SQL, step()s it one time, and returns an
+				array containing the values of the first result row. If it has
+				no results, `undefined` is returned.
+				
+				If passed a second argument other than `undefined`, it is
+				treated like an argument to Stmt.bind(), so may be any type
+				supported by that function.
+				
+				Throws on error (e.g. malformed SQL).
+				*/
 				selectArray: function(sql, bind) {
 					return __selectFirstRow(this, sql, bind, []);
 				},
+				/**
+				Prepares the given SQL, step()s it one time, and returns an
+				object containing the key/value pairs of the first result
+				row. If it has no results, `undefined` is returned.
+				
+				Note that the order of returned object's keys is not guaranteed
+				to be the same as the order of the fields in the query string.
+				
+				If passed a second argument other than `undefined`, it is
+				treated like an argument to Stmt.bind(), so may be any type
+				supported by that function.
+				
+				Throws on error (e.g. malformed SQL).
+				*/
 				selectObject: function(sql, bind) {
 					return __selectFirstRow(this, sql, bind, {});
 				},
+				/**
+				Runs the given SQL and returns an array of all results, with
+				each row represented as an array, as per the 'array' `rowMode`
+				option to `exec()`. An empty result set resolves
+				to an empty array. The second argument, if any, is treated as
+				the 'bind' option to a call to exec().
+				*/
 				selectArrays: function(sql, bind) {
 					return __selectAll(this, sql, bind, "array");
 				},
+				/**
+				Works identically to selectArrays() except that each value
+				in the returned array is an object, as per the 'object' `rowMode`
+				option to `exec()`.
+				*/
 				selectObjects: function(sql, bind) {
 					return __selectAll(this, sql, bind, "object");
 				},
+				/**
+				Returns the number of currently-opened Stmt handles for this db
+				handle, or 0 if this DB instance is closed. Note that only
+				handles prepared via this.prepare() are counted, and not
+				handles prepared using capi.sqlite3_prepare_v3() (or
+				equivalent).
+				*/
 				openStatementCount: function() {
 					return this.pointer ? Object.keys(__stmtMap.get(this)).length : 0;
 				},
+				/**
+				Starts a transaction, calls the given callback, and then either
+				rolls back or commits the transaction, depending on whether the
+				callback throws. The callback is passed this db object as its
+				only argument. On success, returns the result of the
+				callback. Throws on error.
+				
+				Transactions may not be nested, so this will throw if it is
+				called recursively. For nested transactions, use the
+				savepoint() method or manually manage SAVEPOINTs using exec().
+				
+				If called with 2 arguments, the first must be a keyword which
+				is legal immediately after a BEGIN statement, e.g. one of
+				"DEFERRED", "IMMEDIATE", or "EXCLUSIVE", though the exact list
+				of supported keywords is not hard-coded here, in order to be
+				future-compatible, if the argument does not look like a single
+				keyword then an exception is triggered with a description of
+				the problem.
+				*/
 				transaction: function(callback) {
 					let opener = "BEGIN";
 					if (arguments.length > 1) {
@@ -7512,6 +11315,14 @@ async function sqlite3InitModule(moduleArg = {}) {
 						throw e;
 					}
 				},
+				/**
+				This works similarly to transaction() but uses sqlite3's SAVEPOINT
+				feature. This function starts a savepoint (with an unspecified name)
+				and calls the given callback function, passing it this db object.
+				If the callback returns, the savepoint is released (committed). If
+				the callback throws, the savepoint is rolled back. If it does not
+				throw, it returns the result of the callback.
+				*/
 				savepoint: function(callback) {
 					affirmDbOpen(this).exec("SAVEPOINT oo1");
 					try {
@@ -7523,10 +11334,56 @@ async function sqlite3InitModule(moduleArg = {}) {
 						throw e;
 					}
 				},
+				/**
+				A convenience form of DB.checkRc(this,resultCode). If it does
+				not throw, it returns this object.
+				*/
 				checkRc: function(resultCode) {
 					return checkSqlite3Rc(this, resultCode);
 				}
 			};
+			/**
+			Returns a new oo1.DB instance which wraps the given (sqlite3*)
+			WASM pointer, optionally with or without taking over ownership of
+			that pointer.
+			
+			The first argument must be either a non-NULL (sqlite3*) WASM
+			pointer.
+			
+			The second argument, defaulting to false, specifies ownership of
+			the first argument. If it is truthy, the returned object will
+			pass that pointer to sqlite3_close() when its close() method is
+			called, otherwise it will not.
+			
+			Throws if pDb is not a non-0 WASM pointer.
+			
+			The caller MUST GUARANTEE that the passed-in handle will outlive
+			the returned object, i.e. that it will not be closed. If it is closed,
+			this object will hold a stale pointer and results are undefined.
+			
+			Aside from its lifetime, the proxy is to be treated as any other
+			DB instance, including the requirement of calling close() on
+			it. close() will free up internal resources owned by the proxy
+			and disassociate the proxy from that handle but will not
+			actually close the proxied db handle unless this function is
+			passed a thruthy second argument.
+			
+			To stress:
+			
+			- DO NOT call sqlite3_close() (or similar) on the being-proxied
+			pointer while a proxy is active.
+			
+			- ALWAYS eventually call close() on the returned object. If the
+			proxy does not own the underlying handle then its MUST be
+			closed BEFORE the being-proxied handle is closed.
+			
+			Design notes:
+			
+			- wrapHandle() "could" accept a DB object instance as its first
+			argument and proxy thatDb.pointer but there is currently no use
+			case where doing so would be useful, so it does not allow
+			that. That restriction may be lifted in a future version.
+			*/
 			DB.wrapHandle = function(pDb, takeOwnership = false) {
 				if (!pDb || !wasm.isPtr(pDb)) throw new sqlite3.SQLite3Error(capi.SQLITE_MISUSE, "Argument must be a WASM sqlite3 pointer");
 				return new DB({
@@ -7534,10 +11391,16 @@ async function sqlite3InitModule(moduleArg = {}) {
 					"sqlite3*:takeOwnership": !!takeOwnership
 				});
 			};
+			/** Throws if the given Stmt has been finalized, else stmt is
+			returned. */
 			const affirmStmtOpen = function(stmt) {
 				if (!stmt.pointer) toss3("Stmt has been closed.");
 				return stmt;
 			};
+			/** Returns an opaque truthy value from the BindTypes
+			enum if v's type is a valid bindable type, else
+			returns a falsy value. As a special case, a value of
+			undefined is treated as a bind type of null. */
 			const isSupportedBindType = function(v) {
 				let t = BindTypes[null === v || void 0 === v ? "null" : typeof v];
 				switch (t) {
@@ -7549,28 +11412,76 @@ async function sqlite3InitModule(moduleArg = {}) {
 					default: return util.isBindableTypedArray(v) ? BindTypes.blob : void 0;
 				}
 			};
+			/**
+			If isSupportedBindType(v) returns a truthy value, this
+			function returns that value, else it throws.
+			*/
 			const affirmSupportedBindType = function(v) {
 				return isSupportedBindType(v) || toss3("Unsupported bind() argument type:", typeof v);
 			};
+			/**
+			If key is a number and within range of stmt's bound parameter
+			count, key is returned.
+			
+			If key is not a number then it must be a JS string (not a WASM
+			string) and it is checked against named parameters. If a match is
+			found, its index is returned.
+			
+			Else it throws.
+			*/
 			const affirmParamIndex = function(stmt, key) {
 				const n = "number" === typeof key ? key : capi.sqlite3_bind_parameter_index(stmt.pointer, key);
 				if (0 === n || !util.isInt32(n)) toss3("Invalid bind() parameter name: " + key);
 				else if (n < 1 || n > stmt.parameterCount) toss3("Bind index", key, "is out of range.");
 				return n;
 			};
+			/**
+			Each Stmt object which is "locked" by DB.exec() gets an entry
+			here to note that "lock".
+			
+			The reason this is in place is because exec({callback:...})'s
+			callback gets access to the Stmt objects created internally by
+			exec() but it must not use certain Stmt APIs.
+			*/
 			const __execLock = /* @__PURE__ */ new Set();
+			/**
+			This is a Stmt.get() counterpart of __execLock. Each time
+			Stmt.step() returns true, the statement is added to this set,
+			indicating that Stmt.get() is legal. Stmt APIs which invalidate
+			that status remove the Stmt object from this set, which will
+			cause Stmt.get() to throw with a descriptive error message
+			instead of a more generic "API misuse" if we were to allow that
+			call to reach the C API.
+			*/
 			const __stmtMayGet = /* @__PURE__ */ new Set();
+			/**
+			Stmt APIs which are prohibited on locked objects must call
+			affirmNotLockedByExec() before doing any work.
+			
+			If __execLock.has(stmt) is truthy, this throws an exception
+			complaining that the 2nd argument (an operation name,
+			e.g. "bind()") is not legal while the statement is "locked".
+			Locking happens before an exec()-like callback is passed a
+			statement, to ensure that the callback does not mutate or
+			finalize the statement. If it does not throw, it returns stmt.
+			*/
 			const affirmNotLockedByExec = function(stmt, currentOpName) {
 				if (__execLock.has(stmt)) toss3("Operation is illegal when statement is locked:", currentOpName);
 				return stmt;
 			};
+			/**
+			Binds a single bound parameter value on the given stmt at the
+			given index (numeric or named) using the given bindType (see
+			the BindTypes enum) and value. Throws on error. Returns stmt on
+			success.
+			*/
 			const bindOne = function f(stmt, ndx, bindType, val) {
 				affirmNotLockedByExec(affirmStmtOpen(stmt), "bind()");
 				if (!f._) {
 					f._tooBigInt = (v) => toss3("BigInt value is too big to store without precision loss:", v);
-					f._ = { string: function(stmt$1, ndx$1, val$1, asBlob) {
-						const [pStr, n] = wasm.allocCString(val$1, true);
-						return (asBlob ? capi.sqlite3_bind_blob : capi.sqlite3_bind_text)(stmt$1.pointer, ndx$1, pStr, n, capi.SQLITE_WASM_DEALLOC);
+					f._ = { string: function(stmt, ndx, val, asBlob) {
+						const [pStr, n] = wasm.allocCString(val, true);
+						return (asBlob ? capi.sqlite3_bind_blob : capi.sqlite3_bind_text)(stmt.pointer, ndx, pStr, n, capi.SQLITE_WASM_DEALLOC);
 					} };
 				}
 				affirmSupportedBindType(val);
@@ -7586,13 +11497,14 @@ async function sqlite3InitModule(moduleArg = {}) {
 					case BindTypes.number: {
 						let m;
 						if (util.isInt32(val)) m = capi.sqlite3_bind_int;
-						else if ("bigint" === typeof val) if (!util.bigIntFits64(val)) f._tooBigInt(val);
-						else if (wasm.bigIntEnabled) m = capi.sqlite3_bind_int64;
-						else if (util.bigIntFitsDouble(val)) {
-							val = Number(val);
-							m = capi.sqlite3_bind_double;
-						} else f._tooBigInt(val);
-						else {
+						else if ("bigint" === typeof val) {
+							if (!util.bigIntFits64(val)) f._tooBigInt(val);
+							else if (wasm.bigIntEnabled) m = capi.sqlite3_bind_int64;
+							else if (util.bigIntFitsDouble(val)) {
+								val = Number(val);
+								m = capi.sqlite3_bind_double;
+							} else f._tooBigInt(val);
+						} else {
 							val = Number(val);
 							if (wasm.bigIntEnabled && Number.isInteger(val)) m = capi.sqlite3_bind_int64;
 							else m = capi.sqlite3_bind_double;
@@ -7622,6 +11534,22 @@ async function sqlite3InitModule(moduleArg = {}) {
 				return stmt;
 			};
 			Stmt.prototype = {
+				/**
+				"Finalizes" this statement. This is a no-op if the statement
+				has already been finalized. Returns the result of
+				sqlite3_finalize() (0 on success, non-0 on error), or the
+				undefined value if the statement has already been
+				finalized. Regardless of success or failure, most methods in
+				this class will throw if called after this is.
+				
+				This method always throws if called when it is illegal to do
+				so. Namely, when triggered via a per-row callback handler of a
+				DB.exec() call.
+				
+				If Stmt does not own its underlying (sqlite3_stmt*) (see
+				Stmt.wrapHandle()) then this function will not pass it to
+				sqlite3_finalize().
+				*/
 				finalize: function() {
 					const ptr = this.pointer;
 					if (ptr) {
@@ -7636,12 +11564,37 @@ async function sqlite3InitModule(moduleArg = {}) {
 						return rc;
 					}
 				},
+				/**
+				Clears all bound values. Returns this object.  Throws if this
+				statement has been finalized or if modification of the
+				statement is currently illegal (e.g. in the per-row callback of
+				a DB.exec() call).
+				*/
 				clearBindings: function() {
 					affirmNotLockedByExec(affirmStmtOpen(this), "clearBindings()");
 					capi.sqlite3_clear_bindings(this.pointer);
 					__stmtMayGet.delete(this);
 					return this;
 				},
+				/**
+				Resets this statement so that it may be step()ed again from the
+				beginning. Returns this object. Throws if this statement has
+				been finalized, if it may not legally be reset because it is
+				currently being used from a DB.exec() callback, or if the
+				underlying call to sqlite3_reset() returns non-0.
+				
+				If passed a truthy argument then this.clearBindings() is
+				also called, otherwise any existing bindings, along with
+				any memory allocated for them, are retained.
+				
+				In versions 3.42.0 and earlier, this function did not throw if
+				sqlite3_reset() returns non-0, but it was discovered that
+				throwing (or significant extra client-side code) is necessary
+				in order to avoid certain silent failure scenarios, as
+				discussed at:
+				
+				https://sqlite.org/forum/forumpost/36f7a2e7494897df
+				*/
 				reset: function(alsoClearBinds) {
 					affirmNotLockedByExec(this, "reset()");
 					if (alsoClearBinds) this.clearBindings();
@@ -7650,6 +11603,72 @@ async function sqlite3InitModule(moduleArg = {}) {
 					checkSqlite3Rc(this.db, rc);
 					return this;
 				},
+				/**
+				Binds one or more values to its bindable parameters. It
+				accepts 1 or 2 arguments:
+				
+				If passed a single argument, it must be either an array, an
+				object, or a value of a bindable type (see below).
+				
+				If passed 2 arguments, the first one is the 1-based bind
+				index or bindable parameter name and the second one must be
+				a value of a bindable type.
+				
+				Bindable value types:
+				
+				- null is bound as NULL.
+				
+				- undefined as a standalone value is a no-op intended to
+				simplify certain client-side use cases: passing undefined as
+				a value to this function will not actually bind anything and
+				this function will skip confirmation that binding is even
+				legal. (Those semantics simplify certain client-side uses.)
+				Conversely, a value of undefined as an array or object
+				property when binding an array/object (see below) is treated
+				the same as null.
+				
+				- Numbers are bound as either doubles or integers: doubles if
+				they are larger than 32 bits, else double or int32, depending
+				on whether they have a fractional part. Booleans are bound as
+				integer 0 or 1. It is not expected the distinction of binding
+				doubles which have no fractional parts and integers is
+				significant for the majority of clients due to sqlite3's data
+				typing model. If BigInt support is enabled then this routine
+				will bind BigInt values as 64-bit integers if they'll fit in
+				64 bits. If that support disabled, it will store the BigInt
+				as an int32 or a double if it can do so without loss of
+				precision. If the BigInt is _too BigInt_ then it will throw.
+				
+				- Strings are bound as strings (use bindAsBlob() to force
+				blob binding).
+				
+				- Uint8Array, Int8Array, and ArrayBuffer instances are bound as
+				blobs.
+				
+				If passed an array, each element of the array is bound at
+				the parameter index equal to the array index plus 1
+				(because arrays are 0-based but binding is 1-based).
+				
+				If passed an object, each object key is treated as a
+				bindable parameter name. The object keys _must_ match any
+				bindable parameter names, including any `$`, `@`, or `:`
+				prefix. Because `$` is a legal identifier chararacter in
+				JavaScript, that is the suggested prefix for bindable
+				parameters: `stmt.bind({$a: 1, $b: 2})`.
+				
+				It returns this object on success and throws on
+				error. Errors include:
+				
+				- Any bind index is out of range, a named bind parameter
+				does not match, or this statement has no bindable
+				parameters.
+				
+				- Any value to bind is of an unsupported type.
+				
+				- Passed no arguments or more than two.
+				
+				- The statement has been finalized.
+				*/
 				bind: function() {
 					affirmStmtOpen(this);
 					let ndx, arg;
@@ -7678,8 +11697,18 @@ async function sqlite3InitModule(moduleArg = {}) {
 						Object.keys(arg).forEach((k) => bindOne(this, k, affirmSupportedBindType(arg[k]), arg[k]));
 						return this;
 					} else return bindOne(this, ndx, affirmSupportedBindType(arg), arg);
-					toss3("Should not reach this point.");
 				},
+				/**
+				Special case of bind() which binds the given value using the
+				BLOB binding mechanism instead of the default selected one for
+				the value. The ndx may be a numbered or named bind index. The
+				value must be of type string, null/undefined (both get treated
+				as null), or a TypedArray of a type supported by the bind()
+				API. This API cannot bind numbers as blobs.
+				
+				If passed a single argument, a bind index of 1 is assumed and
+				the first argument is the value.
+				*/
 				bindAsBlob: function(ndx, arg) {
 					affirmStmtOpen(this);
 					if (1 === arguments.length) {
@@ -7690,6 +11719,12 @@ async function sqlite3InitModule(moduleArg = {}) {
 					if (BindTypes.string !== t && BindTypes.blob !== t && BindTypes.null !== t) toss3("Invalid value type for bindAsBlob()");
 					return bindOne(this, ndx, BindTypes.blob, arg);
 				},
+				/**
+				Steps the statement one time. If the result indicates that a
+				row of data is available, a truthy value is returned.  If no
+				row of data is available, a falsy value is returned.  Throws on
+				error.
+				*/
 				step: function() {
 					affirmNotLockedByExec(this, "step()");
 					const rc = capi.sqlite3_step(affirmStmtOpen(this).pointer);
@@ -7706,10 +11741,42 @@ async function sqlite3InitModule(moduleArg = {}) {
 							DB.checkRc(this.db.pointer, rc);
 					}
 				},
+				/**
+				Functions exactly like step() except that...
+				
+				1) On success, it calls this.reset() and returns this object.
+				
+				2) On error, it throws and does not call reset().
+				
+				This is intended to simplify constructs like:
+				
+				```
+				for(...) {
+				stmt.bind(...).stepReset();
+				}
+				```
+				
+				Note that the reset() call makes it illegal to call this.get()
+				after the step.
+				*/
 				stepReset: function() {
 					this.step();
 					return this.reset();
 				},
+				/**
+				Functions like step() except that it calls finalize() on this
+				statement immediately after stepping, even if the step() call
+				throws.
+				
+				On success, it returns true if the step indicated that a row of
+				data was available, else it returns a falsy value.
+				
+				This is intended to simplify use cases such as:
+				
+				```
+				aDb.prepare("insert into foo(a) values(?)").bind(123).stepFinalize();
+				```
+				*/
 				stepFinalize: function() {
 					try {
 						const rc = this.step();
@@ -7721,6 +11788,40 @@ async function sqlite3InitModule(moduleArg = {}) {
 						} catch (e) {}
 					}
 				},
+				/**
+				Fetches the value from the given 0-based column index of
+				the current data row, throwing if index is out of range.
+				
+				Requires that step() has just returned a truthy value, else
+				an exception is thrown.
+				
+				By default it will determine the data type of the result
+				automatically. If passed a second argument, it must be one
+				of the enumeration values for sqlite3 types, which are
+				defined as members of the sqlite3 module: SQLITE_INTEGER,
+				SQLITE_FLOAT, SQLITE_TEXT, SQLITE_BLOB. Any other value,
+				except for undefined, will trigger an exception. Passing
+				undefined is the same as not passing a value. It is legal
+				to, e.g., fetch an integer value as a string, in which case
+				sqlite3 will convert the value to a string.
+				
+				If ndx is an array, this function behaves a differently: it
+				assigns the indexes of the array, from 0 to the number of
+				result columns, to the values of the corresponding column,
+				and returns that array.
+				
+				If ndx is a plain object, this function behaves even
+				differentlier: it assigns the properties of the object to
+				the values of their corresponding result columns and returns
+				that object.
+				
+				Blobs are returned as Uint8Array instances.
+				
+				Potential TODO: add type ID SQLITE_JSON, which fetches the
+				result as a string and passes it (if it's not null) to
+				JSON.parse(), returning the result of that. Until then,
+				getJSON() can be used for that.
+				*/
 				get: function(ndx, asType) {
 					if (!__stmtMayGet.has(affirmStmtOpen(this))) toss3("Stmt.step() has not (recently) returned true.");
 					if (Array.isArray(ndx)) {
@@ -7760,40 +11861,95 @@ async function sqlite3InitModule(moduleArg = {}) {
 					}
 					toss3("Not reached.");
 				},
+				/** Equivalent to get(ndx) but coerces the result to an
+				integer. */
 				getInt: function(ndx) {
 					return this.get(ndx, capi.SQLITE_INTEGER);
 				},
+				/** Equivalent to get(ndx) but coerces the result to a
+				float. */
 				getFloat: function(ndx) {
 					return this.get(ndx, capi.SQLITE_FLOAT);
 				},
+				/** Equivalent to get(ndx) but coerces the result to a
+				string. */
 				getString: function(ndx) {
 					return this.get(ndx, capi.SQLITE_TEXT);
 				},
+				/** Equivalent to get(ndx) but coerces the result to a
+				Uint8Array. */
 				getBlob: function(ndx) {
 					return this.get(ndx, capi.SQLITE_BLOB);
 				},
+				/**
+				A convenience wrapper around get() which fetches the value
+				as a string and then, if it is not null, passes it to
+				JSON.parse(), returning that result. Throws if parsing
+				fails. If the result is null, null is returned. An empty
+				string, on the other hand, will trigger an exception.
+				*/
 				getJSON: function(ndx) {
 					const s = this.get(ndx, capi.SQLITE_STRING);
 					return null === s ? s : JSON.parse(s);
 				},
+				/**
+				Returns the result column name of the given index, or
+				throws if index is out of bounds or this statement has been
+				finalized. This can be used without having run step()
+				first.
+				*/
 				getColumnName: function(ndx) {
 					return capi.sqlite3_column_name(affirmColIndex(affirmStmtOpen(this), ndx).pointer, ndx);
 				},
+				/**
+				If this statement potentially has result columns, this function
+				returns an array of all such names. If passed an array, it is
+				used as the target and all names are appended to it. Returns
+				the target array. Throws if this statement cannot have result
+				columns. This object's columnCount property holds the number of
+				columns.
+				*/
 				getColumnNames: function(tgt = []) {
 					affirmColIndex(affirmStmtOpen(this), 0);
 					const n = this.columnCount;
 					for (let i = 0; i < n; ++i) tgt.push(capi.sqlite3_column_name(this.pointer, i));
 					return tgt;
 				},
+				/**
+				If this statement has named bindable parameters and the
+				given name matches one, its 1-based bind index is
+				returned. If no match is found, 0 is returned. If it has no
+				bindable parameters, the undefined value is returned.
+				*/
 				getParamIndex: function(name) {
 					return affirmStmtOpen(this).parameterCount ? capi.sqlite3_bind_parameter_index(this.pointer, name) : void 0;
 				},
+				/**
+				If this statement has named bindable parameters and the given
+				index refers to one, its name is returned, else null is
+				returned. If this statement has no bound parameters, undefined
+				is returned.
+				
+				Added in 3.47.
+				*/
 				getParamName: function(ndx) {
 					return affirmStmtOpen(this).parameterCount ? capi.sqlite3_bind_parameter_name(this.pointer, ndx) : void 0;
 				},
+				/**
+				Behaves like sqlite3_stmt_busy() but throws if this statement
+				is closed and returns a value of type boolean instead of integer.
+				
+				Added in 3.47.
+				*/
 				isBusy: function() {
 					return 0 !== capi.sqlite3_stmt_busy(affirmStmtOpen(this));
 				},
+				/**
+				Behaves like sqlite3_stmt_readonly() but throws if this statement
+				is closed and returns a value of type boolean instead of integer.
+				
+				Added in 3.47.
+				*/
 				isReadOnly: function() {
 					return 0 !== capi.sqlite3_stmt_readonly(affirmStmtOpen(this));
 				}
@@ -7809,6 +11965,15 @@ async function sqlite3InitModule(moduleArg = {}) {
 				Object.defineProperty(Stmt.prototype, "pointer", prop);
 				Object.defineProperty(DB.prototype, "pointer", prop);
 			}
+			/**
+			Stmt.columnCount is an interceptor for sqlite3_column_count().
+			
+			This requires an unfortunate performance hit compared to caching
+			columnCount when the Stmt is created/prepared (as was done in
+			SQLite <=3.42.0), but is necessary in order to handle certain
+			corner cases, as described in
+			https://sqlite.org/forum/forumpost/7774b773937cbe0a.
+			*/
 			Object.defineProperty(Stmt.prototype, "columnCount", {
 				enumerable: false,
 				get: function() {
@@ -7823,16 +11988,421 @@ async function sqlite3InitModule(moduleArg = {}) {
 				},
 				set: () => toss3("The parameterCount property is read-only.")
 			});
+			/**
+			The Stmt counterpart of oo1.DB.wrapHandle(), this creates a Stmt
+			instance which wraps a WASM (sqlite3_stmt*) in the oo1 API,
+			optionally with or without taking over ownership of that pointer.
+			
+			The first argument must be an oo1.DB instance[^1].
+			
+			The second argument must be a valid WASM (sqlite3_stmt*), as
+			produced by sqlite3_prepare_v2() and sqlite3_prepare_v3().
+			
+			The third argument, defaulting to false, specifies whether the
+			returned Stmt object takes over ownership of the underlying
+			(sqlite3_stmt*). If true, the returned object's finalize() method
+			will finalize that handle, else it will not. If it is false,
+			ownership of pStmt is unchanged and pStmt MUST outlive the
+			returned object or results are undefined.
+			
+			This function throws if the arguments are invalid. On success it
+			returns a new Stmt object which wraps the given statement
+			pointer.
+			
+			Like all Stmt objects, the finalize() method must eventually be
+			called on the returned object to free up internal resources,
+			regardless of whether this function's third argument is true or
+			not.
+			
+			[^1]: The first argument cannot be a (sqlite3*) because the
+			resulting Stmt object requires a parent DB object. It is not yet
+			determined whether it would be of general benefit to refactor the
+			DB/Stmt pair internals to communicate in terms of the underlying
+			(sqlite3*) rather than a DB object. If so, we could laxen the
+			first argument's requirement and allow an (sqlite3*). Because
+			DB.wrapHandle() enables multiple DB objects to proxy the same
+			(sqlite3*), we cannot unambiguously translate the first arugment
+			from (sqlite3*) to DB instances for us with this function's first
+			argument.
+			*/
 			Stmt.wrapHandle = function(oo1db, pStmt, takeOwnership = false) {
 				if (!(oo1db instanceof DB) || !oo1db.pointer) throw new sqlite3.SQLite3Error(sqlite3.SQLITE_MISUSE, "First argument must be an opened sqlite3.oo1.DB instance");
 				if (!pStmt || !wasm.isPtr(pStmt)) throw new sqlite3.SQLite3Error(sqlite3.SQLITE_MISUSE, "Second argument must be a WASM sqlite3_stmt pointer");
 				return new Stmt(oo1db, pStmt, BindTypes, !!takeOwnership);
 			};
+			/** The OO API's public namespace. */
 			sqlite3.oo1 = {
 				DB,
 				Stmt
 			};
 		});
+		/**
+		2022-07-22
+		
+		The author disclaims copyright to this source code.  In place of a
+		legal notice, here is a blessing:
+		
+		*   May you do good and not evil.
+		*   May you find forgiveness for yourself and forgive others.
+		*   May you share freely, never taking more than you give.
+		
+		***********************************************************************
+		
+		This file implements the initializer for SQLite's "Worker API #1", a
+		very basic DB access API intended to be scripted from a main window
+		thread via Worker-style messages. Because of limitations in that
+		type of communication, this API is minimalistic and only capable of
+		serving relatively basic DB requests (e.g. it cannot process nested
+		query loops concurrently).
+		
+		This file requires that the core C-style sqlite3 API and OO API #1
+		have been loaded.
+		*/
+		/**
+		sqlite3.initWorker1API() implements a Worker-based wrapper around
+		SQLite3 OO API #1, colloquially known as "Worker API #1".
+		
+		In order to permit this API to be loaded in worker threads without
+		automatically registering onmessage handlers, initializing the
+		worker API requires calling initWorker1API(). If this function is
+		called from a non-worker thread then it throws an exception.  It
+		must only be called once per Worker.
+		
+		When initialized, it installs message listeners to receive Worker
+		messages and then it posts a message in the form:
+		
+		```
+		{type:'sqlite3-api', result:'worker1-ready'}
+		```
+		
+		to let the client know that it has been initialized. Clients may
+		optionally depend on this function not returning until
+		initialization is complete, as the initialization is synchronous.
+		In some contexts, however, listening for the above message is
+		a better fit.
+		
+		Note that the worker-based interface can be slightly quirky because
+		of its async nature. In particular, any number of messages may be posted
+		to the worker before it starts handling any of them. If, e.g., an
+		"open" operation fails, any subsequent messages will fail. The
+		Promise-based wrapper for this API (`sqlite3-worker1-promiser.js`)
+		is more comfortable to use in that regard.
+		
+		The documentation for the input and output worker messages for
+		this API follows...
+		
+		====================================================================
+		Common message format...
+		
+		Each message posted to the worker has an operation-independent
+		envelope and operation-dependent arguments:
+		
+		```
+		{
+		type: string, // one of: 'open', 'close', 'exec', 'export', 'config-get'
+		
+		messageId: OPTIONAL arbitrary value. The worker will copy it as-is
+		into response messages to assist in client-side dispatching.
+		
+		dbId: a db identifier string (returned by 'open') which tells the
+		operation which database instance to work on. If not provided, the
+		first-opened db is used. This is an "opaque" value, with no
+		inherently useful syntax or information. Its value is subject to
+		change with any given build of this API and cannot be used as a
+		basis for anything useful beyond its one intended purpose.
+		
+		args: ...operation-dependent arguments...
+		
+		// the framework may add other properties for testing or debugging
+		// purposes.
+		
+		}
+		```
+		
+		Response messages, posted back to the main thread, look like:
+		
+		```
+		{
+		type: string. Same as above except for error responses, which have the type
+		'error',
+		
+		messageId: same value, if any, provided by the inbound message
+		
+		dbId: the id of the db which was operated on, if any, as returned
+		by the corresponding 'open' operation.
+		
+		result: ...operation-dependent result...
+		
+		}
+		```
+		
+		====================================================================
+		Error responses
+		
+		Errors are reported messages in an operation-independent format:
+		
+		```
+		{
+		type: "error",
+		
+		messageId: ...as above...,
+		
+		dbId: ...as above...
+		
+		result: {
+		
+		operation: type of the triggering operation: 'open', 'close', ...
+		
+		message: ...error message text...
+		
+		errorClass: string. The ErrorClass.name property from the thrown exception.
+		
+		input: the message object which triggered the error.
+		
+		stack: _if available_, a stack trace array.
+		
+		}
+		
+		}
+		```
+		
+		
+		====================================================================
+		"config-get"
+		
+		This operation fetches the serializable parts of the sqlite3 API
+		configuration.
+		
+		Message format:
+		
+		```
+		{
+		type: "config-get",
+		messageId: ...as above...,
+		args: currently ignored and may be elided.
+		}
+		```
+		
+		Response:
+		
+		```
+		{
+		type: "config-get",
+		messageId: ...as above...,
+		result: {
+		
+		version: sqlite3.version object
+		
+		bigIntEnabled: bool. True if BigInt support is enabled.
+		
+		vfsList: result of sqlite3.capi.sqlite3_js_vfs_list()
+		}
+		}
+		```
+		
+		
+		====================================================================
+		"open" a database
+		
+		Message format:
+		
+		```
+		{
+		type: "open",
+		messageId: ...as above...,
+		args:{
+		
+		filename [=":memory:" or "" (unspecified)]: the db filename.
+		See the sqlite3.oo1.DB constructor for peculiarities and
+		transformations,
+		
+		vfs: sqlite3_vfs name. Ignored if filename is ":memory:" or "".
+		This may change how the given filename is resolved.
+		}
+		}
+		```
+		
+		Response:
+		
+		```
+		{
+		type: "open",
+		messageId: ...as above...,
+		result: {
+		filename: db filename, possibly differing from the input.
+		
+		dbId: an opaque ID value which must be passed in the message
+		envelope to other calls in this API to tell them which db to
+		use. If it is not provided to future calls, they will default to
+		operating on the least-recently-opened db. This property is, for
+		API consistency's sake, also part of the containing message
+		envelope.  Only the `open` operation includes it in the `result`
+		property.
+		
+		persistent: true if the given filename resides in the
+		known-persistent storage, else false.
+		
+		vfs: name of the VFS the "main" db is using.
+		}
+		}
+		```
+		
+		====================================================================
+		"close" a database
+		
+		Message format:
+		
+		```
+		{
+		type: "close",
+		messageId: ...as above...
+		dbId: ...as above...
+		args: OPTIONAL {unlink: boolean}
+		}
+		```
+		
+		If the `dbId` does not refer to an opened ID, this is a no-op. If
+		the `args` object contains a truthy `unlink` value then the database
+		will be unlinked (deleted) after closing it. The inability to close a
+		db (because it's not opened) or delete its file does not trigger an
+		error.
+		
+		Response:
+		
+		```
+		{
+		type: "close",
+		messageId: ...as above...,
+		result: {
+		
+		filename: filename of closed db, or undefined if no db was closed
+		
+		}
+		}
+		```
+		
+		====================================================================
+		"exec" SQL
+		
+		All SQL execution is processed through the exec operation. It offers
+		most of the features of the oo1.DB.exec() method, with a few limitations
+		imposed by the state having to cross thread boundaries.
+		
+		Message format:
+		
+		```
+		{
+		type: "exec",
+		messageId: ...as above...
+		dbId: ...as above...
+		args: string (SQL) or {... see below ...}
+		}
+		```
+		
+		Response:
+		
+		```
+		{
+		type: "exec",
+		messageId: ...as above...,
+		dbId: ...as above...
+		result: {
+		input arguments, possibly modified. See below.
+		}
+		}
+		```
+		
+		The arguments are in the same form accepted by oo1.DB.exec(), with
+		the exceptions noted below.
+		
+		If `args.countChanges` (added in version 3.43) is truthy then the
+		`result` property contained by the returned object will have a
+		`changeCount` property which holds the number of changes made by the
+		provided SQL. Because the SQL may contain an arbitrary number of
+		statements, the `changeCount` is calculated by calling
+		`sqlite3_total_changes()` before and after the SQL is evaluated. If
+		the value of `countChanges` is 64 then the `changeCount` property
+		will be returned as a 64-bit integer in the form of a BigInt (noting
+		that that will trigger an exception if used in a BigInt-incapable
+		build).  In the latter case, the number of changes is calculated by
+		calling `sqlite3_total_changes64()` before and after the SQL is
+		evaluated.
+		
+		If the `args.lastInsertRowId` (added in version 3.50.0) is truthy
+		then the `result` property contained by the returned object will
+		have a `lastInsertRowId` will hold a BigInt-type value corresponding
+		to the result of sqlite3_last_insert_rowid(). This value is only
+		fetched once, after the SQL is run, regardless of how many
+		statements the SQL contains. This API has no idea whether the SQL
+		contains any INSERTs, so it is up to the client to apply/rely on
+		this property only when it makes sense to do so.
+		
+		A function-type args.callback property cannot cross
+		the window/Worker boundary, so is not useful here. If
+		args.callback is a string then it is assumed to be a
+		message type key, in which case a callback function will be
+		applied which posts each row result via:
+		
+		postMessage({type: thatKeyType,
+		rowNumber: 1-based-#,
+		row: theRow,
+		columnNames: anArray
+		})
+		
+		And, at the end of the result set (whether or not any result rows
+		were produced), it will post an identical message with
+		(row=undefined, rowNumber=null) to alert the caller than the result
+		set is completed. Note that a row value of `null` is a legal row
+		result for certain arg.rowMode values.
+		
+		(Design note: we don't use (row=undefined, rowNumber=undefined) to
+		indicate end-of-results because fetching those would be
+		indistinguishable from fetching from an empty object unless the
+		client used hasOwnProperty() (or similar) to distinguish "missing
+		property" from "property with the undefined value".  Similarly,
+		`null` is a legal value for `row` in some case , whereas the db
+		layer won't emit a result value of `undefined`.)
+		
+		The callback proxy must not recurse into this interface. An exec()
+		call will tie up the Worker thread, causing any recursion attempt
+		to wait until the first exec() is completed.
+		
+		The response is the input options object (or a synthesized one if
+		passed only a string), noting that options.resultRows and
+		options.columnNames may be populated by the call to db.exec().
+		
+		
+		====================================================================
+		"export" the current db
+		
+		To export the underlying database as a byte array...
+		
+		Message format:
+		
+		```
+		{
+		type: "export",
+		messageId: ...as above...,
+		dbId: ...as above...
+		}
+		```
+		
+		Response:
+		
+		```
+		{
+		type: "export",
+		messageId: ...as above...,
+		dbId: ...as above...
+		result: {
+		byteArray: Uint8Array (as per sqlite3_js_db_export()),
+		filename: the db filename,
+		mimetype: "application/x-sqlite3"
+		}
+		}
+		```
+		
+		*/
 		globalThis.sqlite3ApiBootstrap.initializers.push(function(sqlite3) {
 			const util = sqlite3.util;
 			sqlite3.initWorker1API = function() {
@@ -7841,19 +12411,44 @@ async function sqlite3InitModule(moduleArg = {}) {
 					throw new Error(args.join(" "));
 				};
 				if (!(globalThis.WorkerGlobalScope instanceof Function)) toss("initWorker1API() must be run from a Worker thread.");
-				const sqlite3$1 = this.sqlite3 || toss("Missing this.sqlite3 object.");
-				const DB = sqlite3$1.oo1.DB;
+				const sqlite3 = this.sqlite3 || toss("Missing this.sqlite3 object.");
+				const DB = sqlite3.oo1.DB;
+				/**
+				Returns the app-wide unique ID for the given db, creating one if
+				needed.
+				*/
 				const getDbId = function(db) {
 					let id = wState.idMap.get(db);
 					if (id) return id;
 					id = "db#" + ++wState.idSeq + ":" + Math.floor(Math.random() * 1e8) + ":" + Math.floor(Math.random() * 1e8);
+					/** ^^^ can't simply use db.pointer b/c closing/opening may re-use
+					the same address, which could map pending messages to a wrong
+					instance.
+					
+					2025-07: https://github.com/sqlite/sqlite-wasm/issues/113
+					demonstrates that two Worker1s can end up with the same IDs,
+					despite using different instances of the library, so we need
+					to add some randomness to the IDs instead of relying on the
+					pointer addresses.
+					*/
 					wState.idMap.set(db, id);
 					return id;
 				};
+				/**
+				Internal helper for managing Worker-level state.
+				*/
 				const wState = {
+					/**
+					Each opened DB is added to this.dbList, and the first entry in
+					that list is the default db. As each db is closed, its entry is
+					removed from the list.
+					*/
 					dbList: [],
+					/** Sequence number of dbId generation. */
 					idSeq: 0,
+					/** Map of DB instances to dbId. */
 					idMap: /* @__PURE__ */ new WeakMap(),
+					/** Temp holder for "transferable" postMessage() state. */
 					xfer: [],
 					open: function(opt) {
 						const db = new DB(opt);
@@ -7872,20 +12467,32 @@ async function sqlite3InitModule(moduleArg = {}) {
 							if (alsoUnlink && filename && pVfs) util.sqlite3__wasm_vfs_unlink(pVfs, filename);
 						}
 					},
+					/**
+					Posts the given worker message value. If xferList is provided,
+					it must be an array, in which case a copy of it passed as
+					postMessage()'s second argument and xferList.length is set to
+					0.
+					*/
 					post: function(msg, xferList) {
 						if (xferList && xferList.length) {
 							globalThis.postMessage(msg, Array.from(xferList));
 							xferList.length = 0;
 						} else globalThis.postMessage(msg);
 					},
+					/** Map of DB IDs to DBs. */
 					dbs: Object.create(null),
+					/** Fetch the DB for the given id. Throw if require=true and the
+					id is not valid, else return the db or undefined. */
 					getDb: function(id, require = true) {
 						return this.dbs[id] || (require ? toss("Unknown (or closed) DB ID:", id) : void 0);
 					}
 				};
+				/** Throws if the given db is falsy or not opened, else returns its
+				argument. */
 				const affirmDbOpen = function(db = wState.dbList[0]) {
 					return db && db.pointer ? db : toss("DB is not opened.");
 				};
+				/** Extract dbId from the given message payload. */
 				const getMsgDb = function(msgData, affirmExists = true) {
 					const db = wState.getDb(msgData.dbId, false) || wState.dbList[0];
 					return affirmExists ? affirmDbOpen(db) : db;
@@ -7893,6 +12500,16 @@ async function sqlite3InitModule(moduleArg = {}) {
 				const getDefaultDbId = function() {
 					return wState.dbList[0] && getDbId(wState.dbList[0]);
 				};
+				/**
+				A level of "organizational abstraction" for the Worker1
+				API. Each method in this object must map directly to a Worker1
+				message type key. The onmessage() dispatcher attempts to
+				dispatch all inbound messages to a method of this object,
+				passing it the event.data part of the inbound event object. All
+				methods must return a plain Object containing any result
+				state, which the dispatcher may amend. All methods must throw
+				on error.
+				*/
 				const wMsgHandler = {
 					open: function(ev) {
 						const oargs = Object.create(null), args = ev.args || Object.create(null);
@@ -7902,7 +12519,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 						oargs.filename = args.filename || "";
 						const db = wState.open(oargs);
 						rc.filename = db.filename;
-						rc.persistent = !!sqlite3$1.capi.sqlite3_js_db_uses_vfs(db.pointer, "opfs");
+						rc.persistent = !!sqlite3.capi.sqlite3_js_db_uses_vfs(db.pointer, "opfs");
 						rc.dbId = getDbId(db);
 						rc.vfs = db.dbVfsName();
 						return rc;
@@ -7940,7 +12557,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 							const changeCount = !!rc.countChanges ? db.changes(true, 64 === rc.countChanges) : void 0;
 							db.exec(rc);
 							if (void 0 !== changeCount) rc.changeCount = db.changes(true, 64 === rc.countChanges) - changeCount;
-							const lastInsertRowId = !!rc.lastInsertRowId ? sqlite3$1.capi.sqlite3_last_insert_rowid(db) : void 0;
+							const lastInsertRowId = !!rc.lastInsertRowId ? sqlite3.capi.sqlite3_last_insert_rowid(db) : void 0;
 							if (void 0 !== lastInsertRowId) rc.lastInsertRowId = lastInsertRowId;
 							if (rc.callback instanceof Function) {
 								rc.callback = theCallback;
@@ -7958,18 +12575,28 @@ async function sqlite3InitModule(moduleArg = {}) {
 						return rc;
 					},
 					"config-get": function() {
-						const rc = Object.create(null), src = sqlite3$1.config;
+						const rc = Object.create(null), src = sqlite3.config;
 						["bigIntEnabled"].forEach(function(k) {
 							if (Object.getOwnPropertyDescriptor(src, k)) rc[k] = src[k];
 						});
-						rc.version = sqlite3$1.version;
-						rc.vfsList = sqlite3$1.capi.sqlite3_js_vfs_list();
+						rc.version = sqlite3.version;
+						rc.vfsList = sqlite3.capi.sqlite3_js_vfs_list();
 						return rc;
 					},
+					/**
+					Exports the database to a byte array, as per
+					sqlite3_serialize(). Response is an object:
+					
+					{
+					byteArray:  Uint8Array (db file contents),
+					filename: the current db filename,
+					mimetype: 'application/x-sqlite3'
+					}
+					*/
 					export: function(ev) {
 						const db = getMsgDb(ev);
 						const response = {
-							byteArray: sqlite3$1.capi.sqlite3_js_db_export(db.pointer),
+							byteArray: sqlite3.capi.sqlite3_js_db_export(db.pointer),
 							filename: db.filename,
 							mimetype: "application/x-sqlite3"
 						};
@@ -7987,15 +12614,15 @@ async function sqlite3InitModule(moduleArg = {}) {
 					try {
 						if (wMsgHandler.hasOwnProperty(evType) && wMsgHandler[evType] instanceof Function) result = await wMsgHandler[evType](ev);
 						else toss("Unknown db worker message type:", ev.type);
-					} catch (err$1) {
+					} catch (err) {
 						evType = "error";
 						result = {
 							operation: ev.type,
-							message: err$1.message,
-							errorClass: err$1.name,
+							message: err.message,
+							errorClass: err.name,
 							input: ev
 						};
-						if (err$1.stack) result.stack = "string" === typeof err$1.stack ? err$1.stack.split(/\n\s*/) : err$1.stack;
+						if (err.stack) result.stack = "string" === typeof err.stack ? err.stack.split(/\n\s*/) : err.stack;
 					}
 					if (!dbId) dbId = result.dbId || getDefaultDbId();
 					wState.post({
@@ -8018,6 +12645,14 @@ async function sqlite3InitModule(moduleArg = {}) {
 			const wasm = sqlite3.wasm, capi = sqlite3.capi, toss = sqlite3.util.toss3;
 			const vfs = Object.create(null);
 			sqlite3.vfs = vfs;
+			/**
+			Uses sqlite3_vfs_register() to register this
+			sqlite3.capi.sqlite3_vfs instance. This object must have already
+			been filled out properly. If the first argument is truthy, the
+			VFS is registered as the default VFS, else it is not.
+			
+			On success, returns this object. Throws on error.
+			*/
 			capi.sqlite3_vfs.prototype.registerVfs = function(asDefault = false) {
 				if (!(this instanceof sqlite3.capi.sqlite3_vfs)) toss("Expecting a sqlite3_vfs-type argument.");
 				const rc = capi.sqlite3_vfs_register(this, asDefault ? 1 : 0);
@@ -8025,6 +12660,42 @@ async function sqlite3InitModule(moduleArg = {}) {
 				if (this.pointer !== capi.sqlite3_vfs_find(this.$zName)) toss("BUG: sqlite3_vfs_find(vfs.$zName) failed for just-installed VFS", this);
 				return this;
 			};
+			/**
+			A wrapper for
+			sqlite3.StructBinder.StructType.prototype.installMethods() or
+			registerVfs() to reduce installation of a VFS and/or its I/O
+			methods to a single call.
+			
+			Accepts an object which contains the properties "io" and/or
+			"vfs", each of which is itself an object with following properties:
+			
+			- `struct`: an sqlite3.StructBinder.StructType-type struct. This
+			must be a populated (except for the methods) object of type
+			sqlite3_io_methods (for the "io" entry) or sqlite3_vfs (for the
+			"vfs" entry).
+			
+			- `methods`: an object mapping sqlite3_io_methods method names
+			(e.g. 'xClose') to JS implementations of those methods. The JS
+			implementations must be call-compatible with their native
+			counterparts.
+			
+			For each of those object, this function passes its (`struct`,
+			`methods`, (optional) `applyArgcCheck`) properties to
+			installMethods().
+			
+			If the `vfs` entry is set then:
+			
+			- Its `struct` property's registerVfs() is called. The
+			`vfs` entry may optionally have an `asDefault` property, which
+			gets passed as the argument to registerVfs().
+			
+			- If `struct.$zName` is falsy and the entry has a string-type
+			`name` property, `struct.$zName` is set to the C-string form of
+			that `name` value before registerVfs() is called. That string
+			gets added to the on-dispose state of the struct.
+			
+			On success returns this object. Throws on error.
+			*/
 			vfs.installVfs = function(opt) {
 				let count = 0;
 				const propList = ["io", "vfs"];
@@ -8049,21 +12720,46 @@ async function sqlite3InitModule(moduleArg = {}) {
 			const vtab = Object.create(null);
 			sqlite3.vtab = vtab;
 			const sii = capi.sqlite3_index_info;
+			/**
+			If n is >=0 and less than this.$nConstraint, this function
+			returns either a WASM pointer to the 0-based nth entry of
+			this.$aConstraint (if passed a truthy 2nd argument) or an
+			sqlite3_index_info.sqlite3_index_constraint object wrapping that
+			address (if passed a falsy value or no 2nd argument). Returns a
+			falsy value if n is out of range.
+			*/
 			sii.prototype.nthConstraint = function(n, asPtr = false) {
 				if (n < 0 || n >= this.$nConstraint) return false;
 				const ptr = wasm.ptr.add(this.$aConstraint, sii.sqlite3_index_constraint.structInfo.sizeof * n);
 				return asPtr ? ptr : new sii.sqlite3_index_constraint(ptr);
 			};
+			/**
+			Works identically to nthConstraint() but returns state from
+			this.$aConstraintUsage, so returns an
+			sqlite3_index_info.sqlite3_index_constraint_usage instance
+			if passed no 2nd argument or a falsy 2nd argument.
+			*/
 			sii.prototype.nthConstraintUsage = function(n, asPtr = false) {
 				if (n < 0 || n >= this.$nConstraint) return false;
 				const ptr = wasm.ptr.add(this.$aConstraintUsage, sii.sqlite3_index_constraint_usage.structInfo.sizeof * n);
 				return asPtr ? ptr : new sii.sqlite3_index_constraint_usage(ptr);
 			};
+			/**
+			If n is >=0 and less than this.$nOrderBy, this function
+			returns either a WASM pointer to the 0-based nth entry of
+			this.$aOrderBy (if passed a truthy 2nd argument) or an
+			sqlite3_index_info.sqlite3_index_orderby object wrapping that
+			address (if passed a falsy value or no 2nd argument). Returns a
+			falsy value if n is out of range.
+			*/
 			sii.prototype.nthOrderBy = function(n, asPtr = false) {
 				if (n < 0 || n >= this.$nOrderBy) return false;
 				const ptr = wasm.ptr.add(this.$aOrderBy, sii.sqlite3_index_orderby.structInfo.sizeof * n);
 				return asPtr ? ptr : new sii.sqlite3_index_orderby(ptr);
 			};
+			/**
+			Internal factory function for xVtab and xCursor impls.
+			*/
 			const __xWrapFactory = function(methodName, StructType) {
 				return function(ptr, removeMapping = false) {
 					if (0 === arguments.length) ptr = new StructType();
@@ -8076,35 +12772,243 @@ async function sqlite3InitModule(moduleArg = {}) {
 					return rc;
 				}.bind(/* @__PURE__ */ new Map());
 			};
+			/**
+			A factory function which implements a simple lifetime manager for
+			mappings between C struct pointers and their JS-level wrappers.
+			The first argument must be the logical name of the manager
+			(e.g. 'xVtab' or 'xCursor'), which is only used for error
+			reporting. The second must be the capi.XYZ struct-type value,
+			e.g. capi.sqlite3_vtab or capi.sqlite3_vtab_cursor.
+			
+			Returns an object with 4 methods: create(), get(), unget(), and
+			dispose(), plus a StructType member with the value of the 2nd
+			argument. The methods are documented in the body of this
+			function.
+			*/
 			const StructPtrMapper = function(name, StructType) {
 				const __xWrap = __xWrapFactory(name, StructType);
+				/**
+				This object houses a small API for managing mappings of (`T*`)
+				to StructType<T> objects, specifically within the lifetime
+				requirements of sqlite3_module methods.
+				*/
 				return Object.assign(Object.create(null), {
+					/** The StructType object for this object's API. */
 					StructType,
+					/**
+					Creates a new StructType object, writes its `pointer`
+					value to the given output pointer, and returns that
+					object. Its intended usage depends on StructType:
+					
+					sqlite3_vtab: to be called from sqlite3_module::xConnect()
+					or xCreate() implementations.
+					
+					sqlite3_vtab_cursor: to be called from xOpen().
+					
+					This will throw if allocation of the StructType instance
+					fails or if ppOut is not a pointer-type value.
+					*/
 					create: (ppOut) => {
 						const rc = __xWrap();
 						wasm.pokePtr(ppOut, rc.pointer);
 						return rc;
 					},
+					/**
+					Returns the StructType object previously mapped to the
+					given pointer using create(). Its intended usage depends
+					on StructType:
+					
+					sqlite3_vtab: to be called from sqlite3_module methods which
+					take a (sqlite3_vtab*) pointer _except_ for
+					xDestroy()/xDisconnect(), in which case unget() or dispose().
+					
+					sqlite3_vtab_cursor: to be called from any sqlite3_module methods
+					which take a `sqlite3_vtab_cursor*` argument except xClose(),
+					in which case use unget() or dispose().
+					
+					Rule to remember: _never_ call dispose() on an instance
+					returned by this function.
+					*/
 					get: (pCObj) => __xWrap(pCObj),
+					/**
+					Identical to get() but also disconnects the mapping between the
+					given pointer and the returned StructType object, such that
+					future calls to this function or get() with the same pointer
+					will return the undefined value. Its intended usage depends
+					on StructType:
+					
+					sqlite3_vtab: to be called from sqlite3_module::xDisconnect() or
+					xDestroy() implementations or in error handling of a failed
+					xCreate() or xConnect().
+					
+					sqlite3_vtab_cursor: to be called from xClose() or during
+					cleanup in a failed xOpen().
+					
+					Calling this method obligates the caller to call dispose() on
+					the returned object when they're done with it.
+					*/
 					unget: (pCObj) => __xWrap(pCObj, true),
+					/**
+					Works like unget() plus it calls dispose() on the
+					StructType object.
+					*/
 					dispose: (pCObj) => __xWrap(pCObj, true)?.dispose?.()
 				});
 			};
+			/**
+			A lifetime-management object for mapping `sqlite3_vtab*`
+			instances in sqlite3_module methods to capi.sqlite3_vtab
+			objects.
+			
+			The API docs are in the API-internal StructPtrMapper().
+			*/
 			vtab.xVtab = StructPtrMapper("xVtab", capi.sqlite3_vtab);
+			/**
+			A lifetime-management object for mapping `sqlite3_vtab_cursor*`
+			instances in sqlite3_module methods to capi.sqlite3_vtab_cursor
+			objects.
+			
+			The API docs are in the API-internal StructPtrMapper().
+			*/
 			vtab.xCursor = StructPtrMapper("xCursor", capi.sqlite3_vtab_cursor);
+			/**
+			Convenience form of creating an sqlite3_index_info wrapper,
+			intended for use in xBestIndex implementations. Note that the
+			caller is expected to call dispose() on the returned object
+			before returning. Though not _strictly_ required, as that object
+			does not own the pIdxInfo memory, it is nonetheless good form.
+			*/
 			vtab.xIndexInfo = (pIdxInfo) => new capi.sqlite3_index_info(pIdxInfo);
-			vtab.xError = function f(methodName, err$1, defaultRc) {
+			/**
+			Given an sqlite3_module method name and error object, this
+			function returns sqlite3.capi.SQLITE_NOMEM if (e instanceof
+			sqlite3.WasmAllocError), else it returns its second argument. Its
+			intended usage is in the methods of a sqlite3_vfs or
+			sqlite3_module:
+			
+			```
+			try{
+			let rc = ...
+			return rc;
+			}catch(e){
+			return sqlite3.vtab.xError(
+			'xColumn', e, sqlite3.capi.SQLITE_XYZ);
+			// where SQLITE_XYZ is some call-appropriate result code.
+			}
+			```
+			
+			If no 3rd argument is provided, its default depends on
+			the error type:
+			
+			- An sqlite3.WasmAllocError always resolves to capi.SQLITE_NOMEM.
+			
+			- If err is an SQLite3Error then its `resultCode` property
+			is used.
+			
+			- If all else fails, capi.SQLITE_ERROR is used.
+			
+			If xError.errorReporter is a function, it is called in
+			order to report the error, else the error is not reported.
+			If that function throws, that exception is ignored.
+			*/
+			vtab.xError = function f(methodName, err, defaultRc) {
 				if (f.errorReporter instanceof Function) try {
-					f.errorReporter("sqlite3_module::" + methodName + "(): " + err$1.message);
+					f.errorReporter("sqlite3_module::" + methodName + "(): " + err.message);
 				} catch (e) {}
 				let rc;
-				if (err$1 instanceof sqlite3.WasmAllocError) rc = capi.SQLITE_NOMEM;
+				if (err instanceof sqlite3.WasmAllocError) rc = capi.SQLITE_NOMEM;
 				else if (arguments.length > 2) rc = defaultRc;
-				else if (err$1 instanceof sqlite3.SQLite3Error) rc = err$1.resultCode;
+				else if (err instanceof sqlite3.SQLite3Error) rc = err.resultCode;
 				return rc || capi.SQLITE_ERROR;
 			};
 			vtab.xError.errorReporter = sqlite3.config.error.bind(sqlite3.config);
+			/**
+			A helper for sqlite3_vtab::xRowid() and xUpdate()
+			implementations. It must be passed the final argument to one of
+			those methods (an output pointer to an int64 row ID) and the
+			value to store at the output pointer's address. Returns the same
+			as wasm.poke() and will throw if the 1st or 2nd arguments
+			are invalid for that function.
+			
+			Example xRowid impl:
+			
+			```
+			const xRowid = (pCursor, ppRowid64)=>{
+			const c = vtab.xCursor(pCursor);
+			vtab.xRowid(ppRowid64, c.myRowId);
+			return 0;
+			};
+			```
+			*/
 			vtab.xRowid = (ppRowid64, value) => wasm.poke(ppRowid64, value, "i64");
+			/**
+			A helper to initialize and set up an sqlite3_module object for
+			later installation into individual databases using
+			sqlite3_create_module(). Requires an object with the following
+			properties:
+			
+			- `methods`: an object containing a mapping of properties with
+			the C-side names of the sqlite3_module methods, e.g. xCreate,
+			xBestIndex, etc., to JS implementations for those functions.
+			Certain special-case handling is performed, as described below.
+			
+			- `catchExceptions` (default=false): if truthy, the given methods
+			are not mapped as-is, but are instead wrapped inside wrappers
+			which translate exceptions into result codes of SQLITE_ERROR or
+			SQLITE_NOMEM, depending on whether the exception is an
+			sqlite3.WasmAllocError. In the case of the xConnect and xCreate
+			methods, the exception handler also sets the output error
+			string to the exception's error string.
+			
+			- OPTIONAL `struct`: a sqlite3.capi.sqlite3_module() instance. If
+			not set, one will be created automatically. If the current
+			"this" is-a sqlite3_module then it is unconditionally used in
+			place of `struct`.
+			
+			- OPTIONAL `iVersion`: if set, it must be an integer value and it
+			gets assigned to the `$iVersion` member of the struct object.
+			If it's _not_ set, and the passed-in `struct` object's `$iVersion`
+			is 0 (the default) then this function attempts to define a value
+			for that property based on the list of methods it has.
+			
+			If `catchExceptions` is false, it is up to the client to ensure
+			that no exceptions escape the methods, as doing so would move
+			them through the C API, leading to undefined
+			behavior. (vtab.xError() is intended to assist in reporting
+			such exceptions.)
+			
+			Certain methods may refer to the same implementation. To simplify
+			the definition of such methods:
+			
+			- If `methods.xConnect` is `true` then the value of
+			`methods.xCreate` is used in its place, and vice versa. sqlite
+			treats xConnect/xCreate functions specially if they are exactly
+			the same function (same pointer value).
+			
+			- If `methods.xDisconnect` is true then the value of
+			`methods.xDestroy` is used in its place, and vice versa.
+			
+			This is to facilitate creation of those methods inline in the
+			passed-in object without requiring the client to explicitly get a
+			reference to one of them in order to assign it to the other
+			one.
+			
+			The `catchExceptions`-installed handlers will account for
+			identical references to the above functions and will install the
+			same wrapper function for both.
+			
+			The given methods are expected to return integer values, as
+			expected by the C API. If `catchExceptions` is truthy, the return
+			value of the wrapped function will be used as-is and will be
+			translated to 0 if the function returns a falsy value (e.g. if it
+			does not have an explicit return). If `catchExceptions` is _not_
+			active, the method implementations must explicitly return integer
+			values.
+			
+			Throws on error. On success, returns the sqlite3_module object
+			(`this` or `opt.struct` or a new sqlite3_module instance,
+			depending on how it's called).
+			*/
 			vtab.setupModule = function(opt) {
 				let createdMod = false;
 				const mod = this instanceof capi.sqlite3_module ? this : opt.struct || (createdMod = new capi.sqlite3_module());
@@ -8189,30 +13093,137 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 				return mod;
 			};
+			/**
+			Equivalent to calling vtab.setupModule() with this sqlite3_module
+			object as the call's `this`.
+			*/
 			capi.sqlite3_module.prototype.setupModule = function(opt) {
 				return vtab.setupModule.call(this, opt);
 			};
 		});
+		/**
+		kvvfs - the Key/Value VFS - is an SQLite3 VFS which delegates
+		storage of its pages and metadata to a key-value store.
+		
+		It was conceived in order to support JS's localStorage and
+		sessionStorage objects. Its native implementation uses files as
+		key/value storage (one file per record) but the JS implementation
+		replaces a few methods so that it can use the aforementioned
+		objects as storage.
+		
+		It uses a bespoke ASCII encoding to store each db page as a
+		separate record and stores some metadata, like the db's unencoded
+		size and its journal, as individual records.
+		
+		kvvfs is significantly less efficient than a plain in-memory db but
+		it also, as a side effect of its design, offers a JSON-friendly
+		interchange format for exporting and importing databases.
+		
+		kvvfs is _not_ designed for heavy db loads. It is relatively
+		malloc()-heavy, having to de/allocate frequently, and it
+		spends much of its time converting the raw db pages into and out of
+		an ASCII encoding.
+		
+		But it _does_ work and is "performant enough" for db work of the
+		scale of a db which will fit within sessionStorage or localStorage
+		(just 2-3mb).
+		
+		"Version 2" extends it to support using Storage-like objects as
+		backing storage, Storage being the JS class which localStorage and
+		sessionStorage both derive from. This essentially moves the backing
+		store from whatever localStorage and sessionStorage use to an
+		in-memory object.
+		
+		This effort is primarily a stepping stone towards eliminating, if
+		it proves possible, the POSIX I/O API dependencies in SQLite's WASM
+		builds. That is: if this VFS works properly, it can be set as the
+		default VFS and we can eliminate the "unix" VFS from the JS/WASM
+		builds (as opposed to server-wise/WASI builds). That still, as of
+		2025-11-23, a ways away, but it's the main driver for version 2 of
+		kvvfs.
+		
+		Version 2 remains compatible with version 1 databases and always
+		writes localStorage/sessionStorage metadata in the v1 format, so
+		such dbs can be manipulated freely by either version. For transient
+		storage objects (new in version 2), the format of its record keys
+		is simpified, requiring less space than v1 keys by eliding
+		redundant (in this context) info from the keys.
+		
+		Another benefit of v2 is its ability to export dbs into a
+		JSON-friendly (but not human-friendly) format.
+		
+		A potential, as-yet-unproven, benefit, would be the ability to plug
+		arbitrary Storage-compatible objects in so that clients could,
+		e.g. asynchronously post updates to db pages to some back-end for
+		backups.
+		*/
 		globalThis.sqlite3ApiBootstrap.initializers.push(function(sqlite3) {
-			"use strict";
+			if (sqlite3.config.disable?.vfs?.kvvfs) return;
 			const capi = sqlite3.capi, sqlite3_kvvfs_methods = capi.sqlite3_kvvfs_methods, KVVfsFile = capi.KVVfsFile, pKvvfs = sqlite3.capi.sqlite3_vfs_find("kvvfs");
 			delete capi.sqlite3_kvvfs_methods;
 			delete capi.KVVfsFile;
 			if (!pKvvfs) return;
-			const util = sqlite3.util, wasm = sqlite3.wasm, toss3 = util.toss3, hop = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+			const util = sqlite3.util, wasm = sqlite3.wasm, toss3 = util.toss3;
 			const kvvfsMethods = new sqlite3_kvvfs_methods(wasm.exports.sqlite3__wasm_kvvfs_methods());
 			util.assert(32 <= kvvfsMethods.$nKeySize, "unexpected kvvfsMethods.$nKeySize: " + kvvfsMethods.$nKeySize);
+			/**
+			Most of the VFS-internal state.
+			*/
 			const cache = Object.assign(Object.create(null), {
+				/** Regex matching journal file names. */
 				rxJournalSuffix: /-journal$/,
+				/** Frequently-used C-string. */
 				zKeyJrnl: wasm.allocCString("jrnl"),
+				/** Frequently-used C-string. */
 				zKeySz: wasm.allocCString("sz"),
+				/**
+				The maximum size of a kvvfs record key. It is historically only
+				32, a limitation currently retained only because it's convenient to
+				do so (the underlying code has outgrown the need for the artifically
+				low limit).
+				
+				We cache this value here because the end of this init code will
+				dispose of kvvfsMethods, invalidating it.
+				*/
 				keySize: kvvfsMethods.$nKeySize,
+				/**
+				WASM heap memory buffers to optimize out some frequent
+				allocations.
+				*/
 				buffer: Object.assign(Object.create(null), {
+					/**
+					The size of each buffer in this.pool.
+					
+					kvvfsMethods.$nBufferSize is slightly larger than the output
+					space needed for a kvvfs-encoded 64kb db page in a worse-cast
+					encoding (128kb). It is not suitable for arbitrary buffer
+					use, only page de/encoding.
+					*/
 					n: kvvfsMethods.$nBufferSize,
+					/**
+					Map of buffer ids to wasm.alloc()'d pointers of size
+					this.n. (Re)used by various internals.
+					
+					Buffer ids 0 and 1 are used in the API internals.  Other
+					names are used in higher-level APIs.
+					
+					See memBuffer() and memBufferFree().
+					*/
 					pool: Object.create(null)
 				})
 			});
+			/**
+			Returns a (cached) wasm.alloc()'d buffer of cache.buffer.n size,
+			throwing on OOM.
+			
+			We leak this one-time alloc because we've no better option.
+			sqlite3_vfs does not have a finalizer, so we've no place to hook
+			in the cleanup. We "could" extend sqlite3_shutdown() to have a
+			cleanup list for stuff like this but that function is never
+			used in JS, so it's hardly worth it.
+			*/
 			cache.memBuffer = (id = 0) => cache.buffer.pool[id] ??= wasm.alloc(cache.buffer.n);
+			/** Frees the buffer with the given id. */
 			cache.memBufferFree = (id) => {
 				const b = cache.buffer.pool[id];
 				if (b) {
@@ -8221,42 +13232,89 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 			};
 			const noop = () => {};
-			const debug = sqlite3.__isUnderTest ? (...args) => sqlite3.config.debug("kvvfs:", ...args) : noop;
-			const warn = (...args) => sqlite3.config.warn("kvvfs:", ...args);
-			const error = (...args) => sqlite3.config.error("kvvfs:", ...args);
+			const debug = sqlite3.__isUnderTest ? (...args) => sqlite3.config.debug?.("kvvfs:", ...args) : noop;
+			const warn = (...args) => sqlite3.config.warn?.("kvvfs:", ...args);
+			const error = (...args) => sqlite3.config.error?.("kvvfs:", ...args);
+			/**
+			Implementation of JS's Storage interface for use as backing store
+			of the kvvfs. Storage is a native class and its constructor
+			cannot be legally called from JS, making it impossible to
+			directly subclass Storage. This class implements (only) the
+			Storage interface, to make it a drop-in replacement for
+			localStorage/sessionStorage. (Any behavioral discrepancies are to
+			be considered bugs.)
+			
+			This impl simply proxies a plain, prototype-less Object, suitable
+			for JSON-ing.
+			
+			Design note: Storage has a bit of an odd iteration-related
+			interface as does not (AFAIK) specify specific behavior regarding
+			modification during traversal. Because of that, this class does
+			some seemingly unnecessary things with its #keys member, deleting
+			and recreating it whenever a property index might be invalidated.
+			*/
 			class KVVfsStorage {
-				#map;
-				#keys;
-				#getKeys() {
-					return this.#keys ??= Object.keys(this.#map);
-				}
+				#map = Object.create(null);
+				#keys = null;
+				#size = 0;
 				constructor() {
 					this.clear();
 				}
+				#getKeys() {
+					return this.#keys ??= Object.keys(this.#map);
+				}
 				key(n) {
-					const k = this.#getKeys();
-					return n < k.length ? k[n] : null;
+					if (n < 0 || n >= this.#size) return null;
+					return this.#getKeys()[n];
 				}
 				getItem(k) {
 					return this.#map[k] ?? null;
 				}
 				setItem(k, v) {
-					if (!hop(this.#map, k)) this.#keys = null;
+					if (!(k in this.#map)) {
+						++this.#size;
+						this.#keys = null;
+					}
 					this.#map[k] = "" + v;
 				}
 				removeItem(k) {
-					if (delete this.#map[k]) this.#keys = null;
+					if (k in this.#map) {
+						delete this.#map[k];
+						--this.#size;
+						this.#keys = null;
+					}
 				}
 				clear() {
 					this.#map = Object.create(null);
 					this.#keys = null;
+					this.#size = 0;
 				}
 				get length() {
-					return this.#getKeys().length;
+					return this.#size;
 				}
 			}
+			/** True if v is the name of one of the special persistant Storage
+			objects. */
 			const kvvfsIsPersistentName = (v) => "local" === v || "session" === v;
+			/**
+			Keys in kvvfs have a prefix of "kvvfs-NAME-", where NAME is the
+			db name. This key is redundant in JS but it's how kvvfs works (it
+			saves each key to a separate file, so needs a distinct namespace
+			per data source name). We retain this prefix in 'local' and
+			'session' storage for backwards compatibility and so that they
+			can co-exist with client data in their storage, but we elide them
+			from "v2" storage, where they're superfluous.
+			*/
 			const kvvfsKeyPrefix = (v) => kvvfsIsPersistentName(v) ? "kvvfs-" + v + "-" : "";
+			/**
+			Throws if storage name n (JS string) is not valid for use as a
+			storage name.  Much of this goes back to kvvfs having a fixed
+			buffer size for its keys, and the storage name needing to be
+			encoded in the keys for local/session storage.
+			
+			The second argument must only be true when called from xOpen() -
+			it makes names with a "-journal" suffix legal.
+			*/
 			const validateStorageName = function(n, mayBeJournal = false) {
 				if (kvvfsIsPersistentName(n)) return;
 				const len = new Blob([n]).size;
@@ -8267,21 +13325,76 @@ async function sqlite3InitModule(moduleArg = {}) {
 				} else if (["-wal", "-shm"].filter((v) => n.endsWith(v)).length) toss3(capi.SQLITE_MISUSE, "Storage names may not have a -wal or -shm suffix.");
 				else maxLen -= 8;
 				if (len > maxLen) toss3(capi.SQLITE_RANGE, "Storage name is too long. Limit =", maxLen);
-				let i;
-				for (i = 0; i < len; ++i) {
+				let i = 0;
+				for (; i < len; ++i) {
 					const ch = n.codePointAt(i);
 					if (ch < 32) toss3(capi.SQLITE_RANGE, "Illegal character (" + ch + "d) in storage name:", n);
 				}
 			};
+			/**
+			Create a new instance of the objects which go into
+			cache.storagePool, with a refcount of 1. If passed a Storage-like
+			object as its second argument, it is used for the storage,
+			otherwise it creates a new KVVfsStorage object.
+			*/
 			const newStorageObj = (name, storage = void 0) => Object.assign(Object.create(null), {
+				/**
+				JS string value of this KVVfsFile::$zClass. i.e. the storage's
+				name.
+				*/
 				jzClass: name,
+				/**
+				Refcount. This keeps dbs and journals pointing to the same
+				storage for the life of both and enables kvvfs to behave more
+				like a conventional filesystem (a stepping stone towards
+				downstream API goals). Managed by xOpen() and xClose().
+				*/
 				refc: 1,
+				/**
+				If true, this storage will be removed by xClose() or
+				sqlite3_js_kvvfs_unlink() when refc reaches 0. The others will
+				persist when refc==0, to give the illusion of real back-end
+				storage. Managed by xOpen() and sqlite3_js_kvvfs_reserve(). By
+				default this is false but the delete-on-close=1 flag can be
+				used to set this to true.
+				*/
 				deleteAtRefc0: false,
+				/**
+				The backing store. Must implement the Storage interface.
+				*/
 				storage: storage || new KVVfsStorage(),
+				/**
+				The storage prefix used for kvvfs keys.  It is
+				"kvvfs-STORAGENAME-" for local/session storage and an empty
+				string for other storage. local/session storage must use the
+				long form (A) for backwards compatibility and (B) so that kvvfs
+				can coexist with non-db client data in those backends.  Neither
+				(A) nor (B) are concerns for KVVfsStorage objects.
+				
+				This prefix mirrors the one generated by os_kv.c's
+				kvrecordMakeKey() and must stay in sync with that one.
+				*/
 				keyPrefix: kvvfsKeyPrefix(name),
+				/**
+				KVVfsFile instances currently using this storage. Managed by
+				xOpen() and xClose().
+				*/
 				files: [],
+				/**
+				If set, it's an array of objects with various event
+				callbacks. See sqlite3_js_kvvfs_listen(). When there are no
+				listeners, this member is set to undefined (instead of an empty
+				array) to allow us to more easily optimize out calls to
+				notifyListeners() for the common case of no listeners.
+				*/
 				listeners: void 0
 			});
+			/**
+			Public interface for kvvfs v2. The capi.sqlite3_js_kvvfs_...()
+			routines remain in place for v1. Some members of this class proxy
+			to those functions but use different default argument values in
+			some cases.
+			*/
 			const kvvfs = sqlite3.kvvfs = Object.create(null);
 			if (sqlite3.__isUnderTest) kvvfs.log = Object.assign(Object.create(null), {
 				xOpen: false,
@@ -8295,6 +13408,10 @@ async function sqlite3InitModule(moduleArg = {}) {
 				xRcrdWrite: false,
 				xRcrdDelete: false
 			});
+			/**
+			Deletes the cache.storagePool entries for store (a
+			cache.storagePool entry) and its db/journal counterpart.
+			*/
 			const deleteStorage = function(store) {
 				const other = cache.rxJournalSuffix.test(store.jzClass) ? store.jzClass.replace(cache.rxJournalSuffix, "") : store.jzClass + "-journal";
 				kvvfs?.log?.xClose && debug("cleaning up storage handles [", store.jzClass, other, "]", store);
@@ -8305,8 +13422,24 @@ async function sqlite3InitModule(moduleArg = {}) {
 					delete store.refc;
 				}
 			};
+			/**
+			Add both store.jzClass and store.jzClass+"-journal"
+			to cache,storagePool.
+			*/
 			const installStorageAndJournal = (store) => cache.storagePool[store.jzClass] = cache.storagePool[store.jzClass + "-journal"] = store;
+			/**
+			The public name of the current thread's transient storage
+			object. A storage object with this name gets preinstalled.
+			*/
 			const nameOfThisThreadStorage = ".";
+			/**
+			Map of JS-stringified KVVfsFile::zClass names to
+			reference-counted Storage objects. These objects are created in
+			xOpen(). Their refcount is decremented in xClose(), and the
+			record is destroyed if the refcount reaches 0. We refcount so
+			that concurrent active xOpen()s on a given name, and within a
+			given thread, use the same storage object.
+			*/
 			cache.storagePool = Object.assign(Object.create(null), { [nameOfThisThreadStorage]: newStorageObj(nameOfThisThreadStorage) });
 			if (globalThis.Storage) {
 				if (globalThis.localStorage instanceof globalThis.Storage) cache.storagePool.local = newStorageObj("local", globalThis.localStorage);
@@ -8331,11 +13464,35 @@ async function sqlite3InitModule(moduleArg = {}) {
 				delete cache.lastError;
 				return e;
 			};
+			/** Exception handler for notifyListeners(). */
 			const catchForNotify = (e) => {
 				warn("kvvfs.listener handler threw:", e);
 			};
 			const kvvfsDecode = wasm.exports.sqlite3__wasm_kvvfs_decode;
 			const kvvfsEncode = wasm.exports.sqlite3__wasm_kvvfs_encode;
+			/**
+			Listener events and their argument(s) (via the callback(ev)
+			ev.data member):
+			
+			'open': number of opened handles on this storage.
+			
+			'close': number of opened handles on this storage.
+			
+			'write': key, value
+			
+			'delete': key
+			
+			'sync': true if it's from xSync(), false if it's from
+			xFileControl().
+			
+			For efficiency's sake, all calls to this function should
+			be in the form:
+			
+			store.listeners && notifyListeners(...);
+			
+			Failing to do so will trigger an exceptin in this function (which
+			will be ignored but may produce a console warning).
+			*/
 			const notifyListeners = async function(eventName, store, ...args) {
 				try {
 					if (store.keyPrefix && args[0]) args[0] = args[0].replace(store.keyPrefix, "");
@@ -8378,14 +13535,39 @@ async function sqlite3InitModule(moduleArg = {}) {
 					catchForNotify(e);
 				}
 			};
+			/**
+			Returns the storage object mapped to the given string zClass
+			(C-string pointer or JS string).
+			*/
 			const storageForZClass = (zClass) => "string" === typeof zClass ? cache.storagePool[zClass] : cache.storagePool[wasm.cstrToJs(zClass)];
 			const kvvfsMakeKey = wasm.exports.sqlite3__wasm_kvvfsMakeKey;
+			/**
+			Returns a C string from kvvfsMakeKey() OR returns zKey. In the
+			former case the memory is static, so must be copied before a
+			second call. zKey MUST be a pointer passed to a VFS/file method,
+			to allow us to avoid an alloc and/or an snprintf(). It requires
+			C-string arguments for zClass and zKey. zClass may be NULL but
+			zKey may not.
+			*/
 			const zKeyForStorage = (store, zClass, zKey) => {
 				return zClass && store.keyPrefix ? kvvfsMakeKey(zClass, zKey) : zKey;
 			};
 			const jsKeyForStorage = (store, zClass, zKey) => wasm.cstrToJs(zKeyForStorage(store, zClass, zKey));
 			const storageGetDbSize = (store) => +store.storage.getItem(store.keyPrefix + "sz");
+			/**
+			sqlite3_file pointers => objects, each of which has:
+			
+			.file = KVVfsFile instance
+			
+			.jzClass = JS-string form of f.$zClass
+			
+			.storage = Storage object. It is shared between a db and its
+			journal.
+			*/
 			const pFileHandles = /* @__PURE__ */ new Map();
+			/**
+			Original WASM functions for methods we partially override.
+			*/
 			const originalMethods = {
 				vfs: Object.create(null),
 				ioDb: Object.create(null),
@@ -8400,10 +13582,40 @@ async function sqlite3InitModule(moduleArg = {}) {
 				cache,
 				storageForZClass,
 				KVVfsStorage,
+				/**
+				BUG: changing to a page size other than the default,
+				then vacuuming, corrupts the db. As a workaround,
+				until this is resolved, we forcibly disable
+				(pragma page_size=...) changes.
+				*/
 				disablePageSizeChange: true
 			});
 			if (kvvfs.log) kvvfs.internal = kvvfsInternal;
+			/**
+			Implementations for members of the object referred to by
+			sqlite3__wasm_kvvfs_methods(). We swap out some native
+			implementations with these so that we can use JS Storage for
+			their backing store.
+			*/
 			const methodOverrides = {
+				/**
+				sqlite3_kvvfs_methods's member methods.  These perform the
+				fetching, setting, and removal of storage keys on behalf of
+				kvvfs. In the native impl these write each db page to a
+				separate file. This impl stores each db page as a single
+				record in a Storage object which is mapped to zClass.
+				
+				A db's size is stored in a record named kvvfs[-storagename]-sz
+				and the journal is stored in kvvfs[-storagename]-jrnl. The
+				[-storagename] part is a remnant of the native impl (so that
+				it has unique filenames per db) and is only used for
+				localStorage and sessionStorage. We elide that part (to save
+				space) from other storage objects but retain it on those two
+				to avoid invalidating pre-version-2 session/localStorage dbs.
+				
+				The interface docs for these methods are in src/os_kv.c's
+				kvrecordRead(), kvrecordWrite(), and kvrecordDelete().
+				*/
 				recordHandler: {
 					xRcrdRead: (zClass, zKey, zBuf, nBuf) => {
 						try {
@@ -8423,8 +13635,8 @@ async function sqlite3InitModule(moduleArg = {}) {
 							if (nBuf + 1 < nV) toss3(capi.SQLITE_RANGE, "xRcrdRead()", jzClass, jXKey, "input buffer is too small: need", nV, "but have", nBuf);
 							const zV = cache.memBuffer(0);
 							const heap = wasm.heap8();
-							let i;
-							for (i = 0; i < nV; ++i) heap[wasm.ptr.add(zV, i)] = jV.codePointAt(i) & 255;
+							let i = 0;
+							for (; i < nV; ++i) heap[wasm.ptr.add(zV, i)] = jV.codePointAt(i) & 255;
 							heap.copyWithin(Number(zBuf), Number(zV), wasm.ptr.addn(zV, i));
 							heap[wasm.ptr.add(zBuf, nV)] = 0;
 							return nBuf;
@@ -8462,6 +13674,11 @@ async function sqlite3InitModule(moduleArg = {}) {
 						}
 					}
 				},
+				/**
+				Override certain operations of the underlying sqlite3_vfs and
+				the two sqlite3_io_methods instances so that we can tie
+				Storage objects to db names.
+				*/
 				vfs: {
 					xOpen: function(pProtoVfs, zName, pProtoFile, flags, pOutFlags) {
 						cache.popError();
@@ -8515,7 +13732,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 							zToFree && wasm.dealloc(zToFree);
 						}
 					},
-					xDelete: function(pVfs$1, zName, iSyncFlag) {
+					xDelete: function(pVfs, zName, iSyncFlag) {
 						cache.popError();
 						try {
 							const jzName = wasm.cstrToJs(zName);
@@ -8532,7 +13749,12 @@ async function sqlite3InitModule(moduleArg = {}) {
 							const s = storageForZClass(zPath);
 							const jzPath = s?.jzClass || wasm.cstrToJs(zPath);
 							if (kvvfs?.log?.xAccess) debug("xAccess", jzPath, "flags =", flags, "*pResOut =", wasm.peek32(pResOut), "store =", s);
-							if (!s) try {
+							if (!s)
+ /** The xAccess method returns [SQLITE_OK] on success or some
+							** non-zero error code if there is an I/O error or if the name of
+							** the file given in the second argument is illegal.
+							*/
+							try {
 								validateStorageName(jzPath);
 							} catch (e) {
 								wasm.poke32(pResOut, 0);
@@ -8549,14 +13771,14 @@ async function sqlite3InitModule(moduleArg = {}) {
 							return cache.setError(e);
 						}
 					},
-					xRandomness: function(pVfs$1, nOut, pOut) {
+					xRandomness: function(pVfs, nOut, pOut) {
 						const heap = wasm.heap8u();
 						let i = 0;
 						const npOut = Number(pOut);
 						for (; i < nOut; ++i) heap[npOut + i] = Math.random() * 255e3 & 255;
 						return nOut;
 					},
-					xGetLastError: function(pVfs$1, nOut, pOut) {
+					xGetLastError: function(pVfs, nOut, pOut) {
 						const e = cache.popError();
 						debug("xGetLastError", e);
 						if (e) {
@@ -8567,7 +13789,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 								if (n > nOut) wasm.poke8(wasm.ptr.add(pOut, nOut, -1), 0);
 								debug("set xGetLastError", e.message);
 								return e.resultCode | 0 || capi.SQLITE_IOERR;
-							} catch (e$1) {
+							} catch (e) {
 								return capi.SQLITE_NOMEM;
 							} finally {
 								wasm.scopedAllocPop(scope);
@@ -8576,6 +13798,12 @@ async function sqlite3InitModule(moduleArg = {}) {
 						return 0;
 					}
 				},
+				/**
+				kvvfs has separate sqlite3_api_methods impls for some of the
+				methods depending on whether it's a db or journal file. Some
+				of the methods use shared impls but others are specific to
+				either db or journal files.
+				*/
 				ioDb: {
 					xClose: function(pFile) {
 						cache.popError();
@@ -8603,7 +13831,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 							const h = pFileHandles.get(pFile);
 							util.assert(h, "Missing KVVfsFile handle");
 							kvvfs?.log?.xFileControl && debug("xFileControl", h, "op =", opId);
-							if (opId === capi.SQLITE_FCNTL_PRAGMA && kvvfs.internal.disablePageSizeChange) {
+							if (opId === capi.SQLITE_FCNTL_PRAGMA && kvvfsInternal.disablePageSizeChange) {
 								const zName = wasm.peekPtr(wasm.ptr.add(pArg, wasm.ptr.size));
 								if ("page_size" === wasm.cstrToJs(zName)) {
 									kvvfs?.log?.xFileControl && debug("xFileControl pragma", wasm.cstrToJs(zName));
@@ -8640,41 +13868,12 @@ async function sqlite3InitModule(moduleArg = {}) {
 							error("xSync", e);
 							return cache.setError(e);
 						}
-					},
-					xRead: function(pFile, pTgt, n, iOff64) {
-						cache.popError();
-						try {
-							if (kvvfs?.log?.xRead) {
-								const h = pFileHandles.get(pFile);
-								util.assert(h, "Missing KVVfsFile handle");
-								debug("xRead", n, iOff64, h);
-							}
-							return originalMethods.ioDb.xRead(pFile, pTgt, n, iOff64);
-						} catch (e) {
-							error("xRead", e);
-							return cache.setError(e);
-						}
-					},
-					xWrite: function(pFile, pSrc, n, iOff64) {
-						cache.popError();
-						try {
-							if (kvvfs?.log?.xWrite) {
-								const h = pFileHandles.get(pFile);
-								util.assert(h, "Missing KVVfsFile handle");
-								debug("xWrite", n, iOff64, h);
-							}
-							return originalMethods.ioDb.xWrite(pFile, pSrc, n, iOff64);
-						} catch (e) {
-							error("xWrite", e);
-							return cache.setError(e);
-						}
 					}
 				},
 				ioJrnl: { xClose: true }
 			};
-			debug("pVfs and friends", pVfs, pIoDb, pIoJrnl, kvvfsMethods, capi.sqlite3_file.structInfo, KVVfsFile.structInfo);
 			try {
-				util.assert(cache.buffer.n > 1024 * 129, "Heap buffer is not large enough");
+				util.assert(cache.buffer.n > 132096, "Heap buffer is not large enough");
 				for (const e of Object.entries(methodOverrides.recordHandler)) {
 					const k = e[0], f = e[1];
 					recordHandler[k] = f;
@@ -8702,11 +13901,49 @@ async function sqlite3InitModule(moduleArg = {}) {
 				pIoDb.dispose();
 				pIoJrnl.dispose();
 			}
+			/**
+			Clears all storage used by the kvvfs DB backend, deleting any
+			DB(s) stored there.
+			
+			Its argument must be the name of a kvvfs storage object:
+			
+			- 'session'
+			- 'local'
+			- '' - see below.
+			- A transient kvvfs storage object name.
+			
+			In the first two cases, only sessionStorage resp. localStorage is
+			cleared. An empty string resolves to both 'local' and 'session'
+			storage.
+			
+			Returns the number of entries cleared.
+			
+			As of kvvfs version 2:
+			
+			This API is available in Worker threads but does not have access
+			to localStorage or sessionStorage in them. Prior versions did not
+			include this API in Worker threads.
+			
+			Differences in this function in version 2:
+			
+			- It accepts an arbitrary storage name. In v1 this was a silent
+			no-op for any names other than ('local','session','').
+			
+			- It throws if a db currently has the storage opened UNLESS the
+			storage object is localStorage or sessionStorage. That version 1
+			did not throw for this case was due to an architectural
+			limitation which has since been overcome, but removal of
+			JsStorageDb.prototype.clearStorage() would be a backwards compatibility
+			break, so this function permits wiping the storage for those two
+			cases even if they are opened. Use with care.
+			*/
 			const sqlite3_js_kvvfs_clear = function callee(which) {
 				if ("" === which) return callee("local") + callee("session");
 				const store = storageForZClass(which);
 				if (!store) return 0;
-				if (store.files.length) if (globalThis.localStorage === store.storage || globalThis.sessionStorage === store.storage) {} else toss3(capi.SQLITE_ACCESS, "Cannot clear in-use database storage.");
+				if (store.files.length) {
+					if (globalThis.localStorage === store.storage || globalThis.sessionStorage === store.storage) {} else toss3(capi.SQLITE_ACCESS, "Cannot clear in-use database storage.");
+				}
 				const s = store.storage;
 				const toRm = [];
 				let i, n = s.length;
@@ -8717,6 +13954,23 @@ async function sqlite3InitModule(moduleArg = {}) {
 				toRm.forEach((kk) => s.removeItem(kk));
 				return toRm.length;
 			};
+			/**
+			This routine estimates the approximate amount of
+			storage used by the given kvvfs back-end.
+			
+			Its arguments are as documented for sqlite3_js_kvvfs_clear(),
+			only the operation this performs is different.
+			
+			The returned value is twice the "length" value of every matching
+			key and value, noting that JavaScript stores each character in 2
+			bytes.
+			
+			The returned size is not authoritative from the perspective of
+			how much data can fit into localStorage and sessionStorage, as
+			the precise algorithms for determining those limits are
+			unspecified and may include per-entry overhead invisible to
+			clients.
+			*/
 			const sqlite3_js_kvvfs_size = function callee(which) {
 				if ("" === which) return callee("local") + callee("session");
 				const store = storageForZClass(which);
@@ -8732,6 +13986,61 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 				return sz * 2;
 			};
+			/**
+			Exports a kvvfs storage object to an object, optionally
+			JSON-friendly.
+			
+			Usages:
+			
+			thisfunc(storageName);
+			thisfunc(options);
+			
+			In the latter case, the options object must be an object with
+			the following properties:
+			
+			- "name" (string) required. The storage to export.
+			
+			- "decodePages" (bool=false). If true, the .pages result property
+			holdes Uint8Array objects holding the raw binary-format db
+			pages. The default is to use kvvfs-encoded string pages
+			(JSON-friendly).
+			
+			- "includeJournal" (bool=false). If true and the db has a current
+			journal, it is exported as well. (Kvvfs journals are stored as a
+			single record within the db's storage object.)
+			
+			The returned object is structured as follows...
+			
+			- "name": the name of the storage. This is 'local' or 'session'
+			for localStorage resp. sessionStorage, and an arbitrary name for
+			transient storage. This propery may be changed before passing
+			this object to sqlite3_js_kvvfs_import() in order to
+			import into a different storage object.
+			
+			- "timestamp": the time this function was called, in Unix
+			epoch milliseconds.
+			
+			- "size": the unencoded db size.
+			
+			- "journal": if options.includeJournal is true and this db has a
+			journal, it is stored as a string here, otherwise this property
+			is not set.
+			
+			- "pages": An array holding the raw encoded db pages in their
+			proper order.
+			
+			Throws if this db is not opened.
+			
+			The encoding of the underlying database is not part of this
+			interface - it is simply passed on as-is. Interested parties are
+			directed to src/os_kv.c in the SQLite source tree, with the
+			caveat that that code also does not offer a public interface.
+			i.e. the encoding is a private implementation detail of kvvfs.
+			The format may be changed in the future but kvvfs will continue
+			to support the current form.
+			
+			Added in version 3.52.0.
+			*/
 			const sqlite3_js_kvvfs_export = function callee(...args) {
 				let opt;
 				if (1 === args.length && "object" === typeof args[0]) opt = args[0];
@@ -8763,14 +14072,13 @@ async function sqlite3InitModule(moduleArg = {}) {
 								kk = +kk;
 								if (!util.isInt32(kk) || kk <= 0) toss3(capi.SQLITE_RANGE, "Malformed kvvfs key: " + k);
 								if (opt.decodePages) {
-									const spg = s.getItem(k), n$1 = spg.length, z = cache.memBuffer(0), zDec = cache.memBuffer(1), heap = wasm.heap8u();
-									let i$1 = 0;
-									for (; i$1 < n$1; ++i$1) heap[wasm.ptr.add(z, i$1)] = spg.codePointAt(i$1) & 255;
-									heap[wasm.ptr.add(z, i$1)] = 0;
+									const spg = s.getItem(k), n = spg.length, z = cache.memBuffer(0), zDec = cache.memBuffer(1), heap = wasm.heap8u();
+									let i = 0;
+									for (; i < n; ++i) heap[wasm.ptr.add(z, i)] = spg.codePointAt(i) & 255;
+									heap[wasm.ptr.add(z, i)] = 0;
 									const nDec = kvvfsDecode(z, zDec, cache.buffer.n);
 									pages[kk] = heap.slice(Number(zDec), wasm.ptr.addn(zDec, nDec));
 								} else pages[kk] = s.getItem(k);
-								break;
 						}
 					}
 				}
@@ -8778,6 +14086,32 @@ async function sqlite3InitModule(moduleArg = {}) {
 				Object.keys(pages).map((v) => +v).sort().forEach((v) => rc.pages.push(pages[v]));
 				return rc;
 			};
+			/**
+			The counterpart of sqlite3_js_kvvfs_export(). Its
+			argument must be the result of that function() or
+			a compatible one.
+			
+			This either replaces the contents of an existing transient
+			storage object or installs one named exp.name, setting
+			the storage's db contents to that of the exp object.
+			
+			Throws on error. Error conditions include:
+			
+			- The given storage object is currently opened by any db.
+			Performing this page-by-page import would invoke undefined
+			behavior on them.
+			
+			- Malformed input object.
+			
+			If it throws after starting the import then it clears the storage
+			before returning, to avoid leaving the db in an undefined
+			state. It may throw for any of the above-listed conditions before
+			reaching that step, in which case the db is not modified. If
+			exp.name refers to a new storage name then if it throws, the name
+			does not get installed.
+			
+			Added in version 3.52.0.
+			*/
 			const sqlite3_js_kvvfs_import = function(exp, overwrite = false) {
 				if (!exp?.timestamp || !exp.name || void 0 === exp.size || !Array.isArray(exp.pages)) toss3(capi.SQLITE_MISUSE, "Malformed export object.");
 				else if (!exp.size || exp.size !== (exp.size | 0) || exp.size >= 2147483647) toss3(capi.SQLITE_RANGE, "Invalid db size: " + exp.size);
@@ -8819,6 +14153,16 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 				return this;
 			};
+			/**
+			If no kvvfs storage exists with the given name, one is
+			installed. If one exists, its reference count is increased so
+			that it won't be freed by the closing of a database or journal
+			file.
+			
+			Throws if the name is not valid for a new storage object.
+			
+			Added in version 3.52.0.
+			*/
 			const sqlite3_js_kvvfs_reserve = function(name) {
 				let store = storageForZClass(name);
 				if (store) {
@@ -8828,6 +14172,28 @@ async function sqlite3InitModule(moduleArg = {}) {
 				validateStorageName(name);
 				installStorageAndJournal(newStorageObj(name));
 			};
+			/**
+			Conditionally "unlinks" a kvvfs storage object, reducing its
+			reference count by 1.
+			
+			This is a no-op if name ends in "-journal" or refers to a
+			built-in storage object.
+			
+			It will not lower the refcount below the number of
+			currently-opened db/journal files for the storage (so that it
+			cannot delete it out from under them).
+			
+			If the refcount reaches 0 then the storage object is
+			removed.
+			
+			Returns true if it reduces the refcount, else false.  A result of
+			true does not necessarily mean that the storage unit was removed,
+			just that its refcount was lowered. Similarly, a result of false
+			does not mean that the storage is removed - it may still have
+			opened handles.
+			
+			Added in version 3.52.0.
+			*/
 			const sqlite3_js_kvvfs_unlink = function(name) {
 				const store = storageForZClass(name);
 				if (!store || kvvfsIsPersistentName(store.jzClass) || isBuiltinName(store.jzClass) || cache.rxJournalSuffix.test(name)) return false;
@@ -8837,16 +14203,117 @@ async function sqlite3InitModule(moduleArg = {}) {
 				}
 				return false;
 			};
+			/**
+			Adds an event listener to a kvvfs storage object. The idea is
+			that this can be used to asynchronously back up one kvvfs storage
+			object to another or another channel entirely. (The caveat in the
+			latter case is that kvvfs's format is not readily consumable by
+			downstream code.)
+			
+			Its argument must be an object with the following properties:
+			
+			- storage: the name of the kvvfs storage object.
+			
+			- reserve [=false]: if true, sqlite3_js_kvvfs_reserve() is used
+			to ensure that the storage exists if it does not already.
+			If this is false and the storage does not exist then an
+			exception is thrown.
+			
+			- events: an object which may have any of the following
+			callback function properties: open, close, write, delete.
+			
+			- decodePages [=false]: if true, write events will receive each
+			db page write in the form of a Uint8Array holding the raw binary
+			db page. The default is to emit the kvvfs-format page because it
+			requires no extra work, we already have it in hand, and it's
+			often smaller. It's not great for interchange, though.
+			
+			- includeJournal [=false]: if true, writes and deletes of
+			"jrnl" records are included. If false, no events are sent
+			for journal updates.
+			
+			Passing the same object to sqlite3_js_kvvfs_unlisten() will
+			remove the listener.
+			
+			Each one of the events callbacks will be called asynchronously
+			when the given storage performs those operations. They may be
+			asynchronous functions but are not required to be (the events are
+			fired async either way, but making the event callbacks async may
+			be advantageous when multiple listeners are involved). All
+			exceptions, including those via Promises, are ignored but may (or
+			may not) trigger warning output on the console.
+			
+			Each callback gets passed a single object with the following
+			properties:
+			
+			.type = the same as the name of the callback
+			
+			.storageName = the name of the storage object
+			
+			.data = callback-dependent:
+			
+			- 'open' and 'close' get an integer, the number of
+			currently-opened handles on the storage.
+			
+			- 'write' gets a length-two array holding the key and value which
+			were written. The key is always a string, even if it's a db page
+			number. For db-page records, the value's type depends on
+			opt.decodePages.  All others, including the journal, are strings.
+			(The journal, being a kvvfs-specific format, is delivered in
+			that same JSON-friendly format.) More details below.
+			
+			- 'delete' gets the string-type key of the deleted record.
+			
+			- 'sync' gets a boolean value: true if it was triggered by db
+			file's xSync(), false if it was triggered by xFileControl().  The
+			latter triggers before the xSync() and also triggers if the DB
+			has PRAGMA SYNCHRONOUS=OFF (in which case xSync() is not
+			triggered).
+			
+			The key/value arguments to 'write', and key argument to 'delete',
+			are in one of the following forms:
+			
+			- 'sz' = the unencoded db size as a string. This specific key is
+			key is never deleted, so is only ever passed to 'write' events.
+			
+			- 'jrnl' = the current db journal as a kvvfs-encoded string. This
+			journal format is not useful anywhere except in the kvvfs
+			internals. These events are not fired if opt.includeJournal is
+			false.
+			
+			- '[1-9][0-9]*' (a db page number) = Its type depends on
+			opt.decodePages. These may be written and deleted in arbitrary
+			order.
+			
+			Design note: JS has StorageEvents but only in the main thread,
+			which is why the listeners are not based on that.
+			
+			Added in version 3.52.0.
+			*/
 			const sqlite3_js_kvvfs_listen = function(opt) {
 				if (!opt || "object" !== typeof opt) toss3(capi.SQLITE_MISUSE, "Expecting a listener object.");
 				let store = storageForZClass(opt.storage);
-				if (!store) if (opt.storage && opt.reserve) {
-					sqlite3_js_kvvfs_reserve(opt.storage);
-					store = storageForZClass(opt.storage);
-					util.assert(store, "Unexpectedly cannot fetch reserved storage " + opt.storage);
-				} else toss3(capi.SQLITE_NOTFOUND, "No such storage:", opt.storage);
+				if (!store) {
+					if (opt.storage && opt.reserve) {
+						sqlite3_js_kvvfs_reserve(opt.storage);
+						store = storageForZClass(opt.storage);
+						util.assert(store, "Unexpectedly cannot fetch reserved storage " + opt.storage);
+					} else toss3(capi.SQLITE_NOTFOUND, "No such storage:", opt.storage);
+				}
 				if (opt.events) (store.listeners ??= []).push(opt);
 			};
+			/**
+			Removes the kvvfs event listeners for the given options
+			object. It must be passed the same object instance which was
+			passed to sqlite3_js_kvvfs_listen().
+			
+			This has no side effects if opt is invalid or is not a match for
+			any listeners.
+			
+			Return true if it unregisters its argument, else false.
+			
+			Added in version 3.52.0.
+			*/
 			const sqlite3_js_kvvfs_unlisten = function(opt) {
 				const store = storageForZClass(opt?.storage);
 				if (store?.listeners && opt.events) {
@@ -8868,10 +14335,35 @@ async function sqlite3InitModule(moduleArg = {}) {
 			sqlite3.kvvfs.estimateSize = sqlite3_js_kvvfs_size;
 			sqlite3.kvvfs.clear = sqlite3_js_kvvfs_clear;
 			if (globalThis.Storage) {
+				/**
+				Prior to version 2, kvvfs was only available in the main
+				thread.  We retain that for the v1 APIs, exposing them only in
+				the main UI thread. As of version 2, kvvfs is available in all
+				threads but only via its v2 interface (sqlite3.kvvfs).
+				
+				These versions have a default argument value of "" which the v2
+				versions lack.
+				*/
 				capi.sqlite3_js_kvvfs_size = (which = "") => sqlite3_js_kvvfs_size(which);
 				capi.sqlite3_js_kvvfs_clear = (which = "") => sqlite3_js_kvvfs_clear(which);
 			}
 			if (sqlite3.oo1?.DB) {
+				/**
+				Functionally equivalent to DB(storageName,'c','kvvfs') except
+				that it throws if the given storage name is not one of 'local'
+				or 'session'.
+				
+				As of version 3.46, the argument may optionally be an options
+				object in the form:
+				
+				{
+				filename: 'session'|'local',
+				... etc. (all options supported by the DB ctor)
+				}
+				
+				noting that the 'vfs' option supported by main DB
+				constructor is ignored here: the vfs is always 'kvvfs'.
+				*/
 				const DB = sqlite3.oo1.DB;
 				sqlite3.oo1.JsStorageDb = function(storageName = sqlite3.oo1.JsStorageDb.defaultStorageName) {
 					const opt = DB.dbCtorHelper.normalizeArgs(...arguments);
@@ -8880,9 +14372,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 						case ":sessionStorage:":
 							opt.filename = "session";
 							break;
-						case ":localStorage:":
-							opt.filename = "local";
-							break;
+						case ":localStorage:": opt.filename = "local";
 					}
 					const m = /(file:(\/\/)?)([^?]+)/.exec(opt.filename);
 					validateStorageName(m ? m[3] : opt.filename);
@@ -8892,15 +14382,39 @@ async function sqlite3InitModule(moduleArg = {}) {
 				const jdb = sqlite3.oo1.JsStorageDb;
 				jdb.prototype = Object.create(DB.prototype);
 				jdb.clearStorage = sqlite3_js_kvvfs_clear;
+				/**
+				DEPRECATED: the inherited method of this name (as opposed to
+				the "static" class method) is deprecated with version 2 of
+				kvvfs. This function will, for backwards comaptibility,
+				continue to work with localStorage and sessionStorage, but will
+				throw for all other storage because they are opened. Version 1
+				was not capable of recognizing that the storage was opened so
+				permitted wiping it out at any time, but that was arguably a
+				bug.
+				
+				Clears this database instance's storage or throws if this
+				instance has been closed. Returns the number of
+				database pages which were cleaned up.
+				*/
 				jdb.prototype.clearStorage = function() {
 					return jdb.clearStorage(this.affirmOpen().dbFilename(), true);
 				};
+				/** Equivalent to sqlite3_js_kvvfs_size(). */
 				jdb.storageSize = sqlite3_js_kvvfs_size;
+				/**
+				Returns the _approximate_ number of bytes this database takes
+				up in its storage or throws if this instance has been closed.
+				*/
 				jdb.prototype.storageSize = function() {
 					return jdb.storageSize(this.affirmOpen().dbFilename(), true);
 				};
 			}
 			if (sqlite3.__isUnderTest && sqlite3.vtab) {
+				/**
+				An eponymous vtab for inspecting the kvvfs state.  This is only
+				intended for use in testing and development, not part of the
+				public API.
+				*/
 				const cols = Object.assign(Object.create(null), {
 					rowid: { type: "INTEGER" },
 					name: { type: "TEXT" },
@@ -8926,13 +14440,11 @@ async function sqlite3InitModule(moduleArg = {}) {
 					});
 					return o.vTabState;
 				};
-				const dbg = () => {};
 				const theModule = function f() {
 					return f.mod ??= new sqlite3.capi.sqlite3_module().setupModule({
 						catchExceptions: true,
 						methods: {
 							xConnect: function(pDb, pAux, argc, argv, ppVtab, pzErr) {
-								dbg("xConnect");
 								try {
 									const xcol = [];
 									Object.keys(cols).forEach((k) => {
@@ -8945,35 +14457,30 @@ async function sqlite3InitModule(moduleArg = {}) {
 									}
 									return rc;
 								} catch (e) {
-									return VT.xErrror("xConnect", e, capi.SQLITE_ERROR);
+									return VT.xError("xConnect", e, capi.SQLITE_ERROR);
 								}
 							},
 							xCreate: wasm.ptr.null,
 							xDisconnect: function(pVtab) {
-								dbg("xDisconnect", ...arguments);
 								VT.xVtab.dispose(pVtab);
 								return 0;
 							},
 							xOpen: function(pVtab, ppCursor) {
-								dbg("xOpen", ...arguments);
 								VT.xCursor.create(ppCursor);
 								return 0;
 							},
 							xClose: function(pCursor) {
-								dbg("xClose", ...arguments);
 								const c = VT.xCursor.unget(pCursor);
 								delete c.vTabState;
 								c.dispose();
 								return 0;
 							},
 							xNext: function(pCursor) {
-								dbg("xNext", ...arguments);
 								const c = VT.xCursor.get(pCursor);
 								++cursorState(c).rowid;
 								return 0;
 							},
 							xColumn: function(pCursor, pCtx, iCol) {
-								dbg("xColumn", ...arguments);
 								const st = cursorState(pCursor);
 								const store = st.row();
 								util.assert(store, "Unexpected xColumn call");
@@ -9003,23 +14510,20 @@ async function sqlite3InitModule(moduleArg = {}) {
 								return 0;
 							},
 							xRowid: function(pCursor, ppRowid64) {
-								dbg("xRowid", ...arguments);
 								const st = cursorState(pCursor);
 								VT.xRowid(ppRowid64, st.rowid);
 								return 0;
 							},
 							xEof: function(pCursor) {
 								const st = cursorState(pCursor);
-								dbg("xEof?=" + !st.row(), ...arguments);
+								"" + !st.row();
 								return !st.row();
 							},
 							xFilter: function(pCursor, idxNum, idxCStr, argc, argv) {
-								dbg("xFilter", ...arguments);
 								cursorState(pCursor, true);
 								return 0;
 							},
 							xBestIndex: function(pVtab, pIdxInfo) {
-								dbg("xBestIndex", ...arguments);
 								const pii = new capi.sqlite3_index_info(pIdxInfo);
 								pii.$estimatedRows = cache.storagePool.size;
 								pii.$estimatedCost = 1;
@@ -9035,755 +14539,1275 @@ async function sqlite3InitModule(moduleArg = {}) {
 			}
 		});
 		globalThis.sqlite3ApiBootstrap.initializers.push(function(sqlite3) {
-			const installOpfsVfs = function callee(options) {
-				if (!globalThis.SharedArrayBuffer || !globalThis.Atomics) return Promise.reject(/* @__PURE__ */ new Error("Cannot install OPFS: Missing SharedArrayBuffer and/or Atomics. The server must emit the COOP/COEP response headers to enable those. See https://sqlite.org/wasm/doc/trunk/persistence.md#coop-coep"));
-				else if ("undefined" === typeof WorkerGlobalScope) return Promise.reject(/* @__PURE__ */ new Error("The OPFS sqlite3_vfs cannot run in the main thread because it requires Atomics.wait()."));
-				else if (!globalThis.FileSystemHandle || !globalThis.FileSystemDirectoryHandle || !globalThis.FileSystemFileHandle || !globalThis.FileSystemFileHandle.prototype.createSyncAccessHandle || !navigator?.storage?.getDirectory) return Promise.reject(/* @__PURE__ */ new Error("Missing required OPFS APIs."));
-				if (!options || "object" !== typeof options) options = Object.create(null);
-				const urlParams = new URL(globalThis.location.href).searchParams;
-				if (urlParams.has("opfs-disable")) return Promise.resolve(sqlite3);
-				if (void 0 === options.verbose) options.verbose = urlParams.has("opfs-verbose") ? +urlParams.get("opfs-verbose") || 2 : 1;
-				if (void 0 === options.sanityChecks) options.sanityChecks = urlParams.has("opfs-sanity-check");
-				if (void 0 === options.proxyUri) options.proxyUri = callee.defaultProxyUri;
-				if ("function" === typeof options.proxyUri) options.proxyUri = options.proxyUri();
-				return new Promise(function(promiseResolve_, promiseReject_) {
-					const loggers = [
-						sqlite3.config.error,
-						sqlite3.config.warn,
-						sqlite3.config.log
-					];
-					const logImpl = (level, ...args) => {
-						if (options.verbose > level) loggers[level]("OPFS syncer:", ...args);
-					};
-					const log = (...args) => logImpl(2, ...args);
-					const warn = (...args) => logImpl(1, ...args);
-					const error = (...args) => logImpl(0, ...args);
-					const toss = sqlite3.util.toss;
-					const capi = sqlite3.capi;
-					const util = sqlite3.util;
-					const wasm = sqlite3.wasm;
-					const sqlite3_vfs = capi.sqlite3_vfs;
-					const sqlite3_file = capi.sqlite3_file;
-					const sqlite3_io_methods = capi.sqlite3_io_methods;
-					const opfsUtil = Object.create(null);
-					const thisThreadHasOPFS = () => {
-						return globalThis.FileSystemHandle && globalThis.FileSystemDirectoryHandle && globalThis.FileSystemFileHandle && globalThis.FileSystemFileHandle.prototype.createSyncAccessHandle && navigator?.storage?.getDirectory;
-					};
-					opfsUtil.metrics = {
-						dump: function() {
-							let k, n = 0, t = 0, w = 0;
-							for (k in state.opIds) {
-								const m = metrics[k];
-								n += m.count;
-								t += m.time;
-								w += m.wait;
-								m.avgTime = m.count && m.time ? m.time / m.count : 0;
-								m.avgWait = m.count && m.wait ? m.wait / m.count : 0;
-							}
-							sqlite3.config.log(globalThis.location.href, "metrics for", globalThis.location.href, ":", metrics, "\nTotal of", n, "op(s) for", t, "ms (incl. " + w + " ms of waiting on the async side)");
-							sqlite3.config.log("Serialization metrics:", metrics.s11n);
-							W.postMessage({ type: "opfs-async-metrics" });
-						},
-						reset: function() {
-							let k;
-							const r = (m) => m.count = m.time = m.wait = 0;
-							for (k in state.opIds) r(metrics[k] = Object.create(null));
-							let s = metrics.s11n = Object.create(null);
-							s = s.serialize = Object.create(null);
-							s.count = s.time = 0;
-							s = metrics.s11n.deserialize = Object.create(null);
-							s.count = s.time = 0;
-						}
-					};
-					const opfsIoMethods = new sqlite3_io_methods();
-					const opfsVfs = new sqlite3_vfs().addOnDispose(() => opfsIoMethods.dispose());
-					let promiseWasRejected = void 0;
-					const promiseReject = (err$1) => {
-						promiseWasRejected = true;
-						opfsVfs.dispose();
-						return promiseReject_(err$1);
-					};
-					const promiseResolve = () => {
-						promiseWasRejected = false;
-						return promiseResolve_(sqlite3);
-					};
-					const W = new Worker(new URL("sqlite3-opfs-async-proxy.js", import.meta.url));
-					setTimeout(() => {
-						if (void 0 === promiseWasRejected) promiseReject(/* @__PURE__ */ new Error("Timeout while waiting for OPFS async proxy worker."));
-					}, 4e3);
-					W._originalOnError = W.onerror;
-					W.onerror = function(err$1) {
-						error("Error initializing OPFS asyncer:", err$1);
-						promiseReject(/* @__PURE__ */ new Error("Loading OPFS async Worker failed for unknown reasons."));
-					};
-					const pDVfs = capi.sqlite3_vfs_find(null);
-					const dVfs = pDVfs ? new sqlite3_vfs(pDVfs) : null;
-					opfsIoMethods.$iVersion = 1;
-					opfsVfs.$iVersion = 2;
-					opfsVfs.$szOsFile = capi.sqlite3_file.structInfo.sizeof;
-					opfsVfs.$mxPathname = 1024;
-					opfsVfs.$zName = wasm.allocCString("opfs");
-					opfsVfs.$xDlOpen = opfsVfs.$xDlError = opfsVfs.$xDlSym = opfsVfs.$xDlClose = null;
-					opfsVfs.addOnDispose("$zName", opfsVfs.$zName, "cleanup default VFS wrapper", () => dVfs ? dVfs.dispose() : null);
-					const state = Object.create(null);
-					state.verbose = options.verbose;
-					state.littleEndian = (() => {
-						const buffer = /* @__PURE__ */ new ArrayBuffer(2);
-						new DataView(buffer).setInt16(0, 256, true);
-						return new Int16Array(buffer)[0] === 256;
-					})();
-					state.asyncIdleWaitTime = 150;
-					state.asyncS11nExceptions = 1;
-					state.fileBufferSize = 1024 * 64;
-					state.sabS11nOffset = state.fileBufferSize;
-					state.sabS11nSize = opfsVfs.$mxPathname * 2;
-					state.sabIO = new SharedArrayBuffer(state.fileBufferSize + state.sabS11nSize);
-					state.opIds = Object.create(null);
-					const metrics = Object.create(null);
-					{
-						let i = 0;
-						state.opIds.whichOp = i++;
-						state.opIds.rc = i++;
-						state.opIds.xAccess = i++;
-						state.opIds.xClose = i++;
-						state.opIds.xDelete = i++;
-						state.opIds.xDeleteNoWait = i++;
-						state.opIds.xFileSize = i++;
-						state.opIds.xLock = i++;
-						state.opIds.xOpen = i++;
-						state.opIds.xRead = i++;
-						state.opIds.xSleep = i++;
-						state.opIds.xSync = i++;
-						state.opIds.xTruncate = i++;
-						state.opIds.xUnlock = i++;
-						state.opIds.xWrite = i++;
-						state.opIds.mkdir = i++;
-						state.opIds["opfs-async-metrics"] = i++;
-						state.opIds["opfs-async-shutdown"] = i++;
-						state.opIds.retry = i++;
-						state.sabOP = new SharedArrayBuffer(i * 4);
-						opfsUtil.metrics.reset();
+			"use strict";
+			if (sqlite3.config.disable?.vfs?.opfs && sqlite3.config.disable.vfs["opfs-vfs"]) return;
+			const toss = sqlite3.util.toss;
+			sqlite3.capi;
+			const util = sqlite3.util;
+			sqlite3.wasm;
+			/**
+			Generic utilities for working with OPFS. This will get filled out
+			by the Promise setup and, on success, installed as sqlite3.opfs.
+			
+			This is an internal/private namespace intended for use solely by
+			the OPFS VFSes and test code for them. The library bootstrapping
+			process removes this object in non-testing contexts.
+			*/
+			const opfsUtil = sqlite3.opfs = Object.create(null);
+			/**
+			Returns true if _this_ thread has access to the OPFS APIs.
+			*/
+			opfsUtil.thisThreadHasOPFS = () => {
+				return globalThis.FileSystemHandle && globalThis.FileSystemDirectoryHandle && globalThis.FileSystemFileHandle && globalThis.FileSystemFileHandle.prototype.createSyncAccessHandle && navigator?.storage?.getDirectory;
+			};
+			/**
+			Must be called by the OPFS VFSes immediately after they determine
+			whether OPFS is available by calling
+			thisThreadHasOPFS(). Resolves to the OPFS storage root directory
+			and sets opfsUtil.rootDirectory to that value.
+			*/
+			opfsUtil.getRootDir = async function f() {
+				return f.promise ??= navigator.storage.getDirectory().then((d) => {
+					opfsUtil.rootDirectory = d;
+					return d;
+				}).catch((e) => {
+					delete f.promise;
+					throw e;
+				});
+			};
+			/**
+			Expects an OPFS file path. It gets resolved, such that ".."
+			components are properly expanded, and returned. If the 2nd arg
+			is true, the result is returned as an array of path elements,
+			else an absolute path string is returned.
+			*/
+			opfsUtil.getResolvedPath = function(filename, splitIt) {
+				const p = new URL(filename, "file://irrelevant").pathname;
+				return splitIt ? p.split("/").filter((v) => !!v) : p;
+			};
+			/**
+			Takes the absolute path to a filesystem element. Returns an
+			array of [handleOfContainingDir, filename]. If the 2nd argument
+			is truthy then each directory element leading to the file is
+			created along the way. Throws if any creation or resolution
+			fails.
+			*/
+			opfsUtil.getDirForFilename = async function f(absFilename, createDirs = false) {
+				const path = opfsUtil.getResolvedPath(absFilename, true);
+				const filename = path.pop();
+				let dh = await opfsUtil.getRootDir();
+				for (const dirName of path) if (dirName) dh = await dh.getDirectoryHandle(dirName, { create: !!createDirs });
+				return [dh, filename];
+			};
+			/**
+			Creates the given directory name, recursively, in
+			the OPFS filesystem. Returns true if it succeeds or the
+			directory already exists, else false.
+			*/
+			opfsUtil.mkdir = async function(absDirName) {
+				try {
+					await opfsUtil.getDirForFilename(absDirName + "/filepart", true);
+					return true;
+				} catch (e) {
+					return false;
+				}
+			};
+			/**
+			Checks whether the given OPFS filesystem entry exists,
+			returning true if it does, false if it doesn't or if an
+			exception is intercepted while trying to make the
+			determination.
+			*/
+			opfsUtil.entryExists = async function(fsEntryName) {
+				try {
+					const [dh, fn] = await opfsUtil.getDirForFilename(fsEntryName);
+					await dh.getFileHandle(fn);
+					return true;
+				} catch (e) {
+					return false;
+				}
+			};
+			/**
+			Generates a random ASCII string len characters long, intended for
+			use as a temporary file name.
+			*/
+			opfsUtil.randomFilename = function f(len = 16) {
+				if (!f._chars) {
+					f._chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ012346789";
+					f._n = f._chars.length;
+				}
+				const a = [];
+				let i = 0;
+				for (; i < len; ++i) {
+					const ndx = Math.random() * (f._n * 64) % f._n | 0;
+					a[i] = f._chars[ndx];
+				}
+				return a.join("");
+			};
+			/**
+			Returns a promise which resolves to an object which represents
+			all files and directories in the OPFS tree. The top-most object
+			has two properties: `dirs` is an array of directory entries
+			(described below) and `files` is a list of file names for all
+			files in that directory.
+			
+			Traversal starts at sqlite3.opfs.rootDirectory.
+			
+			Each `dirs` entry is an object in this form:
+			
+			```
+			{ name: directoryName,
+			dirs: [...subdirs],
+			files: [...file names]
+			}
+			```
+			
+			The `files` and `subdirs` entries are always set but may be
+			empty arrays.
+			
+			The returned object has the same structure but its `name` is
+			an empty string. All returned objects are created with
+			Object.create(null), so have no prototype.
+			
+			Design note: the entries do not contain more information,
+			e.g. file sizes, because getting such info is not only
+			expensive but is subject to locking-related errors.
+			*/
+			opfsUtil.treeList = async function() {
+				const doDir = async function callee(dirHandle, tgt) {
+					tgt.name = dirHandle.name;
+					tgt.dirs = [];
+					tgt.files = [];
+					for await (const handle of dirHandle.values()) if ("directory" === handle.kind) {
+						const subDir = Object.create(null);
+						tgt.dirs.push(subDir);
+						await callee(handle, subDir);
+					} else tgt.files.push(handle.name);
+				};
+				const root = Object.create(null);
+				await doDir(await opfsUtil.getRootDir(), root);
+				return root;
+			};
+			/**
+			Irrevocably deletes _all_ files in the current origin's OPFS.
+			Obviously, this must be used with great caution. It may throw
+			an exception if removal of anything fails (e.g. a file is
+			locked), but the precise conditions under which the underlying
+			APIs will throw are not documented (so we cannot tell you what
+			they are).
+			*/
+			opfsUtil.rmfr = async function() {
+				const dir = await opfsUtil.getRootDir(), opt = { recurse: true };
+				for await (const handle of dir.values()) dir.removeEntry(handle.name, opt);
+			};
+			/**
+			Deletes the given OPFS filesystem entry.  As this environment
+			has no notion of "current directory", the given name must be an
+			absolute path. If the 2nd argument is truthy, deletion is
+			recursive (use with caution!).
+			
+			The returned Promise resolves to true if the deletion was
+			successful, else false (but...). The OPFS API reports the
+			reason for the failure only in human-readable form, not
+			exceptions which can be type-checked to determine the
+			failure. Because of that...
+			
+			If the final argument is truthy then this function will
+			propagate any exception on error, rather than returning false.
+			*/
+			opfsUtil.unlink = async function(fsEntryName, recursive = false, throwOnError = false) {
+				try {
+					const [hDir, filenamePart] = await opfsUtil.getDirForFilename(fsEntryName, false);
+					await hDir.removeEntry(filenamePart, { recursive });
+					return true;
+				} catch (e) {
+					if (throwOnError) throw new Error("unlink(", arguments[0], ") failed: " + e.message, { cause: e });
+					return false;
+				}
+			};
+			/**
+			Traverses the OPFS filesystem, calling a callback for each
+			entry.  The argument may be either a callback function or an
+			options object with any of the following properties:
+			
+			- `callback`: function which gets called for each filesystem
+			entry.  It gets passed 3 arguments: 1) the
+			FileSystemFileHandle or FileSystemDirectoryHandle of each
+			entry (noting that both are instanceof FileSystemHandle). 2)
+			the FileSystemDirectoryHandle of the parent directory. 3) the
+			current depth level, with 0 being at the top of the tree
+			relative to the starting directory. If the callback returns a
+			literal false, as opposed to any other falsy value, traversal
+			stops without an error. Any exceptions it throws are
+			propagated. Results are undefined if the callback manipulate
+			the filesystem (e.g. removing or adding entries) because the
+			how OPFS iterators behave in the face of such changes is
+			undocumented.
+			
+			- `recursive` [bool=true]: specifies whether to recurse into
+			subdirectories or not. Whether recursion is depth-first or
+			breadth-first is unspecified!
+			
+			- `directory` [FileSystemDirectoryEntry=sqlite3.opfs.rootDirectory]
+			specifies the starting directory.
+			
+			If this function is passed a function, it is assumed to be the
+			callback.
+			
+			Returns a promise because it has to (by virtue of being async)
+			but that promise has no specific meaning: the traversal it
+			performs is synchronous. The promise must be used to catch any
+			exceptions propagated by the callback, however.
+			*/
+			opfsUtil.traverse = async function(opt) {
+				const defaultOpt = {
+					recursive: true,
+					directory: await opfsUtil.getRootDir()
+				};
+				if ("function" === typeof opt) opt = { callback: opt };
+				opt = Object.assign(defaultOpt, opt || {});
+				(async function callee(dirHandle, depth) {
+					for await (const handle of dirHandle.values()) if (false === opt.callback(handle, dirHandle, depth)) return false;
+					else if (opt.recursive && "directory" === handle.kind) {
+						if (false === await callee(handle, depth + 1)) break;
 					}
-					state.sq3Codes = Object.create(null);
-					[
-						"SQLITE_ACCESS_EXISTS",
-						"SQLITE_ACCESS_READWRITE",
-						"SQLITE_BUSY",
-						"SQLITE_CANTOPEN",
-						"SQLITE_ERROR",
-						"SQLITE_IOERR",
-						"SQLITE_IOERR_ACCESS",
-						"SQLITE_IOERR_CLOSE",
-						"SQLITE_IOERR_DELETE",
-						"SQLITE_IOERR_FSYNC",
-						"SQLITE_IOERR_LOCK",
-						"SQLITE_IOERR_READ",
-						"SQLITE_IOERR_SHORT_READ",
-						"SQLITE_IOERR_TRUNCATE",
-						"SQLITE_IOERR_UNLOCK",
-						"SQLITE_IOERR_WRITE",
-						"SQLITE_LOCK_EXCLUSIVE",
-						"SQLITE_LOCK_NONE",
-						"SQLITE_LOCK_PENDING",
-						"SQLITE_LOCK_RESERVED",
-						"SQLITE_LOCK_SHARED",
-						"SQLITE_LOCKED",
-						"SQLITE_MISUSE",
-						"SQLITE_NOTFOUND",
-						"SQLITE_OPEN_CREATE",
-						"SQLITE_OPEN_DELETEONCLOSE",
-						"SQLITE_OPEN_MAIN_DB",
-						"SQLITE_OPEN_READONLY"
-					].forEach((k) => {
-						if (void 0 === (state.sq3Codes[k] = capi[k])) toss("Maintenance required: not found:", k);
-					});
-					state.opfsFlags = Object.assign(Object.create(null), {
-						OPFS_UNLOCK_ASAP: 1,
-						OPFS_UNLINK_BEFORE_OPEN: 2,
-						defaultUnlockAsap: false
-					});
-					const opRun = (op, ...args) => {
-						const opNdx = state.opIds[op] || toss("Invalid op ID:", op);
-						state.s11n.serialize(...args);
-						Atomics.store(state.sabOPView, state.opIds.rc, -1);
-						Atomics.store(state.sabOPView, state.opIds.whichOp, opNdx);
-						Atomics.notify(state.sabOPView, state.opIds.whichOp);
-						const t = performance.now();
-						while ("not-equal" !== Atomics.wait(state.sabOPView, state.opIds.rc, -1));
-						const rc = Atomics.load(state.sabOPView, state.opIds.rc);
-						metrics[op].wait += performance.now() - t;
-						if (rc && state.asyncS11nExceptions) {
-							const err$1 = state.s11n.deserialize();
-							if (err$1) error(op + "() async error:", ...err$1);
+				})(opt.directory, 0);
+			};
+			/**
+			Impl of opfsUtil.importDb() when it's given a function as its
+			second argument.
+			*/
+			const importDbChunked = async function(filename, callback) {
+				const [hDir, fnamePart] = await opfsUtil.getDirForFilename(filename, true);
+				let sah = await (await hDir.getFileHandle(fnamePart, { create: true })).createSyncAccessHandle(), nWrote = 0, chunk, checkedHeader = false;
+				try {
+					sah.truncate(0);
+					while (void 0 !== (chunk = await callback())) {
+						if (chunk instanceof ArrayBuffer) chunk = new Uint8Array(chunk);
+						if (!checkedHeader && 0 === nWrote && chunk.byteLength >= 15) {
+							util.affirmDbHeader(chunk);
+							checkedHeader = true;
 						}
+						sah.write(chunk, { at: nWrote });
+						nWrote += chunk.byteLength;
+					}
+					if (nWrote < 512 || 0 !== nWrote % 512) toss("Input size", nWrote, "is not correct for an SQLite database.");
+					if (!checkedHeader) {
+						const header = /* @__PURE__ */ new Uint8Array(20);
+						sah.read(header, { at: 0 });
+						util.affirmDbHeader(header);
+					}
+					sah.write(new Uint8Array([1, 1]), { at: 18 });
+					return nWrote;
+				} catch (e) {
+					await sah.close();
+					sah = void 0;
+					await hDir.removeEntry(fnamePart).catch(() => {});
+					throw e;
+				} finally {
+					if (sah) await sah.close();
+				}
+			};
+			/**
+			Asynchronously imports the given bytes (a byte array or
+			ArrayBuffer) into the given database file.
+			
+			Results are undefined if the given db name refers to an opened
+			db.
+			
+			If passed a function for its second argument, its behaviour
+			changes: imports its data in chunks fed to it by the given
+			callback function. It calls the callback (which may be async)
+			repeatedly, expecting either a Uint8Array or ArrayBuffer (to
+			denote new input) or undefined (to denote EOF). For so long as
+			the callback continues to return non-undefined, it will append
+			incoming data to the given VFS-hosted database file. When
+			called this way, the resolved value of the returned Promise is
+			the number of bytes written to the target file.
+			
+			It very specifically requires the input to be an SQLite3
+			database and throws if that's not the case.  It does so in
+			order to prevent this function from taking on a larger scope
+			than it is specifically intended to. i.e. we do not want it to
+			become a convenience for importing arbitrary files into OPFS.
+			
+			This routine rewrites the database header bytes in the output
+			file (not the input array) to force disabling of WAL mode.
+			
+			On error this throws and the state of the input file is
+			undefined (it depends on where the exception was triggered).
+			
+			On success, resolves to the number of bytes written.
+			*/
+			opfsUtil.importDb = async function(filename, bytes) {
+				if (bytes instanceof Function) return importDbChunked(filename, bytes);
+				if (bytes instanceof ArrayBuffer) bytes = new Uint8Array(bytes);
+				util.affirmIsDb(bytes);
+				const n = bytes.byteLength;
+				const [hDir, fnamePart] = await opfsUtil.getDirForFilename(filename, true);
+				let sah, nWrote = 0;
+				try {
+					sah = await (await hDir.getFileHandle(fnamePart, { create: true })).createSyncAccessHandle();
+					sah.truncate(0);
+					nWrote = sah.write(bytes, { at: 0 });
+					if (nWrote != n) toss("Expected to write " + n + " bytes but wrote " + nWrote + ".");
+					sah.write(new Uint8Array([1, 1]), { at: 18 });
+					return nWrote;
+				} catch (e) {
+					if (sah) {
+						await sah.close();
+						sah = void 0;
+					}
+					await hDir.removeEntry(fnamePart).catch(() => {});
+					throw e;
+				} finally {
+					if (sah) await sah.close();
+				}
+			};
+			/**
+			Checks for features required for OPFS VFSes and throws with a
+			descriptive error message if they're not found. This is intended
+			to be run as part of async VFS installation steps.
+			*/
+			opfsUtil.vfsInstallationFeatureCheck = function(vfsName) {
+				if (!globalThis.SharedArrayBuffer || !globalThis.Atomics) toss("Cannot install OPFS: Missing SharedArrayBuffer and/or Atomics.", "The server must emit the COOP/COEP response headers to enable those.", "See https://sqlite.org/wasm/doc/trunk/persistence.md#coop-coep");
+				else if ("undefined" === typeof WorkerGlobalScope) toss("The OPFS sqlite3_vfs cannot run in the main thread", "because it requires Atomics.wait().");
+				else if (!globalThis.FileSystemHandle || !globalThis.FileSystemDirectoryHandle || !globalThis.FileSystemFileHandle?.prototype?.createSyncAccessHandle || !navigator?.storage?.getDirectory) toss("Missing required OPFS APIs.");
+				else if ("opfs-wl" === vfsName && !globalThis.Atomics.waitAsync) toss("The", vfsName, "VFS requires Atomics.waitAsync(), which is not available.");
+			};
+			/**
+			Must be called by the VFS's main installation routine and passed
+			the options object that function receives and a reference to that
+			function itself (we don't need this anymore).
+			
+			It throws if OPFS is not available.
+			
+			If it returns falsy, it detected that OPFS should be disabled, in
+			which case the callee should immediately return/resolve to the
+			sqlite3 object.
+			
+			Else it returns a new copy of the options object, fleshed out
+			with any missing defaults. The caller must:
+			
+			- Set up any local state they need.
+			
+			- Call opfsUtil.createVfsState(vfsName,opt), where opt is the
+			object returned by this function.
+			
+			- Set up any references they may need to state returned
+			by the previous step.
+			
+			- Call opfvs.bindVfs()
+			*/
+			opfsUtil.initOptions = function callee(vfsName, options) {
+				const urlParams = new URL(globalThis.location.href).searchParams;
+				if (urlParams.has(vfsName + "-disable")) return;
+				try {
+					opfsUtil.vfsInstallationFeatureCheck(vfsName);
+				} catch (e) {
+					return;
+				}
+				options = util.nu(options);
+				options.vfsName = vfsName;
+				options.verbose ??= urlParams.has("opfs-verbose") ? +urlParams.get("opfs-verbose") : 1;
+				options.sanityChecks ??= urlParams.has("opfs-sanity-check");
+				if (!opfsUtil.proxyUri) {
+					opfsUtil.proxyUri = "sqlite3-opfs-async-proxy.js";
+					if (sqlite3.scriptInfo?.sqlite3Dir) opfsUtil.proxyUri = sqlite3.scriptInfo.sqlite3Dir + opfsUtil.proxyUri;
+				}
+				options.proxyUri ??= opfsUtil.proxyUri;
+				if ("function" === typeof options.proxyUri) options.proxyUri = options.proxyUri();
+				return opfsUtil.options = options;
+			};
+			/**
+			Creates, populates, and returns the main state object used by the
+			"opfs" and "opfs-wl" VFSes, and transfered from those to their
+			async counterparts.
+			
+			The returned object's vfs property holds the fully-populated
+			capi.sqlite3_vfs instance, tagged with lots of extra state which
+			the current VFSes need to have exposed to them.
+			
+			After setting up any local state needed, the caller must call
+			theVfs.bindVfs(X,Y), where X is an object containing the
+			sqlite3_io_methods to override and Y is a callback which gets
+			triggered if init succeeds, before the final Promise decides
+			whether or not to reject.
+			
+			This object must, when it's passed to the async part, contain
+			only cloneable or sharable objects. After the worker's "inited"
+			message arrives, other types of data may be added to it.
+			*/
+			opfsUtil.createVfsState = function() {
+				const state = util.nu();
+				const options = opfsUtil.options;
+				state.verbose = options.verbose;
+				const loggers = [
+					sqlite3.config.error,
+					sqlite3.config.warn,
+					sqlite3.config.log
+				];
+				const vfsName = options.vfsName || toss("Maintenance required: missing VFS name");
+				const logImpl = (level, ...args) => {
+					if (state.verbose > level) loggers[level](vfsName + ":", ...args);
+				};
+				const log = (...args) => logImpl(2, ...args), warn = (...args) => logImpl(1, ...args), error = (...args) => logImpl(0, ...args), capi = sqlite3.capi, wasm = sqlite3.wasm;
+				const opfsVfs = state.vfs = new capi.sqlite3_vfs();
+				const opfsIoMethods = opfsVfs.ioMethods = new capi.sqlite3_io_methods();
+				opfsIoMethods.$iVersion = 1;
+				opfsVfs.$iVersion = 2;
+				opfsVfs.$szOsFile = capi.sqlite3_file.structInfo.sizeof;
+				opfsVfs.$mxPathname = 1024;
+				opfsVfs.$zName = wasm.allocCString(vfsName);
+				opfsVfs.addOnDispose(
+					"$zName",
+					opfsVfs.$zName,
+					opfsIoMethods
+					/**
+					Pedantic sidebar: the entries in this array are items to
+					clean up when opfsVfs.dispose() is called, but in this
+					environment it will never be called. The VFS instance simply
+					hangs around until the WASM module instance is cleaned up. We
+					"could" _hypothetically_ clean it up by "importing" an
+					sqlite3_os_end() impl into the wasm build, but the shutdown
+					order of the wasm engine and the JS one are undefined so
+					there is no guaranty that the opfsVfs instance would be
+					available in one environment or the other when
+					sqlite3_os_end() is called (_if_ it gets called at all in a
+					wasm build, which is undefined). i.e. addOnDispose() here is
+					a matter of "correctness", not necessity. It just wouldn't do
+					to leave the impression that we're blindly leaking memory.
+					*/
+				);
+				opfsVfs.metrics = util.nu({
+					counters: util.nu(),
+					dump: function() {
+						let k, n = 0, t = 0, w = 0;
+						for (k in state.opIds) {
+							const m = metrics[k];
+							n += m.count;
+							t += m.time;
+							w += m.wait;
+							m.avgTime = m.count && m.time ? m.time / m.count : 0;
+							m.avgWait = m.count && m.wait ? m.wait / m.count : 0;
+						}
+						sqlite3.config.log(globalThis.location.href, "metrics for", globalThis.location.href, ":", metrics, "\nTotal of", n, "op(s) for", t, "ms (incl. " + w + " ms of waiting on the async side)");
+						sqlite3.config.log("Serialization metrics:", opfsVfs.metrics.counters.s11n);
+						opfsVfs.worker?.postMessage?.({ type: "opfs-async-metrics" });
+					},
+					reset: function() {
+						let k;
+						const r = (m) => m.count = m.time = m.wait = 0;
+						const m = opfsVfs.metrics.counters;
+						for (k in state.opIds) r(m[k] = Object.create(null));
+						let s = m.s11n = Object.create(null);
+						s = s.serialize = Object.create(null);
+						s.count = s.time = 0;
+						s = m.s11n.deserialize = Object.create(null);
+						s.count = s.time = 0;
+					}
+				});
+				/**
+				asyncIdleWaitTime is how long (ms) to wait, in the async proxy,
+				for each Atomics.wait() when waiting on inbound VFS API calls.
+				We need to wake up periodically to give the thread a chance to
+				do other things. If this is too high (e.g. 500ms) then even two
+				workers/tabs can easily run into locking errors. Some multiple
+				of this value is also used for determining how long to wait on
+				lock contention to free up.
+				*/
+				state.asyncIdleWaitTime = 150;
+				/**
+				Whether the async counterpart should log exceptions to
+				the serialization channel. That produces a great deal of
+				noise for seemingly innocuous things like xAccess() checks
+				for missing files, so this option may have one of 3 values:
+				
+				0 = no exception logging.
+				
+				1 = only log exceptions for "significant" ops like xOpen(),
+				xRead(), and xWrite(). Exceptions related to, e.g., wait/retry
+				loops in acquiring SyncAccessHandles are not logged.
+				
+				2 = log all exceptions.
+				*/
+				state.asyncS11nExceptions = 1;
+				state.fileBufferSize = 65536;
+				state.sabS11nOffset = state.fileBufferSize;
+				/**
+				The size of the block in our SAB for serializing arguments and
+				result values. Needs to be large enough to hold serialized
+				values of any of the proxied APIs. Filenames are the largest
+				part but are limited to opfsVfs.$mxPathname bytes. We also
+				store exceptions there, so it needs to be long enough to hold
+				a reasonably long exception string.
+				*/
+				state.sabS11nSize = opfsVfs.$mxPathname * 2;
+				/**
+				The SAB used for all data I/O between the synchronous and
+				async halves (file i/o and arg/result s11n).
+				*/
+				state.sabIO = new SharedArrayBuffer(state.fileBufferSize + state.sabS11nSize);
+				/**
+				For purposes of Atomics.wait() and Atomics.notify(), we use a
+				SharedArrayBuffer with one slot reserved for each of the API
+				proxy's methods. The sync side of the API uses Atomics.wait()
+				on the corresponding slot and the async side uses
+				Atomics.notify() on that slot. state.opIds holds the SAB slot
+				IDs of each of those.
+				*/
+				state.opIds = Object.create(null);
+				{
+					let i = 0;
+					state.opIds.whichOp = i++;
+					state.opIds.rc = i++;
+					state.opIds.xAccess = i++;
+					state.opIds.xClose = i++;
+					state.opIds.xDelete = i++;
+					state.opIds.xDeleteNoWait = i++;
+					state.opIds.xFileSize = i++;
+					state.opIds.xLock = i++;
+					state.opIds.xOpen = i++;
+					state.opIds.xRead = i++;
+					state.opIds.xSleep = i++;
+					state.opIds.xSync = i++;
+					state.opIds.xTruncate = i++;
+					state.opIds.xUnlock = i++;
+					state.opIds.xWrite = i++;
+					state.opIds.mkdir = i++;
+					/** Internal signals which are used only during development and
+					testing via the dev console. */
+					state.opIds["opfs-async-metrics"] = i++;
+					state.opIds["opfs-async-shutdown"] = i++;
+					state.opIds.retry = i++;
+					state.sabOP = new SharedArrayBuffer(i * 4);
+				}
+				/**
+				SQLITE_xxx constants to export to the async worker
+				counterpart...
+				*/
+				state.sq3Codes = Object.create(null);
+				for (const k of [
+					"SQLITE_ACCESS_EXISTS",
+					"SQLITE_ACCESS_READWRITE",
+					"SQLITE_BUSY",
+					"SQLITE_CANTOPEN",
+					"SQLITE_ERROR",
+					"SQLITE_IOERR",
+					"SQLITE_IOERR_ACCESS",
+					"SQLITE_IOERR_CLOSE",
+					"SQLITE_IOERR_DELETE",
+					"SQLITE_IOERR_FSYNC",
+					"SQLITE_IOERR_LOCK",
+					"SQLITE_IOERR_READ",
+					"SQLITE_IOERR_SHORT_READ",
+					"SQLITE_IOERR_TRUNCATE",
+					"SQLITE_IOERR_UNLOCK",
+					"SQLITE_IOERR_WRITE",
+					"SQLITE_LOCK_EXCLUSIVE",
+					"SQLITE_LOCK_NONE",
+					"SQLITE_LOCK_PENDING",
+					"SQLITE_LOCK_RESERVED",
+					"SQLITE_LOCK_SHARED",
+					"SQLITE_LOCKED",
+					"SQLITE_MISUSE",
+					"SQLITE_NOTFOUND",
+					"SQLITE_OPEN_CREATE",
+					"SQLITE_OPEN_DELETEONCLOSE",
+					"SQLITE_OPEN_MAIN_DB",
+					"SQLITE_OPEN_READONLY",
+					"SQLITE_LOCK_NONE",
+					"SQLITE_LOCK_SHARED",
+					"SQLITE_LOCK_RESERVED",
+					"SQLITE_LOCK_PENDING",
+					"SQLITE_LOCK_EXCLUSIVE"
+				]) state.sq3Codes[k] = capi[k] ?? toss("Maintenance required: not found:", k);
+				state.opfsFlags = Object.assign(Object.create(null), {
+					/**
+					Flag for use with xOpen(). URI flag "opfs-unlock-asap=1"
+					enables this. See defaultUnlockAsap, below.
+					*/
+					OPFS_UNLOCK_ASAP: 1,
+					/**
+					Flag for use with xOpen(). URI flag "delete-before-open=1"
+					tells the VFS to delete the db file before attempting to open
+					it. This can be used, e.g., to replace a db which has been
+					corrupted (without forcing us to expose a delete/unlink()
+					function in the public API).
+					
+					Failure to unlink the file is ignored but may lead to
+					downstream errors.  An unlink can fail if, e.g., another tab
+					has the handle open.
+					
+					It goes without saying that deleting a file out from under
+					another instance results in Undefined Behavior.
+					*/
+					OPFS_UNLINK_BEFORE_OPEN: 2,
+					/**
+					If true, any async routine which must implicitly acquire a
+					sync access handle (i.e. an OPFS lock), without an active
+					xLock(), will release that lock at the end of the call which
+					acquires it. If false, such implicit locks are not released
+					until the VFS is idle for some brief amount of time, as
+					defined by state.asyncIdleWaitTime.
+					
+					The benefit of enabling this is higher concurrency. The
+					down-side is much-reduced performance (as much as a 4x
+					decrease in speedtest1).
+					*/
+					defaultUnlockAsap: false
+				});
+				opfsVfs.metrics.reset();
+				const metrics = opfsVfs.metrics.counters;
+				/**
+				Runs the given operation (by name) in the async worker
+				counterpart, waits for its response, and returns the result
+				which the async worker writes to SAB[state.opIds.rc]. The 2nd
+				and subsequent arguments must be the arguments for the async op
+				(see sqlite3-opfs-async-proxy.c-pp.js).
+				*/
+				const opRun = opfsVfs.opRun = (op, ...args) => {
+					const opNdx = state.opIds[op] || toss(opfsVfs.vfsName + ": Invalid op ID:", op);
+					state.s11n.serialize(...args);
+					Atomics.store(state.sabOPView, state.opIds.rc, -1);
+					Atomics.store(state.sabOPView, state.opIds.whichOp, opNdx);
+					Atomics.notify(state.sabOPView, state.opIds.whichOp);
+					const t = performance.now();
+					while ("not-equal" !== Atomics.wait(state.sabOPView, state.opIds.rc, -1));
+					const rc = Atomics.load(state.sabOPView, state.opIds.rc);
+					metrics[op].wait += performance.now() - t;
+					if (rc && state.asyncS11nExceptions) {
+						const err = state.s11n.deserialize();
+						if (err) error(op + "() async error:", ...err);
+					}
+					return rc;
+				};
+				const opTimer = Object.create(null);
+				opTimer.op = void 0;
+				opTimer.start = void 0;
+				const mTimeStart = opfsVfs.mTimeStart = (op) => {
+					opTimer.start = performance.now();
+					opTimer.op = op;
+					++metrics[op].count;
+				};
+				const mTimeEnd = opfsVfs.mTimeEnd = () => metrics[opTimer.op].time += performance.now() - opTimer.start;
+				/**
+				Map of sqlite3_file pointers to objects constructed by xOpen().
+				*/
+				const __openFiles = opfsVfs.__openFiles = Object.create(null);
+				opfsVfs.ioSyncWrappers = util.nu({
+					xCheckReservedLock: function(pFile, pOut) {
+						/**
+						After consultation with a topic expert: "opfs-wl" will
+						continue to use the same no-op impl which "opfs" does
+						because:
+						
+						- xCheckReservedLock() is just a hint. If SQLite needs to
+						lock, it's still going to try to lock.
+						
+						- We cannot do this check synchronously in "opfs-wl",
+						so would need to pass it to the async proxy. That would
+						make it inordinately expensive considering that it's
+						just a hint.
+						*/
+						wasm.poke(pOut, 0, "i32");
+						return 0;
+					},
+					xClose: function(pFile) {
+						mTimeStart("xClose");
+						let rc = 0;
+						const f = __openFiles[pFile];
+						if (f) {
+							delete __openFiles[pFile];
+							rc = opRun("xClose", pFile);
+							if (f.sq3File) f.sq3File.dispose();
+						}
+						mTimeEnd();
+						return rc;
+					},
+					xDeviceCharacteristics: function(pFile) {
+						return capi.SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN;
+					},
+					xFileControl: function(pFile, opId, pArg) {
+						return capi.SQLITE_NOTFOUND;
+					},
+					xFileSize: function(pFile, pSz64) {
+						mTimeStart("xFileSize");
+						let rc = opRun("xFileSize", pFile);
+						if (0 == rc) try {
+							const sz = state.s11n.deserialize()[0];
+							wasm.poke(pSz64, sz, "i64");
+						} catch (e) {
+							error("Unexpected error reading xFileSize() result:", e);
+							rc = state.sq3Codes.SQLITE_IOERR;
+						}
+						mTimeEnd();
+						return rc;
+					},
+					xRead: function(pFile, pDest, n, offset64) {
+						mTimeStart("xRead");
+						const f = __openFiles[pFile];
+						let rc;
+						try {
+							rc = opRun("xRead", pFile, n, Number(offset64));
+							if (0 === rc || capi.SQLITE_IOERR_SHORT_READ === rc)
+ /**
+							Results get written to the SharedArrayBuffer f.sabView.
+							Because the heap is _not_ a SharedArrayBuffer, we have
+							to copy the results. TypedArray.set() seems to be the
+							fastest way to copy this. */
+							wasm.heap8u().set(f.sabView.subarray(0, n), Number(pDest));
+						} catch (e) {
+							error("xRead(", arguments, ") failed:", e, f);
+							rc = capi.SQLITE_IOERR_READ;
+						}
+						mTimeEnd();
+						return rc;
+					},
+					xSync: function(pFile, flags) {
+						mTimeStart("xSync");
+						const rc = opRun("xSync", pFile, flags);
+						mTimeEnd();
+						return rc;
+					},
+					xTruncate: function(pFile, sz64) {
+						mTimeStart("xTruncate");
+						const rc = opRun("xTruncate", pFile, Number(sz64));
+						mTimeEnd();
+						return rc;
+					},
+					xWrite: function(pFile, pSrc, n, offset64) {
+						mTimeStart("xWrite");
+						const f = __openFiles[pFile];
+						let rc;
+						try {
+							f.sabView.set(wasm.heap8u().subarray(Number(pSrc), Number(pSrc) + n));
+							rc = opRun("xWrite", pFile, n, Number(offset64));
+						} catch (e) {
+							error("xWrite(", arguments, ") failed:", e, f);
+							rc = capi.SQLITE_IOERR_WRITE;
+						}
+						mTimeEnd();
+						return rc;
+					}
+				});
+				opfsVfs.vfsSyncWrappers = {
+					xAccess: function(pVfs, zName, flags, pOut) {
+						mTimeStart("xAccess");
+						const rc = opRun("xAccess", wasm.cstrToJs(zName));
+						wasm.poke(pOut, rc ? 0 : 1, "i32");
+						mTimeEnd();
+						return 0;
+					},
+					xCurrentTime: function(pVfs, pOut) {
+						wasm.poke(pOut, 2440587.5 + (/* @__PURE__ */ new Date()).getTime() / 864e5, "double");
+						return 0;
+					},
+					xCurrentTimeInt64: function(pVfs, pOut) {
+						wasm.poke(pOut, 0xbfc83e532200 + (/* @__PURE__ */ new Date()).getTime(), "i64");
+						return 0;
+					},
+					xDelete: function(pVfs, zName, doSyncDir) {
+						mTimeStart("xDelete");
+						const rc = opRun("xDelete", wasm.cstrToJs(zName), doSyncDir, false);
+						mTimeEnd();
+						return rc;
+					},
+					xFullPathname: function(pVfs, zName, nOut, pOut) {
+						return wasm.cstrncpy(pOut, zName, nOut) < nOut ? 0 : capi.SQLITE_CANTOPEN;
+					},
+					xGetLastError: function(pVfs, nOut, pOut) {
+						sqlite3.config.warn("OPFS xGetLastError() has nothing sensible to return.");
+						return 0;
+					},
+					xOpen: function f(pVfs, zName, pFile, flags, pOutFlags) {
+						mTimeStart("xOpen");
+						let opfsFlags = 0;
+						let jzName, zToFree;
+						if (!zName) {
+							jzName = opfsUtil.randomFilename();
+							zName = zToFree = wasm.allocCString(jzName);
+						} else if (wasm.isPtr(zName)) {
+							if (capi.sqlite3_uri_boolean(zName, "opfs-unlock-asap", 0)) opfsFlags |= state.opfsFlags.OPFS_UNLOCK_ASAP;
+							if (capi.sqlite3_uri_boolean(zName, "delete-before-open", 0)) opfsFlags |= state.opfsFlags.OPFS_UNLINK_BEFORE_OPEN;
+							jzName = wasm.cstrToJs(zName);
+						} else {
+							sqlite3.config.error("Impossible zName value in xOpen?", zName);
+							return capi.SQLITE_CANTOPEN;
+						}
+						const fh = util.nu({
+							fid: pFile,
+							filename: jzName,
+							sab: new SharedArrayBuffer(state.fileBufferSize),
+							flags,
+							readOnly: !(capi.SQLITE_OPEN_CREATE & flags) && !!(flags & capi.SQLITE_OPEN_READONLY)
+						});
+						const rc = opRun("xOpen", pFile, jzName, flags, opfsFlags);
+						if (rc) {
+							if (zToFree) wasm.dealloc(zToFree);
+						} else {
+							if (fh.readOnly) wasm.poke(pOutFlags, capi.SQLITE_OPEN_READONLY, "i32");
+							__openFiles[pFile] = fh;
+							fh.sabView = state.sabFileBufView;
+							fh.sq3File = new capi.sqlite3_file(pFile);
+							if (zToFree) fh.sq3File.addOnDispose(zToFree);
+							fh.sq3File.$pMethods = opfsIoMethods.pointer;
+							fh.lockType = capi.SQLITE_LOCK_NONE;
+						}
+						mTimeEnd();
+						return rc;
+					}
+				};
+				const pDVfs = capi.sqlite3_vfs_find(null);
+				if (pDVfs) {
+					const dVfs = new capi.sqlite3_vfs(pDVfs);
+					opfsVfs.$xRandomness = dVfs.$xRandomness;
+					opfsVfs.$xSleep = dVfs.$xSleep;
+					dVfs.dispose();
+				}
+				if (!opfsVfs.$xRandomness) opfsVfs.vfsSyncWrappers.xRandomness = function(pVfs, nOut, pOut) {
+					const heap = wasm.heap8u();
+					let i = 0;
+					const npOut = Number(pOut);
+					for (; i < nOut; ++i) heap[npOut + i] = Math.random() * 255e3 & 255;
+					return i;
+				};
+				if (!opfsVfs.$xSleep) opfsVfs.vfsSyncWrappers.xSleep = function(pVfs, ms) {
+					mTimeStart("xSleep");
+					Atomics.wait(state.sabOPView, state.opIds.xSleep, 0, ms);
+					mTimeEnd();
+					return 0;
+				};
+				const initS11n = function() {
+					/**
+					This proxy de/serializes cross-thread function arguments and
+					output-pointer values via the state.sabIO SharedArrayBuffer,
+					using the region defined by (state.sabS11nOffset,
+					state.sabS11nOffset + state.sabS11nSize]. Only one dataset is
+					recorded at a time.
+					
+					This is not a general-purpose format. It only supports the
+					range of operations, and data sizes, needed by the
+					sqlite3_vfs and sqlite3_io_methods operations. Serialized
+					data are transient and this serialization algorithm may
+					change at any time.
+					
+					The data format can be succinctly summarized as:
+					
+					Nt...Td...D
+					
+					Where:
+					
+					- N = number of entries (1 byte)
+					
+					- t = type ID of first argument (1 byte)
+					
+					- ...T = type IDs of the 2nd and subsequent arguments (1 byte
+					each).
+					
+					- d = raw bytes of first argument (per-type size).
+					
+					- ...D = raw bytes of the 2nd and subsequent arguments (per-type
+					size).
+					
+					All types except strings have fixed sizes. Strings are stored
+					using their TextEncoder/TextDecoder representations. It would
+					arguably make more sense to store them as Int16Arrays of
+					their JS character values, but how best/fastest to get that
+					in and out of string form is an open point. Initial
+					experimentation with that approach did not gain us any speed.
+					
+					Historical note: this impl was initially about 1% this size by
+					using using JSON.stringify/parse(), but using fit-to-purpose
+					serialization saves considerable runtime.
+					*/
+					if (state.s11n) return state.s11n;
+					const textDecoder = new TextDecoder(), textEncoder = new TextEncoder("utf-8"), viewU8 = new Uint8Array(state.sabIO, state.sabS11nOffset, state.sabS11nSize), viewDV = new DataView(state.sabIO, state.sabS11nOffset, state.sabS11nSize);
+					state.s11n = Object.create(null);
+					const TypeIds = Object.create(null);
+					TypeIds.number = {
+						id: 1,
+						size: 8,
+						getter: "getFloat64",
+						setter: "setFloat64"
+					};
+					TypeIds.bigint = {
+						id: 2,
+						size: 8,
+						getter: "getBigInt64",
+						setter: "setBigInt64"
+					};
+					TypeIds.boolean = {
+						id: 3,
+						size: 4,
+						getter: "getInt32",
+						setter: "setInt32"
+					};
+					TypeIds.string = { id: 4 };
+					const getTypeId = (v) => TypeIds[typeof v] || toss("Maintenance required: this value type cannot be serialized.", v);
+					const getTypeIdById = (tid) => {
+						switch (tid) {
+							case TypeIds.number.id: return TypeIds.number;
+							case TypeIds.bigint.id: return TypeIds.bigint;
+							case TypeIds.boolean.id: return TypeIds.boolean;
+							case TypeIds.string.id: return TypeIds.string;
+							default: toss("Invalid type ID:", tid);
+						}
+					};
+					/**
+					Returns an array of the deserialized state stored by the most
+					recent serialize() operation (from this thread or the
+					counterpart thread), or null if the serialization buffer is
+					empty.  If passed a truthy argument, the serialization buffer
+					is cleared after deserialization.
+					*/
+					state.s11n.deserialize = function(clear = false) {
+						performance.now();
+						const argc = viewU8[0];
+						const rc = argc ? [] : null;
+						if (argc) {
+							const typeIds = [];
+							let offset = 1, i, n, v;
+							for (i = 0; i < argc; ++i, ++offset) typeIds.push(getTypeIdById(viewU8[offset]));
+							for (i = 0; i < argc; ++i) {
+								const t = typeIds[i];
+								if (t.getter) {
+									v = viewDV[t.getter](offset, state.littleEndian);
+									offset += t.size;
+								} else {
+									n = viewDV.getInt32(offset, state.littleEndian);
+									offset += 4;
+									v = textDecoder.decode(viewU8.slice(offset, offset + n));
+									offset += n;
+								}
+								rc.push(v);
+							}
+						}
+						if (clear) viewU8[0] = 0;
 						return rc;
 					};
-					opfsUtil.debug = {
-						asyncShutdown: () => {
-							warn("Shutting down OPFS async listener. The OPFS VFS will no longer work.");
-							opRun("opfs-async-shutdown");
-						},
-						asyncRestart: () => {
-							warn("Attempting to restart OPFS VFS async listener. Might work, might not.");
-							W.postMessage({ type: "opfs-async-restart" });
-						}
-					};
-					const initS11n = () => {
-						if (state.s11n) return state.s11n;
-						const textDecoder = new TextDecoder(), textEncoder = new TextEncoder("utf-8"), viewU8 = new Uint8Array(state.sabIO, state.sabS11nOffset, state.sabS11nSize), viewDV = new DataView(state.sabIO, state.sabS11nOffset, state.sabS11nSize);
-						state.s11n = Object.create(null);
-						const TypeIds = Object.create(null);
-						TypeIds.number = {
-							id: 1,
-							size: 8,
-							getter: "getFloat64",
-							setter: "setFloat64"
-						};
-						TypeIds.bigint = {
-							id: 2,
-							size: 8,
-							getter: "getBigInt64",
-							setter: "setBigInt64"
-						};
-						TypeIds.boolean = {
-							id: 3,
-							size: 4,
-							getter: "getInt32",
-							setter: "setInt32"
-						};
-						TypeIds.string = { id: 4 };
-						const getTypeId = (v) => TypeIds[typeof v] || toss("Maintenance required: this value type cannot be serialized.", v);
-						const getTypeIdById = (tid) => {
-							switch (tid) {
-								case TypeIds.number.id: return TypeIds.number;
-								case TypeIds.bigint.id: return TypeIds.bigint;
-								case TypeIds.boolean.id: return TypeIds.boolean;
-								case TypeIds.string.id: return TypeIds.string;
-								default: toss("Invalid type ID:", tid);
+					/**
+					Serializes all arguments to the shared buffer for consumption
+					by the counterpart thread.
+					
+					This routine is only intended for serializing OPFS VFS
+					arguments and (in at least one special case) result values,
+					and the buffer is sized to be able to comfortably handle
+					those.
+					
+					If passed no arguments then it zeroes out the serialization
+					state.
+					*/
+					state.s11n.serialize = function(...args) {
+						performance.now();
+						if (args.length) {
+							const typeIds = [];
+							let i = 0, offset = 1;
+							viewU8[0] = args.length & 255;
+							for (; i < args.length; ++i, ++offset) {
+								typeIds.push(getTypeId(args[i]));
+								viewU8[offset] = typeIds[i].id;
 							}
-						};
-						state.s11n.deserialize = function(clear = false) {
-							++metrics.s11n.deserialize.count;
-							const t = performance.now();
-							const argc = viewU8[0];
-							const rc = argc ? [] : null;
-							if (argc) {
-								const typeIds = [];
-								let offset = 1, i, n, v;
-								for (i = 0; i < argc; ++i, ++offset) typeIds.push(getTypeIdById(viewU8[offset]));
-								for (i = 0; i < argc; ++i) {
-									const t$1 = typeIds[i];
-									if (t$1.getter) {
-										v = viewDV[t$1.getter](offset, state.littleEndian);
-										offset += t$1.size;
-									} else {
-										n = viewDV.getInt32(offset, state.littleEndian);
-										offset += 4;
-										v = textDecoder.decode(viewU8.slice(offset, offset + n));
-										offset += n;
-									}
-									rc.push(v);
+							for (i = 0; i < args.length; ++i) {
+								const t = typeIds[i];
+								if (t.setter) {
+									viewDV[t.setter](offset, args[i], state.littleEndian);
+									offset += t.size;
+								} else {
+									const s = textEncoder.encode(args[i]);
+									viewDV.setInt32(offset, s.byteLength, state.littleEndian);
+									offset += 4;
+									viewU8.set(s, offset);
+									offset += s.byteLength;
 								}
 							}
-							if (clear) viewU8[0] = 0;
-							metrics.s11n.deserialize.time += performance.now() - t;
-							return rc;
+						} else viewU8[0] = 0;
+					};
+					return state.s11n;
+				};
+				opfsVfs.initS11n = initS11n;
+				/**
+				To be called by the VFS's main installation routine after it has
+				wired up enough state to provide its overridden io-method impls
+				(which must be properties of the ioMethods argument). Returns a
+				Promise which the installation routine must return. callback must
+				be a function which performs any post-bootstrap touchups, namely
+				plugging in a sqlite3.oo1 wrapper. It is passed (sqlite3, opfsVfs),
+				where opfsVfs is the sqlite3_vfs object which was set up by
+				opfsUtil.createVfsState().
+				*/
+				opfsVfs.bindVfs = function(ioMethods, callback) {
+					Object.assign(opfsVfs.ioSyncWrappers, ioMethods);
+					return new Promise(function(promiseResolve_, promiseReject_) {
+						let promiseWasRejected = void 0;
+						const promiseReject = (err) => {
+							promiseWasRejected = true;
+							opfsVfs.dispose();
+							return promiseReject_(err);
 						};
-						state.s11n.serialize = function(...args) {
-							const t = performance.now();
-							++metrics.s11n.serialize.count;
-							if (args.length) {
-								const typeIds = [];
-								let i = 0, offset = 1;
-								viewU8[0] = args.length & 255;
-								for (; i < args.length; ++i, ++offset) {
-									typeIds.push(getTypeId(args[i]));
-									viewU8[offset] = typeIds[i].id;
-								}
-								for (i = 0; i < args.length; ++i) {
-									const t$1 = typeIds[i];
-									if (t$1.setter) {
-										viewDV[t$1.setter](offset, args[i], state.littleEndian);
-										offset += t$1.size;
-									} else {
-										const s = textEncoder.encode(args[i]);
-										viewDV.setInt32(offset, s.byteLength, state.littleEndian);
-										offset += 4;
-										viewU8.set(s, offset);
-										offset += s.byteLength;
-									}
-								}
-							} else viewU8[0] = 0;
-							metrics.s11n.serialize.time += performance.now() - t;
-						};
-						return state.s11n;
-					};
-					const randomFilename = function f(len = 16) {
-						if (!f._chars) {
-							f._chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ012346789";
-							f._n = f._chars.length;
-						}
-						const a = [];
-						let i = 0;
-						for (; i < len; ++i) {
-							const ndx = Math.random() * (f._n * 64) % f._n | 0;
-							a[i] = f._chars[ndx];
-						}
-						return a.join("");
-					};
-					const __openFiles = Object.create(null);
-					const opTimer = Object.create(null);
-					opTimer.op = void 0;
-					opTimer.start = void 0;
-					const mTimeStart = (op) => {
-						opTimer.start = performance.now();
-						opTimer.op = op;
-						++metrics[op].count;
-					};
-					const mTimeEnd = () => metrics[opTimer.op].time += performance.now() - opTimer.start;
-					const ioSyncWrappers = {
-						xCheckReservedLock: function(pFile, pOut) {
-							wasm.poke(pOut, 0, "i32");
-							return 0;
-						},
-						xClose: function(pFile) {
-							mTimeStart("xClose");
-							let rc = 0;
-							const f = __openFiles[pFile];
-							if (f) {
-								delete __openFiles[pFile];
-								rc = opRun("xClose", pFile);
-								if (f.sq3File) f.sq3File.dispose();
-							}
-							mTimeEnd();
-							return rc;
-						},
-						xDeviceCharacteristics: function(pFile) {
-							return capi.SQLITE_IOCAP_UNDELETABLE_WHEN_OPEN;
-						},
-						xFileControl: function(pFile, opId, pArg) {
-							return capi.SQLITE_NOTFOUND;
-						},
-						xFileSize: function(pFile, pSz64) {
-							mTimeStart("xFileSize");
-							let rc = opRun("xFileSize", pFile);
-							if (0 == rc) try {
-								const sz = state.s11n.deserialize()[0];
-								wasm.poke(pSz64, sz, "i64");
-							} catch (e) {
-								error("Unexpected error reading xFileSize() result:", e);
-								rc = state.sq3Codes.SQLITE_IOERR;
-							}
-							mTimeEnd();
-							return rc;
-						},
-						xLock: function(pFile, lockType) {
-							mTimeStart("xLock");
-							const f = __openFiles[pFile];
-							let rc = 0;
-							if (!f.lockType) {
-								rc = opRun("xLock", pFile, lockType);
-								if (0 === rc) f.lockType = lockType;
-							} else f.lockType = lockType;
-							mTimeEnd();
-							return rc;
-						},
-						xRead: function(pFile, pDest, n, offset64) {
-							mTimeStart("xRead");
-							const f = __openFiles[pFile];
-							let rc;
+						const promiseResolve = () => {
 							try {
-								rc = opRun("xRead", pFile, n, Number(offset64));
-								if (0 === rc || capi.SQLITE_IOERR_SHORT_READ === rc) wasm.heap8u().set(f.sabView.subarray(0, n), Number(pDest));
+								callback(sqlite3, opfsVfs);
 							} catch (e) {
-								error("xRead(", arguments, ") failed:", e, f);
-								rc = capi.SQLITE_IOERR_READ;
+								return promiseReject(e);
 							}
-							mTimeEnd();
-							return rc;
-						},
-						xSync: function(pFile, flags) {
-							mTimeStart("xSync");
-							++metrics.xSync.count;
-							const rc = opRun("xSync", pFile, flags);
-							mTimeEnd();
-							return rc;
-						},
-						xTruncate: function(pFile, sz64) {
-							mTimeStart("xTruncate");
-							const rc = opRun("xTruncate", pFile, Number(sz64));
-							mTimeEnd();
-							return rc;
-						},
-						xUnlock: function(pFile, lockType) {
-							mTimeStart("xUnlock");
-							const f = __openFiles[pFile];
-							let rc = 0;
-							if (capi.SQLITE_LOCK_NONE === lockType && f.lockType) rc = opRun("xUnlock", pFile, lockType);
+							promiseWasRejected = false;
+							return promiseResolve_(sqlite3);
+						};
+						const options = opfsUtil.options;
+						const W = opfsVfs.worker = (() => {
+							const url = new URL("sqlite3-opfs-async-proxy.js", import.meta.url);
+							url.searchParams.set("vfs", vfsName);
+							return new Worker(url.toString());
+						})();
+						let zombieTimer = setTimeout(() => {
+							if (void 0 === promiseWasRejected) promiseReject(/* @__PURE__ */ new Error("Timeout while waiting for OPFS async proxy worker."));
+						}, 4e3);
+						W._originalOnError = W.onerror;
+						W.onerror = function(err) {
+							error("Error initializing OPFS asyncer:", err);
+							promiseReject(/* @__PURE__ */ new Error("Loading OPFS async Worker failed for unknown reasons."));
+						};
+						opfsVfs.opRun;
+						const sanityCheck = function() {
+							const scope = wasm.scopedAllocPush();
+							const sq3File = new capi.sqlite3_file();
+							try {
+								const fid = sq3File.pointer;
+								const openFlags = capi.SQLITE_OPEN_CREATE | capi.SQLITE_OPEN_READWRITE | capi.SQLITE_OPEN_MAIN_DB;
+								const pOut = wasm.scopedAlloc(8);
+								const dbFile = "/sanity/check/file" + randomFilename(8);
+								const zDbFile = wasm.scopedAllocCString(dbFile);
+								let rc;
+								state.s11n.serialize("This is ä string.");
+								rc = state.s11n.deserialize();
+								log("deserialize() says:", rc);
+								if ("This is ä string." !== rc[0]) toss("String d13n error.");
+								opfsVfs.vfsSyncWrappers.xAccess(opfsVfs.pointer, zDbFile, 0, pOut);
+								rc = wasm.peek(pOut, "i32");
+								log("xAccess(", dbFile, ") exists ?=", rc);
+								rc = opfsVfs.vfsSyncWrappers.xOpen(opfsVfs.pointer, zDbFile, fid, openFlags, pOut);
+								log("open rc =", rc, "state.sabOPView[xOpen] =", state.sabOPView[state.opIds.xOpen]);
+								if (0 !== rc) {
+									error("open failed with code", rc);
+									return;
+								}
+								opfsVfs.vfsSyncWrappers.xAccess(opfsVfs.pointer, zDbFile, 0, pOut);
+								rc = wasm.peek(pOut, "i32");
+								if (!rc) toss("xAccess() failed to detect file.");
+								rc = opfsVfs.ioSyncWrappers.xSync(sq3File.pointer, 0);
+								if (rc) toss("sync failed w/ rc", rc);
+								rc = opfsVfs.ioSyncWrappers.xTruncate(sq3File.pointer, 1024);
+								if (rc) toss("truncate failed w/ rc", rc);
+								wasm.poke(pOut, 0, "i64");
+								rc = opfsVfs.ioSyncWrappers.xFileSize(sq3File.pointer, pOut);
+								if (rc) toss("xFileSize failed w/ rc", rc);
+								log("xFileSize says:", wasm.peek(pOut, "i64"));
+								rc = opfsVfs.ioSyncWrappers.xWrite(sq3File.pointer, zDbFile, 10, 1);
+								if (rc) toss("xWrite() failed!");
+								const readBuf = wasm.scopedAlloc(16);
+								rc = opfsVfs.ioSyncWrappers.xRead(sq3File.pointer, readBuf, 6, 2);
+								wasm.poke(readBuf + 6, 0);
+								let jRead = wasm.cstrToJs(readBuf);
+								log("xRead() got:", jRead);
+								if ("sanity" !== jRead) toss("Unexpected xRead() value.");
+								if (opfsVfs.vfsSyncWrappers.xSleep) {
+									log("xSleep()ing before close()ing...");
+									opfsVfs.vfsSyncWrappers.xSleep(opfsVfs.pointer, 2e3);
+									log("waking up from xSleep()");
+								}
+								rc = opfsVfs.ioSyncWrappers.xClose(fid);
+								log("xClose rc =", rc, "sabOPView =", state.sabOPView);
+								log("Deleting file:", dbFile);
+								opfsVfs.vfsSyncWrappers.xDelete(opfsVfs.pointer, zDbFile, 4660);
+								opfsVfs.vfsSyncWrappers.xAccess(opfsVfs.pointer, zDbFile, 0, pOut);
+								rc = wasm.peek(pOut, "i32");
+								if (rc) toss("Expecting 0 from xAccess(", dbFile, ") after xDelete().");
+								warn("End of OPFS sanity checks.");
+							} finally {
+								sq3File.dispose();
+								wasm.scopedAllocPop(scope);
+							}
+						};
+						W.onmessage = function({ data }) {
+							switch (data.type) {
+								case "opfs-unavailable":
+									promiseReject(new Error(data.payload.join(" ")));
+									break;
+								case "opfs-async-loaded":
+									delete state.vfs;
+									W.postMessage({
+										type: "opfs-async-init",
+										args: util.nu(state)
+									});
+									break;
+								case "opfs-async-inited":
+									if (true === promiseWasRejected) break;
+									clearTimeout(zombieTimer);
+									zombieTimer = null;
+									try {
+										sqlite3.vfs.installVfs({
+											io: {
+												struct: opfsVfs.ioMethods,
+												methods: opfsVfs.ioSyncWrappers
+											},
+											vfs: {
+												struct: opfsVfs,
+												methods: opfsVfs.vfsSyncWrappers
+											}
+										});
+										state.sabOPView = new Int32Array(state.sabOP);
+										state.sabFileBufView = new Uint8Array(state.sabIO, 0, state.fileBufferSize);
+										state.sabS11nView = new Uint8Array(state.sabIO, state.sabS11nOffset, state.sabS11nSize);
+										opfsVfs.initS11n();
+										delete opfsVfs.initS11n;
+										if (options.sanityChecks) {
+											warn("Running sanity checks because of opfs-sanity-check URL arg...");
+											sanityCheck();
+										}
+										if (opfsUtil.thisThreadHasOPFS()) opfsUtil.getRootDir().then((d) => {
+											W.onerror = W._originalOnError;
+											delete W._originalOnError;
+											log("End of OPFS sqlite3_vfs setup.", opfsVfs);
+											promiseResolve();
+										}).catch(promiseReject);
+										else promiseResolve();
+									} catch (e) {
+										error(e);
+										promiseReject(e);
+									}
+									break;
+								case "debug":
+									warn("debug message from worker:", data);
+									break;
+								default: {
+									const errMsg = "Unexpected message from the OPFS async worker: " + JSON.stringify(data);
+									error(errMsg);
+									promiseReject(new Error(errMsg));
+									break;
+								}
+							}
+						};
+					});
+				};
+				return state;
+			};
+		});
+		globalThis.sqlite3ApiBootstrap.initializers.push(function(sqlite3) {
+			if (!sqlite3.opfs || sqlite3.config.disable?.vfs?.opfs) return;
+			const util = sqlite3.util, opfsUtil = sqlite3.opfs || sqlite3.util.toss("Missing sqlite3.opfs");
+			/**
+			installOpfsVfs() returns a Promise which, on success, installs an
+			sqlite3_vfs named "opfs", suitable for use with all sqlite3 APIs
+			which accept a VFS. It is intended to be called via
+			sqlite3ApiBootstrap.initializers or an equivalent mechanism.
+			
+			The installed VFS uses the Origin-Private FileSystem API for
+			all file storage. On error it is rejected with an exception
+			explaining the problem. Reasons for rejection include, but are
+			not limited to:
+			
+			- The counterpart Worker (see below) could not be loaded.
+			
+			- The environment does not support OPFS. That includes when
+			this function is called from the main window thread.
+			
+			Significant notes and limitations:
+			
+			- The OPFS features used here are only available in dedicated Worker
+			threads. This file tries to detect that case, resulting in a
+			rejected Promise if those features do not seem to be available.
+			
+			- It requires the SharedArrayBuffer and Atomics classes, and the
+			former is only available if the HTTP server emits the so-called
+			COOP and COEP response headers. These features are required for
+			proxying OPFS's synchronous API via the synchronous interface
+			required by the sqlite3_vfs API.
+			
+			- This function may only be called a single time. When called, this
+			function removes itself from the sqlite3 object.
+			
+			All arguments to this function are for internal/development purposes
+			only. They do not constitute a public API and may change at any
+			time.
+			
+			The argument may optionally be a plain object with the following
+			configuration options:
+			
+			- proxyUri: name of the async proxy JS file or a synchronous function
+			which, when called, returns such a name.
+			
+			- verbose (=2): an integer 0-3. 0 disables all logging, 1 enables
+			logging of errors. 2 enables logging of warnings and errors. 3
+			additionally enables debugging info. Logging is performed
+			via the sqlite3.config.{log|warn|error}() functions.
+			
+			- sanityChecks (=false): if true, some basic sanity tests are run on
+			the OPFS VFS API after it's initialized, before the returned
+			Promise resolves. This is only intended for testing and
+			development of the VFS, not client-side use.
+			
+			Additionaly, the (officially undocumented) 'opfs-disable' URL
+			argument will disable OPFS, making this function a no-op.
+			
+			On success, the Promise resolves to the top-most sqlite3 namespace
+			object. Success does not necessarily mean that it installs the VFS,
+			as there are legitimate non-error reasons for OPFS not to be
+			available.
+			*/
+			const installOpfsVfs = async function(options) {
+				options = opfsUtil.initOptions("opfs", options);
+				if (!options) return sqlite3;
+				const capi = sqlite3.capi, opfsVfs = opfsUtil.createVfsState().vfs, metrics = opfsVfs.metrics.counters, mTimeStart = opfsVfs.mTimeStart, mTimeEnd = opfsVfs.mTimeEnd, opRun = opfsVfs.opRun, __openFiles = opfsVfs.__openFiles;
+				return opfsVfs.bindVfs(util.nu({
+					xLock: function(pFile, lockType) {
+						mTimeStart("xLock");
+						++metrics.xLock.count;
+						const f = __openFiles[pFile];
+						let rc = 0;
+						if (f.lockType) f.lockType = lockType;
+						else {
+							rc = opRun("xLock", pFile, lockType);
 							if (0 === rc) f.lockType = lockType;
-							mTimeEnd();
-							return rc;
-						},
-						xWrite: function(pFile, pSrc, n, offset64) {
-							mTimeStart("xWrite");
-							const f = __openFiles[pFile];
-							let rc;
-							try {
-								f.sabView.set(wasm.heap8u().subarray(Number(pSrc), Number(pSrc) + n));
-								rc = opRun("xWrite", pFile, n, Number(offset64));
-							} catch (e) {
-								error("xWrite(", arguments, ") failed:", e, f);
-								rc = capi.SQLITE_IOERR_WRITE;
-							}
-							mTimeEnd();
-							return rc;
 						}
-					};
-					const vfsSyncWrappers = {
-						xAccess: function(pVfs, zName, flags, pOut) {
-							mTimeStart("xAccess");
-							const rc = opRun("xAccess", wasm.cstrToJs(zName));
-							wasm.poke(pOut, rc ? 0 : 1, "i32");
-							mTimeEnd();
-							return 0;
-						},
-						xCurrentTime: function(pVfs, pOut) {
-							wasm.poke(pOut, 2440587.5 + (/* @__PURE__ */ new Date()).getTime() / 864e5, "double");
-							return 0;
-						},
-						xCurrentTimeInt64: function(pVfs, pOut) {
-							wasm.poke(pOut, 2440587.5 * 864e5 + (/* @__PURE__ */ new Date()).getTime(), "i64");
-							return 0;
-						},
-						xDelete: function(pVfs, zName, doSyncDir) {
-							mTimeStart("xDelete");
-							const rc = opRun("xDelete", wasm.cstrToJs(zName), doSyncDir, false);
-							mTimeEnd();
-							return rc;
-						},
-						xFullPathname: function(pVfs, zName, nOut, pOut) {
-							return wasm.cstrncpy(pOut, zName, nOut) < nOut ? 0 : capi.SQLITE_CANTOPEN;
-						},
-						xGetLastError: function(pVfs, nOut, pOut) {
-							warn("OPFS xGetLastError() has nothing sensible to return.");
-							return 0;
-						},
-						xOpen: function f(pVfs, zName, pFile, flags, pOutFlags) {
-							mTimeStart("xOpen");
-							let opfsFlags = 0;
-							if (0 === zName) zName = randomFilename();
-							else if (wasm.isPtr(zName)) {
-								if (capi.sqlite3_uri_boolean(zName, "opfs-unlock-asap", 0)) opfsFlags |= state.opfsFlags.OPFS_UNLOCK_ASAP;
-								if (capi.sqlite3_uri_boolean(zName, "delete-before-open", 0)) opfsFlags |= state.opfsFlags.OPFS_UNLINK_BEFORE_OPEN;
-								zName = wasm.cstrToJs(zName);
-							}
-							const fh = Object.create(null);
-							fh.fid = pFile;
-							fh.filename = zName;
-							fh.sab = new SharedArrayBuffer(state.fileBufferSize);
-							fh.flags = flags;
-							fh.readOnly = !(capi.SQLITE_OPEN_CREATE & flags) && !!(flags & capi.SQLITE_OPEN_READONLY);
-							const rc = opRun("xOpen", pFile, zName, flags, opfsFlags);
-							if (!rc) {
-								if (fh.readOnly) wasm.poke(pOutFlags, capi.SQLITE_OPEN_READONLY, "i32");
-								__openFiles[pFile] = fh;
-								fh.sabView = state.sabFileBufView;
-								fh.sq3File = new sqlite3_file(pFile);
-								fh.sq3File.$pMethods = opfsIoMethods.pointer;
-								fh.lockType = capi.SQLITE_LOCK_NONE;
-							}
-							mTimeEnd();
-							return rc;
-						}
-					};
-					if (dVfs) {
-						opfsVfs.$xRandomness = dVfs.$xRandomness;
-						opfsVfs.$xSleep = dVfs.$xSleep;
+						mTimeEnd();
+						return rc;
+					},
+					xUnlock: function(pFile, lockType) {
+						mTimeStart("xUnlock");
+						++metrics.xUnlock.count;
+						const f = __openFiles[pFile];
+						let rc = 0;
+						if (capi.SQLITE_LOCK_NONE === lockType && f.lockType) rc = opRun("xUnlock", pFile, lockType);
+						if (0 === rc) f.lockType = lockType;
+						mTimeEnd();
+						return rc;
 					}
-					if (!opfsVfs.$xRandomness) vfsSyncWrappers.xRandomness = function(pVfs, nOut, pOut) {
-						const heap = wasm.heap8u();
-						let i = 0;
-						const npOut = Number(pOut);
-						for (; i < nOut; ++i) heap[npOut + i] = Math.random() * 255e3 & 255;
-						return i;
-					};
-					if (!opfsVfs.$xSleep) vfsSyncWrappers.xSleep = function(pVfs, ms) {
-						Atomics.wait(state.sabOPView, state.opIds.xSleep, 0, ms);
-						return 0;
-					};
-					opfsUtil.getResolvedPath = function(filename, splitIt) {
-						const p = new URL(filename, "file://irrelevant").pathname;
-						return splitIt ? p.split("/").filter((v) => !!v) : p;
-					};
-					opfsUtil.getDirForFilename = async function f(absFilename, createDirs = false) {
-						const path = opfsUtil.getResolvedPath(absFilename, true);
-						const filename = path.pop();
-						let dh = opfsUtil.rootDirectory;
-						for (const dirName of path) if (dirName) dh = await dh.getDirectoryHandle(dirName, { create: !!createDirs });
-						return [dh, filename];
-					};
-					opfsUtil.mkdir = async function(absDirName) {
-						try {
-							await opfsUtil.getDirForFilename(absDirName + "/filepart", true);
-							return true;
-						} catch (e) {
-							return false;
-						}
-					};
-					opfsUtil.entryExists = async function(fsEntryName) {
-						try {
-							const [dh, fn] = await opfsUtil.getDirForFilename(fsEntryName);
-							await dh.getFileHandle(fn);
-							return true;
-						} catch (e) {
-							return false;
-						}
-					};
-					opfsUtil.randomFilename = randomFilename;
-					opfsUtil.treeList = async function() {
-						const doDir = async function callee$1(dirHandle, tgt) {
-							tgt.name = dirHandle.name;
-							tgt.dirs = [];
-							tgt.files = [];
-							for await (const handle of dirHandle.values()) if ("directory" === handle.kind) {
-								const subDir = Object.create(null);
-								tgt.dirs.push(subDir);
-								await callee$1(handle, subDir);
-							} else tgt.files.push(handle.name);
-						};
-						const root = Object.create(null);
-						await doDir(opfsUtil.rootDirectory, root);
-						return root;
-					};
-					opfsUtil.rmfr = async function() {
-						const dir = opfsUtil.rootDirectory, opt = { recurse: true };
-						for await (const handle of dir.values()) dir.removeEntry(handle.name, opt);
-					};
-					opfsUtil.unlink = async function(fsEntryName, recursive = false, throwOnError = false) {
-						try {
-							const [hDir, filenamePart] = await opfsUtil.getDirForFilename(fsEntryName, false);
-							await hDir.removeEntry(filenamePart, { recursive });
-							return true;
-						} catch (e) {
-							if (throwOnError) throw new Error("unlink(", arguments[0], ") failed: " + e.message, { cause: e });
-							return false;
-						}
-					};
-					opfsUtil.traverse = async function(opt) {
-						const defaultOpt = {
-							recursive: true,
-							directory: opfsUtil.rootDirectory
-						};
-						if ("function" === typeof opt) opt = { callback: opt };
-						opt = Object.assign(defaultOpt, opt || {});
-						(async function callee$1(dirHandle, depth) {
-							for await (const handle of dirHandle.values()) if (false === opt.callback(handle, dirHandle, depth)) return false;
-							else if (opt.recursive && "directory" === handle.kind) {
-								if (false === await callee$1(handle, depth + 1)) break;
-							}
-						})(opt.directory, 0);
-					};
-					const importDbChunked = async function(filename, callback) {
-						const [hDir, fnamePart] = await opfsUtil.getDirForFilename(filename, true);
-						let sah = await (await hDir.getFileHandle(fnamePart, { create: true })).createSyncAccessHandle(), nWrote = 0, chunk, checkedHeader = false;
-						try {
-							sah.truncate(0);
-							while (void 0 !== (chunk = await callback())) {
-								if (chunk instanceof ArrayBuffer) chunk = new Uint8Array(chunk);
-								if (!checkedHeader && 0 === nWrote && chunk.byteLength >= 15) {
-									util.affirmDbHeader(chunk);
-									checkedHeader = true;
-								}
-								sah.write(chunk, { at: nWrote });
-								nWrote += chunk.byteLength;
-							}
-							if (nWrote < 512 || 0 !== nWrote % 512) toss("Input size", nWrote, "is not correct for an SQLite database.");
-							if (!checkedHeader) {
-								const header = new Uint8Array(20);
-								sah.read(header, { at: 0 });
-								util.affirmDbHeader(header);
-							}
-							sah.write(new Uint8Array([1, 1]), { at: 18 });
-							return nWrote;
-						} catch (e) {
-							await sah.close();
-							sah = void 0;
-							await hDir.removeEntry(fnamePart).catch(() => {});
-							throw e;
-						} finally {
-							if (sah) await sah.close();
-						}
-					};
-					opfsUtil.importDb = async function(filename, bytes) {
-						if (bytes instanceof Function) return importDbChunked(filename, bytes);
-						if (bytes instanceof ArrayBuffer) bytes = new Uint8Array(bytes);
-						util.affirmIsDb(bytes);
-						const n = bytes.byteLength;
-						const [hDir, fnamePart] = await opfsUtil.getDirForFilename(filename, true);
-						let sah, nWrote = 0;
-						try {
-							sah = await (await hDir.getFileHandle(fnamePart, { create: true })).createSyncAccessHandle();
-							sah.truncate(0);
-							nWrote = sah.write(bytes, { at: 0 });
-							if (nWrote != n) toss("Expected to write " + n + " bytes but wrote " + nWrote + ".");
-							sah.write(new Uint8Array([1, 1]), { at: 18 });
-							return nWrote;
-						} catch (e) {
-							if (sah) {
-								await sah.close();
-								sah = void 0;
-							}
-							await hDir.removeEntry(fnamePart).catch(() => {});
-							throw e;
-						} finally {
-							if (sah) await sah.close();
-						}
-					};
+				}), function(sqlite3, vfs) {
 					if (sqlite3.oo1) {
 						const OpfsDb = function(...args) {
 							const opt = sqlite3.oo1.DB.dbCtorHelper.normalizeArgs(...args);
-							opt.vfs = opfsVfs.$zName;
+							opt.vfs = vfs.$zName;
 							sqlite3.oo1.DB.dbCtorHelper.call(this, opt);
 						};
 						OpfsDb.prototype = Object.create(sqlite3.oo1.DB.prototype);
 						sqlite3.oo1.OpfsDb = OpfsDb;
 						OpfsDb.importDb = opfsUtil.importDb;
-						sqlite3.oo1.DB.dbCtorHelper.setVfsPostOpenCallback(opfsVfs.pointer, function(oo1Db, sqlite3$1) {
-							sqlite3$1.capi.sqlite3_busy_timeout(oo1Db, 1e4);
+						sqlite3.oo1.DB.dbCtorHelper.setVfsPostOpenCallback(opfsVfs.pointer, function(oo1Db, sqlite3) {
+							sqlite3.capi.sqlite3_busy_timeout(oo1Db, 1e4);
 						});
 					}
-					const sanityCheck = function() {
-						const scope = wasm.scopedAllocPush();
-						const sq3File = new sqlite3_file();
-						try {
-							const fid = sq3File.pointer;
-							const openFlags = capi.SQLITE_OPEN_CREATE | capi.SQLITE_OPEN_READWRITE | capi.SQLITE_OPEN_MAIN_DB;
-							const pOut = wasm.scopedAlloc(8);
-							const dbFile = "/sanity/check/file" + randomFilename(8);
-							const zDbFile = wasm.scopedAllocCString(dbFile);
-							let rc;
-							state.s11n.serialize("This is ä string.");
-							rc = state.s11n.deserialize();
-							log("deserialize() says:", rc);
-							if ("This is ä string." !== rc[0]) toss("String d13n error.");
-							vfsSyncWrappers.xAccess(opfsVfs.pointer, zDbFile, 0, pOut);
-							rc = wasm.peek(pOut, "i32");
-							log("xAccess(", dbFile, ") exists ?=", rc);
-							rc = vfsSyncWrappers.xOpen(opfsVfs.pointer, zDbFile, fid, openFlags, pOut);
-							log("open rc =", rc, "state.sabOPView[xOpen] =", state.sabOPView[state.opIds.xOpen]);
-							if (0 !== rc) {
-								error("open failed with code", rc);
-								return;
-							}
-							vfsSyncWrappers.xAccess(opfsVfs.pointer, zDbFile, 0, pOut);
-							rc = wasm.peek(pOut, "i32");
-							if (!rc) toss("xAccess() failed to detect file.");
-							rc = ioSyncWrappers.xSync(sq3File.pointer, 0);
-							if (rc) toss("sync failed w/ rc", rc);
-							rc = ioSyncWrappers.xTruncate(sq3File.pointer, 1024);
-							if (rc) toss("truncate failed w/ rc", rc);
-							wasm.poke(pOut, 0, "i64");
-							rc = ioSyncWrappers.xFileSize(sq3File.pointer, pOut);
-							if (rc) toss("xFileSize failed w/ rc", rc);
-							log("xFileSize says:", wasm.peek(pOut, "i64"));
-							rc = ioSyncWrappers.xWrite(sq3File.pointer, zDbFile, 10, 1);
-							if (rc) toss("xWrite() failed!");
-							const readBuf = wasm.scopedAlloc(16);
-							rc = ioSyncWrappers.xRead(sq3File.pointer, readBuf, 6, 2);
-							wasm.poke(readBuf + 6, 0);
-							let jRead = wasm.cstrToJs(readBuf);
-							log("xRead() got:", jRead);
-							if ("sanity" !== jRead) toss("Unexpected xRead() value.");
-							if (vfsSyncWrappers.xSleep) {
-								log("xSleep()ing before close()ing...");
-								vfsSyncWrappers.xSleep(opfsVfs.pointer, 2e3);
-								log("waking up from xSleep()");
-							}
-							rc = ioSyncWrappers.xClose(fid);
-							log("xClose rc =", rc, "sabOPView =", state.sabOPView);
-							log("Deleting file:", dbFile);
-							vfsSyncWrappers.xDelete(opfsVfs.pointer, zDbFile, 4660);
-							vfsSyncWrappers.xAccess(opfsVfs.pointer, zDbFile, 0, pOut);
-							rc = wasm.peek(pOut, "i32");
-							if (rc) toss("Expecting 0 from xAccess(", dbFile, ") after xDelete().");
-							warn("End of OPFS sanity checks.");
-						} finally {
-							sq3File.dispose();
-							wasm.scopedAllocPop(scope);
-						}
-					};
-					W.onmessage = function({ data }) {
-						switch (data.type) {
-							case "opfs-unavailable":
-								promiseReject(new Error(data.payload.join(" ")));
-								break;
-							case "opfs-async-loaded":
-								W.postMessage({
-									type: "opfs-async-init",
-									args: state
-								});
-								break;
-							case "opfs-async-inited":
-								if (true === promiseWasRejected) break;
-								try {
-									sqlite3.vfs.installVfs({
-										io: {
-											struct: opfsIoMethods,
-											methods: ioSyncWrappers
-										},
-										vfs: {
-											struct: opfsVfs,
-											methods: vfsSyncWrappers
-										}
-									});
-									state.sabOPView = new Int32Array(state.sabOP);
-									state.sabFileBufView = new Uint8Array(state.sabIO, 0, state.fileBufferSize);
-									state.sabS11nView = new Uint8Array(state.sabIO, state.sabS11nOffset, state.sabS11nSize);
-									initS11n();
-									if (options.sanityChecks) {
-										warn("Running sanity checks because of opfs-sanity-check URL arg...");
-										sanityCheck();
-									}
-									if (thisThreadHasOPFS()) navigator.storage.getDirectory().then((d) => {
-										W.onerror = W._originalOnError;
-										delete W._originalOnError;
-										sqlite3.opfs = opfsUtil;
-										opfsUtil.rootDirectory = d;
-										log("End of OPFS sqlite3_vfs setup.", opfsVfs);
-										promiseResolve();
-									}).catch(promiseReject);
-									else promiseResolve();
-								} catch (e) {
-									error(e);
-									promiseReject(e);
-								}
-								break;
-							default: {
-								const errMsg = "Unexpected message from the OPFS async worker: " + JSON.stringify(data);
-								error(errMsg);
-								promiseReject(new Error(errMsg));
-								break;
-							}
-						}
-					};
 				});
 			};
-			installOpfsVfs.defaultProxyUri = "sqlite3-opfs-async-proxy.js";
-			globalThis.sqlite3ApiBootstrap.initializersAsync.push(async (sqlite3$1) => {
-				try {
-					let proxyJs = installOpfsVfs.defaultProxyUri;
-					if (sqlite3$1?.scriptInfo?.sqlite3Dir) installOpfsVfs.defaultProxyUri = sqlite3$1.scriptInfo.sqlite3Dir + proxyJs;
-					return installOpfsVfs().catch((e) => {
-						sqlite3$1.config.warn("Ignoring inability to install OPFS sqlite3_vfs:", e.message);
-					});
-				} catch (e) {
-					sqlite3$1.config.error("installOpfsVfs() exception:", e);
-					return Promise.reject(e);
-				}
+			globalThis.sqlite3ApiBootstrap.initializersAsync.push(async (sqlite3) => {
+				return installOpfsVfs().catch((e) => {
+					sqlite3.config.warn("Ignoring inability to install 'opfs' sqlite3_vfs:", e);
+				});
 			});
 		});
 		globalThis.sqlite3ApiBootstrap.initializers.push(function(sqlite3) {
 			"use strict";
+			if (sqlite3.config.disable?.vfs?.["opfs-sahpool"]) return;
 			const toss = sqlite3.util.toss;
 			const toss3 = sqlite3.util.toss3;
 			const initPromises = Object.create(null);
@@ -9792,15 +15816,21 @@ async function sqlite3InitModule(moduleArg = {}) {
 			const wasm = sqlite3.wasm;
 			const SECTOR_SIZE = 4096;
 			const HEADER_MAX_PATH_SIZE = 512;
-			const HEADER_FLAGS_SIZE = 4;
 			const HEADER_DIGEST_SIZE = 8;
-			const HEADER_CORPUS_SIZE = HEADER_MAX_PATH_SIZE + HEADER_FLAGS_SIZE;
+			const HEADER_CORPUS_SIZE = 516;
 			const HEADER_OFFSET_FLAGS = HEADER_MAX_PATH_SIZE;
 			const HEADER_OFFSET_DIGEST = HEADER_CORPUS_SIZE;
 			const HEADER_OFFSET_DATA = SECTOR_SIZE;
 			const PERSISTENT_FILE_TYPES = capi.SQLITE_OPEN_MAIN_DB | capi.SQLITE_OPEN_MAIN_JOURNAL | capi.SQLITE_OPEN_SUPER_JOURNAL | capi.SQLITE_OPEN_WAL;
 			const FLAG_COMPUTE_DIGEST_V2 = capi.SQLITE_OPEN_MEMORY;
+			/** Subdirectory of the VFS's space where "opaque" (randomly-named)
+			files are stored. Changing this effectively invalidates the data
+			stored under older names (orphaning it), so don't do that. */
 			const OPAQUE_DIR_NAME = ".opaque";
+			/**
+			Returns short a string of random alphanumeric characters
+			suitable for use as a random filename.
+			*/
 			const getRandomName = () => Math.random().toString(36).slice(2);
 			const textDecoder = new TextDecoder();
 			const textEncoder = new TextEncoder();
@@ -9812,6 +15842,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 				verbosity: 2,
 				forceReinitIfPreviouslyFailed: false
 			});
+			/** Logging routines, from most to least serious. */
 			const loggers = [
 				sqlite3.config.error,
 				sqlite3.config.warn,
@@ -9832,6 +15863,10 @@ async function sqlite3InitModule(moduleArg = {}) {
 				if (pool) __mapSqlite3File.set(pFile, pool);
 				else __mapSqlite3File.delete(pFile);
 			};
+			/**
+			Impls for the sqlite3_io_methods methods. Maintenance reminder:
+			members are in alphabetical order to simplify finding them.
+			*/
 			const ioMethods = {
 				xCheckReservedLock: function(pFile, pOut) {
 					const pool = getPoolForPFile(pFile);
@@ -9943,6 +15978,10 @@ async function sqlite3InitModule(moduleArg = {}) {
 				struct: opfsIoMethods,
 				methods: ioMethods
 			} });
+			/**
+			Impls for the sqlite3_vfs methods. Maintenance reminder: members
+			are in alphabetical order to simplify finding them.
+			*/
 			const vfsMethods = {
 				xAccess: function(pVfs, zName, flags, pOut) {
 					const pool = getPoolForVfs(pVfs);
@@ -9960,7 +15999,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 					return 0;
 				},
 				xCurrentTimeInt64: function(pVfs, pOut) {
-					wasm.poke(pOut, 2440587.5 * 864e5 + (/* @__PURE__ */ new Date()).getTime(), "i64");
+					wasm.poke(pOut, 0xbfc83e532200 + (/* @__PURE__ */ new Date()).getTime(), "i64");
 					return 0;
 				},
 				xDelete: function(pVfs, zName, doSyncDir) {
@@ -9988,7 +16027,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 							const [cMsg, n] = wasm.scopedAllocCString(e.message, true);
 							wasm.cstrncpy(pOut, cMsg, nOut);
 							if (n > nOut) wasm.poke8(wasm.ptr.add(pOut, nOut, -1), 0);
-						} catch (e$1) {
+						} catch (e) {
 							return capi.SQLITE_NOMEM;
 						} finally {
 							wasm.scopedAllocPop(scope);
@@ -10003,10 +16042,12 @@ async function sqlite3InitModule(moduleArg = {}) {
 						pool.log(`xOpen ${wasm.cstrToJs(zName)} ${flags}`);
 						const path = zName && wasm.peek8(zName) ? pool.getPath(zName) : getRandomName();
 						let sah = pool.getSAHForPath(path);
-						if (!sah && flags & capi.SQLITE_OPEN_CREATE) if (pool.getFileCount() < pool.getCapacity()) {
-							sah = pool.nextAvailableSAH();
-							pool.setAssociatedPath(sah, path, flags);
-						} else toss("SAH pool is full. Cannot create file", path);
+						if (!sah && flags & capi.SQLITE_OPEN_CREATE) {
+							if (pool.getFileCount() < pool.getCapacity()) {
+								sah = pool.nextAvailableSAH();
+								pool.setAssociatedPath(sah, path, flags);
+							} else toss("SAH pool is full. Cannot create file", path);
+						}
 						if (!sah) toss("file not found:", path);
 						const file = {
 							path,
@@ -10026,6 +16067,17 @@ async function sqlite3InitModule(moduleArg = {}) {
 					}
 				}
 			};
+			/**
+			Creates, initializes, and returns an sqlite3_vfs instance for an
+			OpfsSAHPool. The argument is the VFS's name (JS string).
+			
+			Throws if the VFS name is already registered or if something
+			goes terribly wrong via sqlite3.vfs.installVfs().
+			
+			Maintenance reminder: the only detail about the returned object
+			which is specific to any given OpfsSAHPool instance is the $zName
+			member. All other state is identical.
+			*/
 			const createOpfsVfs = function(vfsName) {
 				if (sqlite3.capi.sqlite3_vfs_find(vfsName)) toss3("VFS name is already registered:", vfsName);
 				const opfsVfs = new capi.sqlite3_vfs();
@@ -10054,6 +16106,10 @@ async function sqlite3InitModule(moduleArg = {}) {
 				} });
 				return opfsVfs;
 			};
+			/**
+			Class for managing OPFS-related state for the
+			OPFS SharedAccessHandle Pool sqlite3_vfs.
+			*/
 			class OpfsSAHPool {
 				vfsDir;
 				#dhVfsRoot;
@@ -10063,6 +16119,7 @@ async function sqlite3InitModule(moduleArg = {}) {
 				#mapFilenameToSAH = /* @__PURE__ */ new Map();
 				#availableSAH = /* @__PURE__ */ new Set();
 				#mapS3FileToOFile_ = /* @__PURE__ */ new Map();
+				/** Buffer used by [sg]etAssociatedPath(). */
 				#apBody = new Uint8Array(HEADER_CORPUS_SIZE);
 				#dvBody;
 				#cVfs;
@@ -10105,6 +16162,11 @@ async function sqlite3InitModule(moduleArg = {}) {
 					for (const n of this.#mapFilenameToSAH.keys()) rc.push(n);
 					return rc;
 				}
+				/**
+				Adds n files to the pool's capacity. This change is
+				persistent across settings. Returns a Promise which resolves
+				to the new capacity.
+				*/
 				async addCapacity(n) {
 					for (let i = 0; i < n; ++i) {
 						const name = getRandomName();
@@ -10114,6 +16176,11 @@ async function sqlite3InitModule(moduleArg = {}) {
 					}
 					return this.getCapacity();
 				}
+				/**
+				Reduce capacity by n, but can only reduce up to the limit
+				of currently-available SAHs. Returns a Promise which resolves
+				to the number of slots really removed.
+				*/
 				async reduceCapacity(n) {
 					let nRm = 0;
 					for (const ah of Array.from(this.#availableSAH)) {
@@ -10127,12 +16194,32 @@ async function sqlite3InitModule(moduleArg = {}) {
 					}
 					return nRm;
 				}
+				/**
+				Releases all currently-opened SAHs. The only legal operation
+				after this is acquireAccessHandles() or (if this is called from
+				pauseVfs()) either of isPaused() or unpauseVfs().
+				*/
 				releaseAccessHandles() {
 					for (const ah of this.#mapSAHToName.keys()) ah.close();
 					this.#mapSAHToName.clear();
 					this.#mapFilenameToSAH.clear();
 					this.#availableSAH.clear();
 				}
+				/**
+				Opens all files under this.vfsDir/this.#dhOpaque and acquires a
+				SAH for each. Returns a Promise which resolves to no value but
+				completes once all SAHs are acquired. If acquiring an SAH
+				throws, this.$error will contain the corresponding Error
+				object.
+				
+				If it throws, it releases any SAHs which it may have
+				acquired before the exception was thrown, leaving the VFS in a
+				well-defined but unusable state.
+				
+				If clearFiles is true, the client-stored state of each file is
+				cleared when its handle is acquired, including its name, flags,
+				and any data stored after the metadata block.
+				*/
 				async acquireAccessHandles(clearFiles = false) {
 					const files = [];
 					for await (const [name, h] of this.#dhOpaque) if ("file" === h.kind) files.push([name, h]);
@@ -10155,6 +16242,13 @@ async function sqlite3InitModule(moduleArg = {}) {
 						}
 					}));
 				}
+				/**
+				Given an SAH, returns the client-specified name of
+				that file by extracting it from the SAH's header.
+				
+				On error, it disassociates SAH from the pool and
+				returns an empty string.
+				*/
 				getAssociatedPath(sah) {
 					sah.read(this.#apBody, { at: 0 });
 					const flags = this.#dvBody.getUint32(HEADER_OFFSET_FLAGS);
@@ -10176,6 +16270,12 @@ async function sqlite3InitModule(moduleArg = {}) {
 						return "";
 					}
 				}
+				/**
+				Stores the given client-defined path and SQLITE_OPEN_xyz flags
+				into the given SAH. If path is an empty string then the file is
+				disassociated from the pool but its previous name is preserved
+				in the metadata.
+				*/
 				setAssociatedPath(sah, path, flags) {
 					const enc = textEncoder.encodeInto(path, this.#apBody);
 					if (HEADER_MAX_PATH_SIZE <= enc.written + 1) toss("Path too long:", path);
@@ -10194,6 +16294,15 @@ async function sqlite3InitModule(moduleArg = {}) {
 						this.#availableSAH.add(sah);
 					}
 				}
+				/**
+				Computes a digest for the given byte array and returns it as a
+				two-element Uint32Array. This digest gets stored in the
+				metadata for each file as a validation check. Changing this
+				algorithm invalidates all existing databases for this VFS, so
+				don't do that.
+				
+				See the docs for FLAG_COMPUTE_DIGEST_V2 for more details.
+				*/
 				computeDigest(byteArray, fileFlags) {
 					if (fileFlags & FLAG_COMPUTE_DIGEST_V2) {
 						let h1 = 3735928559;
@@ -10205,6 +16314,13 @@ async function sqlite3InitModule(moduleArg = {}) {
 						return new Uint32Array([h1 >>> 0, h2 >>> 0]);
 					} else return new Uint32Array([0, 0]);
 				}
+				/**
+				Re-initializes the state of the SAH pool, releasing and
+				re-acquiring all handles.
+				
+				See acquireAccessHandles() for the specifics of the clearFiles
+				argument.
+				*/
 				async reset(clearFiles) {
 					await this.isReady;
 					let h = await navigator.storage.getDirectory(), prev;
@@ -10218,10 +16334,26 @@ async function sqlite3InitModule(moduleArg = {}) {
 					this.releaseAccessHandles();
 					return this.acquireAccessHandles(clearFiles);
 				}
+				/**
+				Returns the pathname part of the given argument,
+				which may be any of:
+				
+				- a URL object
+				- A JS string representing a file name
+				- Wasm C-string representing a file name
+				
+				All "../" parts and duplicate slashes are resolve/removed from
+				the returned result.
+				*/
 				getPath(arg) {
 					if (wasm.isPtr(arg)) arg = wasm.cstrToJs(arg);
 					return (arg instanceof URL ? arg : new URL(arg, "file://localhost/")).pathname;
 				}
+				/**
+				Removes the association of the given client-specified file
+				name (JS string) from the pool. Returns true if a mapping
+				is found, else false.
+				*/
 				deletePath(path) {
 					const sah = this.#mapFilenameToSAH.get(path);
 					if (sah) {
@@ -10230,6 +16362,14 @@ async function sqlite3InitModule(moduleArg = {}) {
 					}
 					return !!sah;
 				}
+				/**
+				Sets e (an Error object) as this object's current error. Pass a
+				falsy (or no) value to clear it. If code is truthy it is
+				assumed to be an SQLITE_xxx result code, defaulting to
+				SQLITE_IOERR if code is falsy.
+				
+				Returns the 2nd argument.
+				*/
 				storeErr(e, code) {
 					if (e) {
 						e.sqlite3Rc = code || capi.SQLITE_IOERR;
@@ -10238,18 +16378,34 @@ async function sqlite3InitModule(moduleArg = {}) {
 					this.$error = e;
 					return code;
 				}
+				/**
+				Pops this object's Error object and returns
+				it (a falsy value if no error is set).
+				*/
 				popErr() {
 					const rc = this.$error;
 					this.$error = void 0;
 					return rc;
 				}
+				/**
+				Returns the next available SAH without removing
+				it from the set.
+				*/
 				nextAvailableSAH() {
 					const [rc] = this.#availableSAH.keys();
 					return rc;
 				}
+				/**
+				Given an (sqlite3_file*), returns the mapped
+				xOpen file object.
+				*/
 				getOFileForS3File(pFile) {
 					return this.#mapS3FileToOFile_.get(pFile);
 				}
+				/**
+				Maps or unmaps (if file is falsy) the given (sqlite3_file*)
+				to an xOpen file object and to this pool object.
+				*/
 				mapS3FileToOFile(pFile, file) {
 					if (file) {
 						this.#mapS3FileToOFile_.set(pFile, file);
@@ -10259,12 +16415,37 @@ async function sqlite3InitModule(moduleArg = {}) {
 						setPoolForPFile(pFile, false);
 					}
 				}
+				/**
+				Returns true if the given client-defined file name is in this
+				object's name-to-SAH map.
+				*/
 				hasFilename(name) {
 					return this.#mapFilenameToSAH.has(name);
 				}
+				/**
+				Returns the SAH associated with the given
+				client-defined file name.
+				*/
 				getSAHForPath(path) {
 					return this.#mapFilenameToSAH.get(path);
 				}
+				/**
+				Removes this object's sqlite3_vfs registration and shuts down
+				this object, releasing all handles, mappings, and whatnot,
+				including deleting its data directory. There is currently no
+				way to "revive" the object and reaquire its
+				resources. Similarly, there is no recovery strategy if removal
+				of any given SAH fails, so such errors are ignored by this
+				function.
+				
+				This function is intended primarily for testing.
+				
+				Resolves to true if it did its job, false if the
+				VFS has already been shut down.
+				
+				@see pauseVfs()
+				@see unpauseVfs()
+				*/
 				async removeVfs() {
 					if (!this.#cVfs.pointer || !this.#dhOpaque) return false;
 					capi.sqlite3_vfs_unregister(this.#cVfs.pointer);
@@ -10281,6 +16462,26 @@ async function sqlite3InitModule(moduleArg = {}) {
 					}
 					return true;
 				}
+				/**
+				"Pauses" this VFS by unregistering it from SQLite and
+				relinquishing all open SAHs, leaving the associated files
+				intact. If this object is already paused, this is a
+				no-op. Returns this object.
+				
+				This function throws if SQLite has any opened file handles
+				hosted by this VFS, as the alternative would be to invoke
+				Undefined Behavior by closing file handles out from under the
+				library. Similarly, automatically closing any database handles
+				opened by this VFS would invoke Undefined Behavior in
+				downstream code which is holding those pointers.
+				
+				If this function throws due to open file handles then it has
+				no side effects. If the OPFS API throws while closing handles
+				then the VFS is left in an undefined state.
+				
+				@see isPaused()
+				@see unpauseVfs()
+				*/
 				pauseVfs() {
 					if (this.#mapS3FileToOFile_.size > 0) sqlite3.SQLite3Error.toss(capi.SQLITE_MISUSE, "Cannot pause VFS", this.vfsName, "because it has opened files.");
 					if (this.#mapSAHToName.size > 0) {
@@ -10289,9 +16490,27 @@ async function sqlite3InitModule(moduleArg = {}) {
 					}
 					return this;
 				}
+				/**
+				Returns true if this pool is currently paused else false.
+				
+				@see pauseVfs()
+				@see unpauseVfs()
+				*/
 				isPaused() {
 					return 0 === this.#mapSAHToName.size;
 				}
+				/**
+				"Unpauses" this VFS, reacquiring all SAH's and (if successful)
+				re-registering it with SQLite. This is a no-op if the VFS is
+				not currently paused.
+				
+				The returned Promise resolves to this object. See
+				acquireAccessHandles() for how it behaves if it throws due to
+				SAH acquisition failure.
+				
+				@see isPaused()
+				@see pauseVfs()
+				*/
 				async unpauseVfs() {
 					if (0 === this.#mapSAHToName.size) return this.acquireAccessHandles(false).then(() => capi.sqlite3_vfs_register(this.#cVfs, 0), this);
 					return this;
@@ -10324,11 +16543,11 @@ async function sqlite3InitModule(moduleArg = {}) {
 						}
 						if (nWrote < 512 || 0 !== nWrote % 512) toss("Input size", nWrote, "is not correct for an SQLite database.");
 						if (!checkedHeader) {
-							const header = new Uint8Array(20);
+							const header = /* @__PURE__ */ new Uint8Array(20);
 							sah.read(header, { at: 0 });
 							util.affirmDbHeader(header);
 						}
-						sah.write(new Uint8Array([1, 1]), { at: HEADER_OFFSET_DATA + 18 });
+						sah.write(new Uint8Array([1, 1]), { at: 4114 });
 					} catch (e) {
 						this.setAssociatedPath(sah, "", 0);
 						throw e;
@@ -10350,12 +16569,21 @@ async function sqlite3InitModule(moduleArg = {}) {
 						this.setAssociatedPath(sah, "", 0);
 						toss("Expected to write " + n + " bytes but wrote " + nWrote + ".");
 					} else {
-						sah.write(new Uint8Array([1, 1]), { at: HEADER_OFFSET_DATA + 18 });
+						sah.write(new Uint8Array([1, 1]), { at: 4114 });
 						this.setAssociatedPath(sah, name, capi.SQLITE_OPEN_MAIN_DB);
 					}
 					return nWrote;
 				}
 			}
+			/**
+			A OpfsSAHPoolUtil instance is exposed to clients in order to
+			manipulate an OpfsSAHPool object without directly exposing that
+			object and allowing for some semantic changes compared to that
+			class.
+			
+			Class docs are in the client-level docs for
+			installOpfsSAHPoolVfs().
+			*/
 			class OpfsSAHPoolUtil {
 				#p;
 				constructor(sahPool) {
@@ -10407,6 +16635,10 @@ async function sqlite3InitModule(moduleArg = {}) {
 					return this.#p.isPaused();
 				}
 			}
+			/**
+			Returns a resolved Promise if the current environment
+			has a "fully-sync" SAH impl, else a rejected Promise.
+			*/
 			const apiVersionCheck = async () => {
 				const dh = await navigator.storage.getDirectory();
 				const fn = ".opfs-sahpool-sync-check-" + getRandomName();
@@ -10416,6 +16648,262 @@ async function sqlite3InitModule(moduleArg = {}) {
 				if (close?.then) toss("The local OPFS API is too old for opfs-sahpool:", "it has an async FileSystemSyncAccessHandle.close() method.");
 				return true;
 			};
+			/**
+			installOpfsSAHPoolVfs() asynchronously initializes the OPFS
+			SyncAccessHandle (a.k.a. SAH) Pool VFS. It returns a Promise which
+			either resolves to a utility object described below or rejects with
+			an Error value.
+			
+			Initialization of this VFS is not automatic because its
+			registration requires that it lock all resources it
+			will potentially use, even if client code does not want
+			to use them. That, in turn, can lead to locking errors
+			when, for example, one page in a given origin has loaded
+			this VFS but does not use it, then another page in that
+			origin tries to use the VFS. If the VFS were automatically
+			registered, the second page would fail to load the VFS
+			due to OPFS locking errors.
+			
+			If this function is called more than once with a given "name"
+			option (see below), it will return the same Promise. Calls for
+			different names will return different Promises which resolve to
+			independent objects and refer to different VFS registrations.
+			
+			On success, the resulting Promise resolves to a utility object
+			which can be used to query and manipulate the pool. Its API is
+			described at the end of these docs.
+			
+			This function accepts an options object to configure certain
+			parts but it is only acknowledged for the very first call for
+			each distinct name and ignored for all subsequent calls with that
+			same name.
+			
+			The options, in alphabetical order:
+			
+			- `clearOnInit`: (default=false) if truthy, contents and filename
+			mapping are removed from each SAH it is acquired during
+			initialization of the VFS, leaving the VFS's storage in a pristine
+			state. Use this only for databases which need not survive a page
+			reload.
+			
+			- `initialCapacity`: (default=6) Specifies the default capacity of
+			the VFS. This should not be set unduly high because the VFS has
+			to open (and keep open) a file for each entry in the pool. This
+			setting only has an effect when the pool is initially empty. It
+			does not have any effect if a pool already exists.
+			
+			- `directory`: (default="."+`name`) Specifies the OPFS directory
+			name in which to store metadata for the `"opfs-sahpool"`
+			sqlite3_vfs.  Only one instance of this VFS can be installed per
+			JavaScript engine, and any two engines with the same storage
+			directory name will collide with each other, leading to locking
+			errors and the inability to register the VFS in the second and
+			subsequent engine. Using a different directory name for each
+			application enables different engines in the same HTTP origin to
+			co-exist, but their data are invisible to each other. Changing
+			this name will effectively orphan any databases stored under
+			previous names. The default is unspecified but descriptive.  This
+			option may contain multiple path elements, e.g. "foo/bar/baz",
+			and they are created automatically.  In practice there should be
+			no driving need to change this. ACHTUNG: all files in this
+			directory are assumed to be managed by the VFS. Do not place
+			other files in that directory, as they may be deleted or
+			otherwise modified by the VFS.
+			
+			- `name`: (default="opfs-sahpool") sets the name to register this
+			VFS under. Normally this should not be changed, but it is
+			possible to register this VFS under multiple names so long as
+			each has its own separate directory to work from. The storage for
+			each is invisible to all others. The name must be a string
+			compatible with `sqlite3_vfs_register()` and friends and suitable
+			for use in URI-style database file names.
+			
+			Achtung: if a custom `name` is provided, a custom `directory`
+			must also be provided if any other instance is registered with
+			the default directory. If no directory is explicitly provided
+			then a directory name is synthesized from the `name` option.
+			
+			
+			- `forceReinitIfPreviouslyFailed`: (default=`false`) Is a fallback option
+			to assist in working around certain flaky environments which may
+			mysteriously fail to permit access to OPFS sync access handles on
+			an initial attempt but permit it on a second attemp. This option
+			should never be used but is provided for those who choose to
+			throw caution to the wind and trust such environments. If this
+			option is truthy _and_ the previous attempt to initialize this
+			VFS with the same `name` failed, the VFS will attempt to
+			initialize a second time instead of returning the cached
+			failure. See discussion at:
+			<https://github.com/sqlite/sqlite-wasm/issues/79>
+			
+			
+			Peculiarities of this VFS vis a vis other SQLite VFSes:
+			
+			- Paths given to it _must_ be absolute. Relative paths will not
+			be properly recognized. This is arguably a bug but correcting it
+			requires some hoop-jumping in routines which have no business
+			doing such tricks. (2026-01-19 (2.5 years later): the specifics
+			are lost to history, but this was a side effect of xOpen()
+			receiving an immutable C-string filename, to which no implicit
+			"/" can be prefixed without causing a discrepancy between what
+			the user provided and what the VFS stores. Its conceivable that
+			that quirk could be glossed over in xFullPathname(), but
+			regressions when doing so cannot be ruled out, so there are no
+			current plans to change this behavior.)
+			
+			- It is possible to install multiple instances under different
+			names, each sandboxed from one another inside their own private
+			directory.  This feature exists primarily as a way for disparate
+			applications within a given HTTP origin to use this VFS without
+			introducing locking issues between them.
+			
+			
+			The API for the utility object passed on by this function's
+			Promise, in alphabetical order...
+			
+			- [async] number addCapacity(n)
+			
+			Adds `n` entries to the current pool. This change is persistent
+			across sessions so should not be called automatically at each app
+			startup (but see `reserveMinimumCapacity()`). Its returned Promise
+			resolves to the new capacity.  Because this operation is necessarily
+			asynchronous, the C-level VFS API cannot call this on its own as
+			needed.
+			
+			- byteArray exportFile(name)
+			
+			Synchronously reads the contents of the given file into a Uint8Array
+			and returns it. This will throw if the given name is not currently
+			in active use or on I/O error. Note that the given name is _not_
+			visible directly in OPFS (or, if it is, it's not from this VFS).
+			
+			- number getCapacity()
+			
+			Returns the number of files currently contained
+			in the SAH pool. The default capacity is only large enough for one
+			or two databases and their associated temp files.
+			
+			- number getFileCount()
+			
+			Returns the number of files from the pool currently allocated to
+			slots. This is not the same as the files being "opened".
+			
+			- array getFileNames()
+			
+			Returns an array of the names of the files currently allocated to
+			slots. This list is the same length as getFileCount().
+			
+			- void importDb(name, bytes)
+			
+			Imports the contents of an SQLite database, provided as a byte
+			array or ArrayBuffer, under the given name, overwriting any
+			existing content. Throws if the pool has no available file slots,
+			on I/O error, or if the input does not appear to be a
+			database. In the latter case, only a cursory examination is made.
+			Results are undefined if the given db name refers to an opened
+			db.  Note that this routine is _only_ for importing database
+			files, not arbitrary files, the reason being that this VFS will
+			automatically clean up any non-database files so importing them
+			is pointless.
+			
+			If passed a function for its second argument, its behavior
+			changes to asynchronous and it imports its data in chunks fed to
+			it by the given callback function. It calls the callback (which
+			may be async) repeatedly, expecting either a Uint8Array or
+			ArrayBuffer (to denote new input) or undefined (to denote
+			EOF). For so long as the callback continues to return
+			non-undefined, it will append incoming data to the given
+			VFS-hosted database file. The result of the resolved Promise when
+			called this way is the size of the resulting database.
+			
+			On success this routine rewrites the database header bytes in the
+			output file (not the input array) to force disabling of WAL mode.
+			
+			On a write error, the handle is removed from the pool and made
+			available for re-use.
+			
+			- [async] number reduceCapacity(n)
+			
+			Removes up to `n` entries from the pool, with the caveat that it can
+			only remove currently-unused entries. It returns a Promise which
+			resolves to the number of entries actually removed.
+			
+			- [async] boolean removeVfs()
+			
+			Unregisters the opfs-sahpool VFS and removes its directory from OPFS
+			(which means that _all client content_ is removed). After calling
+			this, the VFS may no longer be used and there is no way to re-add it
+			aside from reloading the current JavaScript context.
+			
+			Results are undefined if a database is currently in use with this
+			VFS.
+			
+			The returned Promise resolves to true if it performed the removal
+			and false if the VFS was not installed.
+			
+			If the VFS has a multi-level directory, e.g. "/foo/bar/baz", _only_
+			the bottom-most directory is removed because this VFS cannot know for
+			certain whether the higher-level directories contain data which
+			should be removed.
+			
+			- [async] number reserveMinimumCapacity(min)
+			
+			If the current capacity is less than `min`, the capacity is
+			increased to `min`, else this returns with no side effects. The
+			resulting Promise resolves to the new capacity.
+			
+			- boolean unlink(filename)
+			
+			If a virtual file exists with the given name, disassociates it from
+			the pool and returns true, else returns false without side
+			effects. Results are undefined if the file is currently in active
+			use.
+			
+			- string vfsName
+			
+			The SQLite VFS name under which this pool's VFS is registered.
+			
+			- [async] void wipeFiles()
+			
+			Clears all client-defined state of all SAHs and makes all of them
+			available for re-use by the pool. Results are undefined if any such
+			handles are currently in use, e.g. by an sqlite3 db.
+			
+			APIs specific to the "pause" capability (added in version 3.49):
+			
+			Summary: "pausing" the VFS disassociates it from SQLite and
+			relinquishes its SAHs so that they may be opened by another
+			instance of this VFS (running in a separate tab/page or Worker).
+			"Unpausing" it takes back control, if able.
+			
+			- pauseVfs()
+			
+			"Pauses" this VFS by unregistering it from SQLite and
+			relinquishing all open SAHs, leaving the associated files intact.
+			This enables pages/tabs to coordinate semi-concurrent usage of
+			this VFS.  If this object is already paused, this is a
+			no-op. Returns this object. Throws if SQLite has any opened file
+			handles hosted by this VFS. If this function throws due to open
+			file handles then it has no side effects. If the OPFS API throws
+			while closing handles then the VFS is left in an undefined state.
+			
+			- isPaused()
+			
+			Returns true if this VFS is paused, else false.
+			
+			- [async] unpauseVfs()
+			
+			Restores the VFS to an active state after having called
+			pauseVfs() on it.  This is a no-op if the VFS is not paused. The
+			returned Promise resolves to this object on success. A rejected
+			Promise means there was a problem reacquiring the SAH handles
+			(possibly because they're in use by another instance or have
+			since been removed). Generically speaking, there is no recovery
+			strategy for that type of error, but if the problem is simply
+			that the OPFS files are locked, then a later attempt to unpause
+			it, made after the concurrent instance releases the SAHs, may
+			recover from the situation.
+			*/
 			sqlite3.installOpfsSAHPoolVfs = async function(options = Object.create(null)) {
 				options = Object.assign(Object.create(null), optionDefaults, options || {});
 				const vfsName = options.name;
@@ -10427,10 +16915,26 @@ async function sqlite3InitModule(moduleArg = {}) {
 					else throw e;
 				}
 				if (!globalThis.FileSystemHandle || !globalThis.FileSystemDirectoryHandle || !globalThis.FileSystemFileHandle || !globalThis.FileSystemFileHandle.prototype.createSyncAccessHandle || !navigator?.storage?.getDirectory) return initPromises[vfsName] = Promise.reject(/* @__PURE__ */ new Error("Missing required OPFS APIs."));
+				/**
+				Maintenance reminder: the order of ASYNC ops in this function
+				is significant. We need to have them all chained at the very
+				end in order to be able to catch a race condition where
+				installOpfsSAHPoolVfs() is called twice in rapid succession,
+				e.g.:
+				
+				installOpfsSAHPoolVfs().then(console.warn.bind(console));
+				installOpfsSAHPoolVfs().then(console.warn.bind(console));
+				
+				If the timing of the async calls is not "just right" then that
+				second call can end up triggering the init a second time and chaos
+				ensues.
+				*/
 				return initPromises[vfsName] = apiVersionCheck().then(async function() {
 					if (options.$testThrowPhase2) throw options.$testThrowPhase2;
 					const thePool = new OpfsSAHPool(options);
 					return thePool.isReady.then(async () => {
+						/** The poolUtil object will be the result of the
+						resolved Promise. */
 						const poolUtil = new OpfsSAHPoolUtil(thePool);
 						if (sqlite3.oo1) {
 							const oo1 = sqlite3.oo1;
@@ -10449,17 +16953,101 @@ async function sqlite3InitModule(moduleArg = {}) {
 						await thePool.removeVfs().catch(() => {});
 						throw e;
 					});
-				}).catch((err$1) => {
-					return initPromises[vfsName] = Promise.reject(err$1);
+				}).catch((err) => {
+					return initPromises[vfsName] = Promise.reject(err);
 				});
 			};
 		});
+		globalThis.sqlite3ApiBootstrap.initializers.push(function(sqlite3) {
+			if (!sqlite3.opfs || sqlite3.config.disable?.vfs?.["opfs-wl"]) return;
+			const util = sqlite3.util;
+			sqlite3.util.toss;
+			const opfsUtil = sqlite3.opfs;
+			const vfsName = "opfs-wl";
+			/**
+			installOpfsWlVfs() returns a Promise which, on success, installs an
+			sqlite3_vfs named "opfs-wl", suitable for use with all sqlite3 APIs
+			which accept a VFS. It is intended to be called via
+			sqlite3ApiBootstrap.initializers or an equivalent mechanism.
+			
+			This VFS is essentially identical to the "opfs" VFS but uses
+			WebLocks for its xLock() and xUnlock() implementations.
+			
+			Quirks specific to this VFS:
+			
+			- The (officially undocumented) 'opfs-wl-disable' URL
+			argument will disable OPFS, making this function a no-op.
+			
+			Aside from locking differences in the VFSes, this function
+			otherwise behaves the same as
+			sqlite3-vfs-opfs.c-pp.js:installOpfsVfs().
+			*/
+			const installOpfsWlVfs = async function(options) {
+				options = opfsUtil.initOptions(vfsName, options);
+				if (!options) return sqlite3;
+				sqlite3.capi;
+				const opfsVfs = opfsUtil.createVfsState().vfs;
+				opfsVfs.metrics.counters;
+				const mTimeStart = opfsVfs.mTimeStart, mTimeEnd = opfsVfs.mTimeEnd, opRun = opfsVfs.opRun, __openFiles = opfsVfs.__openFiles;
+				return opfsVfs.bindVfs(util.nu({
+					xLock: function(pFile, lockType) {
+						mTimeStart("xLock");
+						const f = __openFiles[pFile];
+						const rc = opRun("xLock", pFile, lockType);
+						if (!rc) f.lockType = lockType;
+						mTimeEnd();
+						return rc;
+					},
+					xUnlock: function(pFile, lockType) {
+						mTimeStart("xUnlock");
+						const f = __openFiles[pFile];
+						const rc = opRun("xUnlock", pFile, lockType);
+						if (!rc) f.lockType = lockType;
+						mTimeEnd();
+						return rc;
+					}
+				}), function(sqlite3, vfs) {
+					if (sqlite3.oo1) {
+						const OpfsWlDb = function(...args) {
+							const opt = sqlite3.oo1.DB.dbCtorHelper.normalizeArgs(...args);
+							opt.vfs = vfs.$zName;
+							sqlite3.oo1.DB.dbCtorHelper.call(this, opt);
+						};
+						OpfsWlDb.prototype = Object.create(sqlite3.oo1.DB.prototype);
+						sqlite3.oo1.OpfsWlDb = OpfsWlDb;
+						OpfsWlDb.importDb = opfsUtil.importDb;
+					}
+				});
+			};
+			globalThis.sqlite3ApiBootstrap.initializersAsync.push(async (sqlite3) => {
+				return installOpfsWlVfs().catch((e) => {
+					sqlite3.config.warn("Ignoring inability to install the", vfsName, "sqlite3_vfs:", e);
+				});
+			});
+		});
 		try {
-			const bootstrapConfig = Object.assign(Object.create(null), {
-				memory: "undefined" !== typeof wasmMemory ? wasmMemory : EmscriptenModule["wasmMemory"],
-				exports: "undefined" !== typeof wasmExports ? wasmExports : Object.prototype.hasOwnProperty.call(EmscriptenModule, "wasmExports") ? EmscriptenModule["wasmExports"] : EmscriptenModule["asm"]
-			}, globalThis.sqlite3ApiBootstrap.defaultConfig, globalThis.sqlite3ApiConfig || {});
+			const bootstrapConfig = Object.assign(
+				Object.create(null),
+				/** The WASM-environment-dependent configuration for sqlite3ApiBootstrap() */
+				{
+					memory: "undefined" !== typeof wasmMemory ? wasmMemory : EmscriptenModule["wasmMemory"],
+					exports: "undefined" !== typeof wasmExports ? wasmExports : Object.prototype.hasOwnProperty.call(EmscriptenModule, "wasmExports") ? EmscriptenModule["wasmExports"] : EmscriptenModule["asm"]
+				},
+				globalThis.sqlite3ApiBootstrap.defaultConfig,
+				globalThis.sqlite3ApiConfig || {}
+			);
 			sqlite3InitScriptInfo.debugModule("Bootstrapping lib config", bootstrapConfig);
+			/**
+			For purposes of the Emscripten build, call sqlite3ApiBootstrap().
+			Ideally clients should be able to inject their own config here,
+			but that's not practical in this particular build constellation
+			because of the order everything happens in.  Clients may either
+			define globalThis.sqlite3ApiConfig or modify
+			globalThis.sqlite3ApiBootstrap.defaultConfig to tweak the default
+			configuration used by a no-args call to sqlite3ApiBootstrap(),
+			but must have first loaded their WASM module in order to be able
+			to provide the necessary configuration state.
+			*/
 			const p = globalThis.sqlite3ApiBootstrap(bootstrapConfig);
 			delete globalThis.sqlite3ApiBootstrap;
 			return p;
@@ -10475,9 +17063,27 @@ async function sqlite3InitModule(moduleArg = {}) {
 	});
 	return moduleRtn;
 }
-sqlite3InitModule = (function() {
-	const originalInit = sqlite3InitModule;
+sqlite3InitModule$1 = (function() {
+	/**
+	In order to hide the sqlite3InitModule()'s resulting
+	Emscripten module from downstream clients (and simplify our
+	documentation by being able to elide those details), we hide that
+	function and expose a hand-written sqlite3InitModule() to return
+	the sqlite3 object (most of the time).
+	*/
+	const originalInit = sqlite3InitModule$1;
 	if (!originalInit) throw new Error("Expecting sqlite3InitModule to be defined by the Emscripten build.");
+	/**
+	We need to add some state which our custom Module.locateFile()
+	can see, but an Emscripten limitation currently prevents us from
+	attaching it to the sqlite3InitModule function object:
+	
+	https://github.com/emscripten-core/emscripten/issues/18071
+	
+	The only(?) current workaround is to temporarily stash this state
+	into the global scope and delete it when sqlite3InitModule()
+	is called.
+	*/
 	const sIMS = globalThis.sqlite3InitModuleState = Object.assign(Object.create(null), {
 		moduleScript: globalThis?.document?.currentScript,
 		isWorker: "undefined" !== typeof WorkerGlobalScope,
@@ -10515,7 +17121,122 @@ sqlite3InitModule = (function() {
 	sIMS.debugModule("extern-post-js.c-pp.js sqlite3InitModuleState =", sIMS);
 	return sIM;
 })();
-var sqlite3_bundler_friendly_default = sqlite3InitModule;
+var sqlite3_bundler_friendly_default = sqlite3InitModule$1;
+//#endregion
+//#region src/bin/sqlite3-worker1-promiser.mjs
+/**
+Configures an sqlite3 Worker API #1 Worker such that it can be
+manipulated via a Promise-based interface and returns a factory
+function which returns Promises for communicating with the worker.
+This proxy has an _almost_ identical interface to the normal
+worker API, with any exceptions documented below.
+
+It requires a configuration object with the following properties:
+
+- `worker` (required): a Worker instance which loads
+`sqlite3-worker1.js` or a functional equivalent. Note that the
+promiser factory replaces the worker.onmessage property. This
+config option may alternately be a function, in which case this
+function re-assigns this property with the result of calling that
+function, enabling delayed instantiation of a Worker.
+
+- `onready` (optional, but...): this callback is called with no
+arguments when the worker fires its initial
+'sqlite3-api'/'worker1-ready' message, which it does when
+sqlite3.initWorker1API() completes its initialization. This is the
+simplest way to tell the worker to kick off work at the earliest
+opportunity, and the only way to know when the worker module has
+completed loading. The irony of using a callback for this, instead
+of returning a promise from sqlite3Worker1Promiser() is not lost on
+the developers: see sqlite3Worker1Promiser.v2() which uses a
+Promise instead.
+
+- `onunhandled` (optional): a callback which gets passed the
+message event object for any worker.onmessage() events which
+are not handled by this proxy. Ideally that "should" never
+happen, as this proxy aims to handle all known message types.
+
+- `generateMessageId` (optional): a function which, when passed an
+about-to-be-posted message object, generates a _unique_ message ID
+for the message, which this API then assigns as the messageId
+property of the message. It _must_ generate unique IDs on each call
+so that dispatching can work. If not defined, a default generator
+is used (which should be sufficient for most or all cases).
+
+- `debug` (optional): a console.debug()-style function for logging
+information about messages.
+
+This function returns a stateful factory function with the
+following interfaces:
+
+- Promise function(messageType, messageArgs)
+- Promise function({message object})
+
+The first form expects the "type" and "args" values for a Worker
+message. The second expects an object in the form {type:...,
+args:...}  plus any other properties the client cares to set. This
+function will always set the `messageId` property on the object,
+even if it's already set, and will set the `dbId` property to the
+current database ID if it is _not_ set in the message object.
+
+The function throws on error.
+
+The function installs a temporary message listener, posts a
+message to the configured Worker, and handles the message's
+response via the temporary message listener. The then() callback
+of the returned Promise is passed the `message.data` property from
+the resulting message, i.e. the payload from the worker, stripped
+of the lower-level event state which the onmessage() handler
+receives.
+
+Example usage:
+
+```
+const config = {...};
+const sq3Promiser = sqlite3Worker1Promiser(config);
+sq3Promiser('open', {filename:"/foo.db"}).then(function(msg){
+console.log("open response",msg); // => {type:'open', result: {filename:'/foo.db'}, ...}
+});
+sq3Promiser({type:'close'}).then((msg)=>{
+console.log("close response",msg); // => {type:'close', result: {filename:'/foo.db'}, ...}
+});
+```
+
+Differences from Worker API #1:
+
+- exec's {callback: STRING} option does not work via this
+interface (it triggers an exception), but {callback: function}
+does and works exactly like the STRING form does in the Worker:
+the callback is called one time for each row of the result set,
+passed the same worker message format as the worker API emits:
+
+{
+type:typeString,
+row:VALUE,
+rowNumber:1-based-#,
+columnNames: array
+}
+
+Where `typeString` is an internally-synthesized message type string
+used temporarily for worker message dispatching. It can be ignored
+by all client code except that which tests this API. The `row`
+property contains the row result in the form implied by the
+`rowMode` option (defaulting to `'array'`). The `rowNumber` is a
+1-based integer value incremented by 1 on each call into the
+callback.
+
+At the end of the result set, the same event is fired with
+(row=undefined, rowNumber=null) to indicate that the end of the
+result set has been reached. The rows arrive via worker-posted
+messages, with all the implications of that.
+
+Notable shortcomings:
+
+- "v1" of this this API is not suitable for use as an ESM module
+because ESM worker modules were not widely supported when it was
+developed. For use as an ESM module, see the "v2" interface later
+on in this file.
+*/
 globalThis.sqlite3Worker1Promiser = function callee(config = callee.defaultConfig) {
 	if (1 === arguments.length && "function" === typeof arguments[0]) {
 		const f = config;
@@ -10563,10 +17284,7 @@ globalThis.sqlite3Worker1Promiser = function callee(config = callee.defaultConfi
 			case "open":
 				if (!dbId) dbId = ev.dbId;
 				break;
-			case "close":
-				if (ev.dbId === dbId) dbId = void 0;
-				break;
-			default: break;
+			case "close": if (ev.dbId === dbId) dbId = void 0;
 		}
 		try {
 			msgHandler.resolve(ev);
@@ -10614,6 +17332,18 @@ globalThis.sqlite3Worker1Promiser.defaultConfig = {
 	},
 	onerror: (...args) => console.error("sqlite3Worker1Promiser():", ...args)
 };
+/**
+sqlite3Worker1Promiser.v2(), added in 3.46, works identically to
+sqlite3Worker1Promiser() except that it returns a Promise instead
+of relying an an onready callback in the config object. The Promise
+resolves to the same factory function which
+sqlite3Worker1Promiser() returns.
+
+If config is-a function or is an object which contains an onready
+function, that function is replaced by a proxy which will resolve
+after calling the original function and will reject if that
+function throws.
+*/
 globalThis.sqlite3Worker1Promiser.v2 = function callee(config = callee.defaultConfig) {
 	let oldFunc;
 	if ("function" == typeof config) {
@@ -10644,7 +17374,19 @@ globalThis.sqlite3Worker1Promiser.v2 = function callee(config = callee.defaultCo
 	return p;
 }.bind({ original: sqlite3Worker1Promiser });
 globalThis.sqlite3Worker1Promiser.v2.defaultConfig = globalThis.sqlite3Worker1Promiser.defaultConfig;
+/**
+When built as a module, we export sqlite3Worker1Promiser.v2()
+instead of sqlite3Worker1Promise() because (A) its interface is more
+conventional for ESM usage and (B) the ESM export option for this
+API did not exist until v2 was created, so there's no backwards
+incompatibility.
+*/
 var sqlite3_worker1_promiser_default = sqlite3Worker1Promiser.v2;
 delete globalThis.sqlite3Worker1Promiser;
-var src_default = sqlite3_bundler_friendly_default;
-export { src_default as default, sqlite3_worker1_promiser_default as sqlite3Worker1Promiser };
+//#endregion
+//#region src/browser.ts
+/** @deprecated Sqlite3Worker1Promiser is deprecated as of 2026-04-15. */
+const sqlite3Worker1Promiser$1 = sqlite3_worker1_promiser_default;
+const sqlite3InitModule = sqlite3_bundler_friendly_default;
+//#endregion
+export { sqlite3InitModule as default, sqlite3Worker1Promiser$1 as sqlite3Worker1Promiser };

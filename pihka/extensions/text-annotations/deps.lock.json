@@ -1,0 +1,28 @@
+{
+    "version": 1,
+    "manifestHash": "ab8db588ac3ee8db58af32f1e0c32cc54b9cb427f283e49291b9297875bc4d39",
+    "patchesHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "packages": {
+        "@ghentcdh/annotated-text": {
+            "version": "1.1.1",
+            "files": {
+                "index.js": {
+                    "sourceSha256": "805f7ad39b9ce2d2f3a37ce7232960c946fbe01bdbf9f9f5c7635ad48ce1de3e",
+                    "sha256": "805f7ad39b9ce2d2f3a37ce7232960c946fbe01bdbf9f9f5c7635ad48ce1de3e"
+                },
+                "index.css": {
+                    "sourceSha256": "2b975073a206bcc3a7e815962384cc2ba801ef6f3b5bf6588b484dcc21256d24",
+                    "sha256": "2b975073a206bcc3a7e815962384cc2ba801ef6f3b5bf6588b484dcc21256d24"
+                },
+                "package.json": {
+                    "sourceSha256": "af3da4b68c8c986a5767878ffbf31d79cac98d140e742145ca0de5d040a4b9d6",
+                    "sha256": "af3da4b68c8c986a5767878ffbf31d79cac98d140e742145ca0de5d040a4b9d6"
+                },
+                "LICENCE": {
+                    "sourceSha256": "30e5da051ce31bd46e9f420c74c05e3328c2bf6ebbbdc90e469521034f349493",
+                    "sha256": "30e5da051ce31bd46e9f420c74c05e3328c2bf6ebbbdc90e469521034f349493"
+                }
+            }
+        }
+    }
+}

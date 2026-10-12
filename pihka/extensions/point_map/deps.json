@@ -1,5 +1,29 @@
 {
-    "maplibre-gl": { "version": "^5.19.0", "include": ["LICENSE.txt"] },
-    "pmtiles": { "version": "^4.3.0", "include": ["README.md"] },
-    "fflate": { "version": "^0.8.2", "include": ["LICENSE"] }
+    "maplibre-gl": {
+        "version": "^6.14.0",
+        "files": [
+            "dist/maplibre-gl.mjs",
+            "dist/maplibre-gl-worker.mjs",
+            "dist/maplibre-gl-shared.mjs",
+            "dist/maplibre-gl.css",
+            "LICENSE.txt",
+            "package.json"
+        ]
+    },
+    "pmtiles": {
+        "version": "^4.5.0",
+        "files": [
+            "dist/esm/index.js",
+            "README.md",
+            "package.json"
+        ]
+    },
+    "fflate": {
+        "version": "^0.8.3",
+        "files": [
+            "esm/browser.js",
+            "LICENSE",
+            "package.json"
+        ]
+    }
 }

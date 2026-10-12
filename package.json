@@ -17,7 +17,11 @@
     "download-world-pmtiles": "node scripts/download-world-pmtiles.js",
     "download-covers": "node scripts/download-covers.js",
     "download-full-text": "node scripts/download-full-text.js",
-    "vendorize": "node scripts/vendorize-deps.js"
+    "vendorize": "node scripts/vendorize-deps.js",
+    "test:engine": "node --test tests/engine/*.test.js tests/architecture/*.test.js",
+    "test:browser": "node scripts/test-browser-server.js",
+    "test:scripts": "node --test tests/scripts/*.test.js",
+    "vendorize:check": "node scripts/vendorize-deps.js --check"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
@@ -29,7 +33,7 @@
     "prettier": "^3.4.2"
   },
   "dependencies": {
-    "@sqlite.org/sqlite-wasm": "^3.51.2-build4",
-    "preact": "^10.28.3"
+    "@sqlite.org/sqlite-wasm": "^3.53.4-build2",
+    "preact": "^11.0.1"
   }
 }

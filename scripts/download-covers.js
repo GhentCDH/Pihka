@@ -20,9 +20,10 @@
  * skipped (and count toward the cap so re-runs stay bounded).
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { atomicWrite } from './lib/atomic-files.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, 'data');
@@ -109,7 +110,7 @@ async function main() {
       continue;
     }
 
-    writeFileSync(outPath, buffer);
+    await atomicWrite(outPath, buffer);
     saved++;
     console.log(`✓  ${author} — ${work.title}  (cover ${coverId}, ${buffer.length} bytes)`);
     await sleep(THROTTLE_MS);

@@ -1,0 +1,27 @@
+{
+    "@sqlite.org/sqlite-wasm": {
+        "version": "^3.53.4-build2",
+        "files": [
+            "dist/index.mjs",
+            "dist/sqlite3.wasm",
+            "dist/sqlite3-opfs-async-proxy.js",
+            "package.json"
+        ],
+        "imports": {
+            "@sqlite.org/sqlite-wasm": "dist/index.mjs"
+        }
+    },
+    "preact": {
+        "version": "^11.0.1",
+        "files": [
+            "dist/preact.mjs",
+            "hooks/dist/hooks.mjs",
+            "package.json",
+            "LICENSE"
+        ],
+        "imports": {
+            "preact": "dist/preact.mjs",
+            "preact/hooks": "hooks/dist/hooks.mjs"
+        }
+    }
+}

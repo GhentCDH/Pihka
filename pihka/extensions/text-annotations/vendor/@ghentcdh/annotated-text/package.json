@@ -6,7 +6,11 @@
     "url": "https://github.com/GhentCDH/annotated-text",
     "directory": "libs/core"
   },
-  "version": "1.0.10",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
+  },
+  "version": "1.1.1",
   "type": "module",
   "main": "./index.cjs",
   "module": "./index.js",
@@ -34,6 +38,6 @@
     "d3": "7.9.0",
     "lodash-es": "^4.17.21",
     "memoizee": "^0.4.17",
-    "tokenizr": "1.7.0"
+    "tokenizr": "2.2.1"
   }
 }

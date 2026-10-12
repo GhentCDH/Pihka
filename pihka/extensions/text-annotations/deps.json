@@ -1,3 +1,11 @@
 {
-    "@ghentcdh/annotated-text": { "version": "^1.0.10" }
+    "@ghentcdh/annotated-text": {
+        "version": "^1.1.1",
+        "files": [
+            "index.js",
+            "index.css",
+            "package.json",
+            "LICENCE"
+        ]
+    }
 }

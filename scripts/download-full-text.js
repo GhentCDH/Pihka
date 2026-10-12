@@ -18,9 +18,10 @@
  * skipped. Stops after MAX_TEXTS successful downloads to bound repo size.
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
+import { readFileSync, mkdirSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { atomicWrite } from './lib/atomic-files.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(__dirname, 'data');
@@ -182,7 +183,7 @@ async function main() {
       continue;
     }
 
-    writeFileSync(
+    await atomicWrite(
       outPath,
       JSON.stringify(
         {

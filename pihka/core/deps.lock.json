@@ -1,0 +1,49 @@
+{
+    "version": 1,
+    "manifestHash": "87bdd029cd98ea22b74a058b9decc2ebf3f79e5b04909bb1c250f6a6627cd1d4",
+    "patchesHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+    "packages": {
+        "@sqlite.org/sqlite-wasm": {
+            "version": "3.53.4-build2",
+            "files": {
+                "dist/index.mjs": {
+                    "sourceSha256": "a6d3fe46aa3f924e7686329f97b0564549ef1f787e0c19924179aef7f72bcc01",
+                    "sha256": "a6d3fe46aa3f924e7686329f97b0564549ef1f787e0c19924179aef7f72bcc01"
+                },
+                "dist/sqlite3.wasm": {
+                    "sourceSha256": "2ee8f3dab694532afc8840e07703127287662d08b74e6ff50491ce63f00d5752",
+                    "sha256": "2ee8f3dab694532afc8840e07703127287662d08b74e6ff50491ce63f00d5752"
+                },
+                "dist/sqlite3-opfs-async-proxy.js": {
+                    "sourceSha256": "9f1970e05ee07a79332498858740b705eeb1dcee03bc150f6f690bc0fb5f0a06",
+                    "sha256": "9f1970e05ee07a79332498858740b705eeb1dcee03bc150f6f690bc0fb5f0a06"
+                },
+                "package.json": {
+                    "sourceSha256": "87d3c9f70a8fec09a199c7eafd38ef0666c4a0cdeb1e1fce5432e5f86901b713",
+                    "sha256": "87d3c9f70a8fec09a199c7eafd38ef0666c4a0cdeb1e1fce5432e5f86901b713"
+                }
+            }
+        },
+        "preact": {
+            "version": "11.0.1",
+            "files": {
+                "dist/preact.mjs": {
+                    "sourceSha256": "3a3201e9ccef7d30ef1273427f1b17ef8323e464b2c8d73b4fd5636af730433e",
+                    "sha256": "3a3201e9ccef7d30ef1273427f1b17ef8323e464b2c8d73b4fd5636af730433e"
+                },
+                "hooks/dist/hooks.mjs": {
+                    "sourceSha256": "6cb79fe9959ad185b8b86134aff47c12fd20216b24837597b19be59a133d9947",
+                    "sha256": "6cb79fe9959ad185b8b86134aff47c12fd20216b24837597b19be59a133d9947"
+                },
+                "package.json": {
+                    "sourceSha256": "5e80731d872459682f9c6168447a59e7b712d1b0d6626da3af2521535b965d4e",
+                    "sha256": "5e80731d872459682f9c6168447a59e7b712d1b0d6626da3af2521535b965d4e"
+                },
+                "LICENSE": {
+                    "sourceSha256": "1fe6958409c8c257a70c587a18b6f7f412b179b456630790d30b2ec9a8e4b7d4",
+                    "sha256": "1fe6958409c8c257a70c587a18b6f7f412b179b456630790d30b2ec9a8e4b7d4"
+                }
+            }
+        }
+    }
+}

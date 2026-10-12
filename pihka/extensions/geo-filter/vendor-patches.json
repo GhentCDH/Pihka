@@ -1,0 +1,8 @@
+{
+    "pmtiles/dist/esm/index.js": [
+        [
+            "from\"fflate\"",
+            "from\"../../../fflate/esm/browser.js\""
+        ]
+    ]
+}

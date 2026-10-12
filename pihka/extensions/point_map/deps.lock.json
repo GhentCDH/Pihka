@@ -1,0 +1,70 @@
+{
+    "version": 1,
+    "manifestHash": "3eb6913cdad11e97d0465c62056bbce06ced1bbf75f4485557ecb61b08026e4b",
+    "patchesHash": "f6b7e6cfe52a5ea0183e37b72a0332be962548962b2e1baba73138735d8ad5ec",
+    "packages": {
+        "maplibre-gl": {
+            "version": "6.14.0",
+            "files": {
+                "dist/maplibre-gl.mjs": {
+                    "sourceSha256": "244d36122c1398da3a8259817cc6d71e04321afe6404f32606b4b6c6cc4f26fb",
+                    "sha256": "244d36122c1398da3a8259817cc6d71e04321afe6404f32606b4b6c6cc4f26fb"
+                },
+                "dist/maplibre-gl-worker.mjs": {
+                    "sourceSha256": "5f1e2f0e1624082b7e88a06e4c86085992b0f8c02929801e552f3f7a119856a9",
+                    "sha256": "5f1e2f0e1624082b7e88a06e4c86085992b0f8c02929801e552f3f7a119856a9"
+                },
+                "dist/maplibre-gl-shared.mjs": {
+                    "sourceSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                "dist/maplibre-gl.css": {
+                    "sourceSha256": "bacba6a85a867fcf602f2ff88331b8acf7edf3fbd063a519888cfbff39970193",
+                    "sha256": "bacba6a85a867fcf602f2ff88331b8acf7edf3fbd063a519888cfbff39970193"
+                },
+                "LICENSE.txt": {
+                    "sourceSha256": "ee5fc05a0677eaf69601d2c7db0d9ecd6cc27c3abc1d0733bc9ed34707cf8ef2",
+                    "sha256": "ee5fc05a0677eaf69601d2c7db0d9ecd6cc27c3abc1d0733bc9ed34707cf8ef2"
+                },
+                "package.json": {
+                    "sourceSha256": "7ede76f4070a3a304386c7db80189273931fa415ca481c255ca452d6c2bedb8c",
+                    "sha256": "7ede76f4070a3a304386c7db80189273931fa415ca481c255ca452d6c2bedb8c"
+                }
+            }
+        },
+        "pmtiles": {
+            "version": "4.5.0",
+            "files": {
+                "dist/esm/index.js": {
+                    "sourceSha256": "751d3f5250d565db7f9ee6bf5ba58ba471cac586cce88f0e3a3834da407f402b",
+                    "sha256": "36abfd7fbc04efc0044fe12f2c2d4a05d89638aadf66b73285054a7294e31ed7"
+                },
+                "README.md": {
+                    "sourceSha256": "7dca35b3f6f9b667cced742cb4d49126989906265deda33771140cad80d5c0cd",
+                    "sha256": "7dca35b3f6f9b667cced742cb4d49126989906265deda33771140cad80d5c0cd"
+                },
+                "package.json": {
+                    "sourceSha256": "5c1f63156b0f76dcda943273176ebbd77ebef73b138602c53ddba22e06c708e4",
+                    "sha256": "5c1f63156b0f76dcda943273176ebbd77ebef73b138602c53ddba22e06c708e4"
+                }
+            }
+        },
+        "fflate": {
+            "version": "0.8.3",
+            "files": {
+                "esm/browser.js": {
+                    "sourceSha256": "b7ca4450b19559a1d50eb381adcee94b82449674be4cd17789d9beba7e6122a1",
+                    "sha256": "b7ca4450b19559a1d50eb381adcee94b82449674be4cd17789d9beba7e6122a1"
+                },
+                "LICENSE": {
+                    "sourceSha256": "0a1df3a083d0c010560aa342e87959c8c1070e6fd54545741f083f22d0c8b551",
+                    "sha256": "0a1df3a083d0c010560aa342e87959c8c1070e6fd54545741f083f22d0c8b551"
+                },
+                "package.json": {
+                    "sourceSha256": "5922d8150b307bc0e4e441491c779c45379e9913d348848fca8d5cf02db4d134",
+                    "sha256": "5922d8150b307bc0e4e441491c779c45379e9913d348848fca8d5cf02db4d134"
+                }
+            }
+        }
+    }
+}

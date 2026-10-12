@@ -7,11 +7,11 @@ import { readFileSync, statSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
-import { readMetadata } from '../pihka/core/js/utilities-data/datasource.js';
-import { applyTableConfig } from '../pihka/core/js/utilities-data/table-config.js';
-import { createPerspectiveViews } from '../pihka/core/js/utilities-data/perspective-views.js';
-import { fts5Plugin } from '../pihka/core/js/utilities-data/enrichment/fts5.js';
-import { quoteIdentifier } from '../pihka/core/js/utilities-data/enrichment/sql-utils.js';
+import { readMetadata } from '../pihka/core/engine/metadata.js';
+import { normalizeEngineConfig } from '../pihka/bootstrap.js';
+import { createPerspectiveViews } from '../pihka/core/engine/perspective-views.js';
+import { fts5Plugin } from '../pihka/core/engine/enrichment/fts5.js';
+import { quoteIdentifier } from '../pihka/core/engine/enrichment/sql-utils.js';
 
 const samplePath = fileURLToPath(new URL('../pihka/app/database/sample.db', import.meta.url));
 const configPath = fileURLToPath(new URL('../pihka/app/config.json', import.meta.url));
@@ -42,7 +42,12 @@ export async function prepareSampleDatabase(databasePath = samplePath, config = 
       await createPerspectiveViews(ds, config);
       if (failures.length) throw failures[0];
       const meta = await readMetadata(ds);
-      applyTableConfig(meta, config);
+      for (const [table, columns] of Object.entries(normalizeEngineConfig(config).columns)) {
+        for (const [name, hints] of Object.entries(columns)) {
+          const column = meta.tables[table]?.columns.find(col => col.name === name);
+          if (column) Object.assign(column, hints);
+        }
+      }
       if (config.enrichment?.fts !== false) {
         await fts5Plugin(ds, meta, config);
         if (failures.length) throw failures[0];

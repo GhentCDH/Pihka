@@ -1,0 +1,70 @@
+{
+    "version": 1,
+    "manifestHash": "54e171bd26c53cfefe885e1a60d18b2f1ece1218624b62d59e4c0db758f33517",
+    "patchesHash": "fa831567a94b06dc85741affc94d8224a075c235d0d4f4e758eac0923bc0dbbd",
+    "packages": {
+        "sqlite-wasm-http": {
+            "version": "1.2.0",
+            "files": {
+                "dist/vfs-sync-http.js": {
+                    "sourceSha256": "663457fe6ab955f9332adb9f00309b5585ed628e7e67ba410df0bcf42401d063",
+                    "sha256": "c6330b2bc442d0f2a69ebbb050e6b18f6ee7213228cc880366e701ed08a4e41b"
+                },
+                "dist/vfs-http-types.js": {
+                    "sourceSha256": "bac2e39647b88bbdc471bd17147d1ce582bb61721bbeb206a1b88c8db11aa82d",
+                    "sha256": "bac2e39647b88bbdc471bd17147d1ce582bb61721bbeb206a1b88c8db11aa82d"
+                },
+                "dist/endianness.js": {
+                    "sourceSha256": "add831dd8821a4ab55b564211207eaf76e57eb24c65b10fe15dea779a24e309e",
+                    "sha256": "add831dd8821a4ab55b564211207eaf76e57eb24c65b10fe15dea779a24e309e"
+                },
+                "LICENSE": {
+                    "sourceSha256": "90d7bc2b461ef82eb6a90309554c1f99458503470d0d38148707a64e1ff6eff1",
+                    "sha256": "90d7bc2b461ef82eb6a90309554c1f99458503470d0d38148707a64e1ff6eff1"
+                },
+                "package.json": {
+                    "sourceSha256": "99ed70bf004d3ed0a22c651ff6814090879171d33994bd1f0c95b5a547db720f",
+                    "sha256": "99ed70bf004d3ed0a22c651ff6814090879171d33994bd1f0c95b5a547db720f"
+                }
+            }
+        },
+        "lru-cache": {
+            "version": "7.18.3",
+            "files": {
+                "index.mjs": {
+                    "sourceSha256": "8794030e0a4e683b50c5707adc710010f4042b893af8c88bc065ffbb5910e053",
+                    "sha256": "8794030e0a4e683b50c5707adc710010f4042b893af8c88bc065ffbb5910e053"
+                },
+                "LICENSE": {
+                    "sourceSha256": "451ec07eeb9c4e1b86de9abdaa426462a8be48f887ec7421cf0bbb9c769555ab",
+                    "sha256": "451ec07eeb9c4e1b86de9abdaa426462a8be48f887ec7421cf0bbb9c769555ab"
+                },
+                "package.json": {
+                    "sourceSha256": "08bdb4e1fe6f5bfbdc0183d3ad6086dc22cade3ce0d6466c6116584387ad9550",
+                    "sha256": "08bdb4e1fe6f5bfbdc0183d3ad6086dc22cade3ce0d6466c6116584387ad9550"
+                }
+            }
+        },
+        "@sqlite.org/sqlite-wasm": {
+            "version": "3.53.4-build2",
+            "files": {
+                "dist/index.mjs": {
+                    "sourceSha256": "a6d3fe46aa3f924e7686329f97b0564549ef1f787e0c19924179aef7f72bcc01",
+                    "sha256": "a6d3fe46aa3f924e7686329f97b0564549ef1f787e0c19924179aef7f72bcc01"
+                },
+                "dist/sqlite3.wasm": {
+                    "sourceSha256": "2ee8f3dab694532afc8840e07703127287662d08b74e6ff50491ce63f00d5752",
+                    "sha256": "2ee8f3dab694532afc8840e07703127287662d08b74e6ff50491ce63f00d5752"
+                },
+                "dist/sqlite3-opfs-async-proxy.js": {
+                    "sourceSha256": "9f1970e05ee07a79332498858740b705eeb1dcee03bc150f6f690bc0fb5f0a06",
+                    "sha256": "9f1970e05ee07a79332498858740b705eeb1dcee03bc150f6f690bc0fb5f0a06"
+                },
+                "package.json": {
+                    "sourceSha256": "87d3c9f70a8fec09a199c7eafd38ef0666c4a0cdeb1e1fce5432e5f86901b713",
+                    "sha256": "87d3c9f70a8fec09a199c7eafd38ef0666c4a0cdeb1e1fce5432e5f86901b713"
+                }
+            }
+        }
+    }
+}

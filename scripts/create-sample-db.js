@@ -7,22 +7,29 @@
  * Run with: node scripts/create-sample-db.js
  */
 
-import initSqlJs from 'sql.js';
-import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 'fs';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
-import { prepareSampleDatabase } from './prepare-sample-db.js';
+import { DatabaseSync } from "node:sqlite";
+import { atomicOutput } from "./lib/atomic-files.js";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { prepareSampleDatabase } from "./prepare-sample-db.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = join(__dirname, 'data');
-const FULL_TEXT_DIR = join(DATA_DIR, 'full_text');
-const COVERS_DIR = join(__dirname, '..', 'pihka', 'app', 'assets', 'covers');
+const DATA_DIR = join(__dirname, "data");
+const COVERS_DIR = join(__dirname, "..", "pihka", "app", "assets", "covers");
 
-async function createSampleDatabase() {
-  const SQL = await initSqlJs();
-  const db = new SQL.Database();
-
-  db.run(`
+export async function createSampleDatabase({
+    dataDir = DATA_DIR,
+    fullTextDir = join(dataDir, "full_text"),
+    coversDir = COVERS_DIR,
+    outputPath = join(__dirname, "..", "pihka", "app", "database", "sample.db"),
+    config,
+} = {}) {
+    return atomicOutput(outputPath, async (temporary) => {
+        const db = new DatabaseSync(temporary);
+        let summary;
+        try {
+            db.exec(`
     CREATE TABLE authors (
       id INTEGER PRIMARY KEY,
       name TEXT NOT NULL,
@@ -84,163 +91,189 @@ async function createSampleDatabase() {
     CREATE INDEX idx_annotations_page ON annotations(page_id);
   `);
 
-  // A public IIIF manifest on a few rows, demoing the iiif-viewer extension.
-  const SAMPLE_MANIFEST = 'https://objects.library.uu.nl/manifest/iiif/v3/20.500.14918-326815';
-  const MANIFEST_ROWS = 3;
+            // A public IIIF manifest on a few rows, demoing the iiif-viewer extension.
+            const SAMPLE_MANIFEST =
+                "https://objects.library.uu.nl/manifest/iiif/v3/20.500.14918-326815";
+            const MANIFEST_ROWS = 3;
 
-  const authors    = JSON.parse(readFileSync(join(DATA_DIR, 'authors.json'),    'utf8'));
-  const categories = JSON.parse(readFileSync(join(DATA_DIR, 'categories.json'), 'utf8'));
-  const works      = JSON.parse(readFileSync(join(DATA_DIR, 'works.json'),      'utf8'));
+            const authors = JSON.parse(readFileSync(join(dataDir, "authors.json"), "utf8"));
+            const categories = JSON.parse(readFileSync(join(dataDir, "categories.json"), "utf8"));
+            const works = JSON.parse(readFileSync(join(dataDir, "works.json"), "utf8"));
 
-  // Full novel texts downloaded from Project Gutenberg (scripts/download-
-  // full-text.js). Keyed by the work_id embedded in each JSON, so we never
-  // depend on the filename slug. Directory is absent on a fresh clone.
-  const fullText = new Map();
-  if (existsSync(FULL_TEXT_DIR)) {
-    for (const file of readdirSync(FULL_TEXT_DIR)) {
-      if (!file.endsWith('.json')) continue;
-      const entry = JSON.parse(readFileSync(join(FULL_TEXT_DIR, file), 'utf8'));
-      if (entry.work_id != null && entry.text) fullText.set(entry.work_id, entry.text);
-    }
-  }
+            // Full novel texts downloaded from Project Gutenberg (scripts/download-
+            // full-text.js). Keyed by the work_id embedded in each JSON, so we never
+            // depend on the filename slug. Directory is absent on a fresh clone.
+            const fullText = new Map();
+            if (existsSync(fullTextDir)) {
+                for (const file of readdirSync(fullTextDir)) {
+                    if (!file.endsWith(".json")) continue;
+                    const entry = JSON.parse(readFileSync(join(fullTextDir, file), "utf8"));
+                    if (entry.work_id != null && entry.text)
+                        fullText.set(entry.work_id, entry.text);
+                }
+            }
 
-  // Book covers are only a demo subset (scripts/download-covers.js downloads
-  // ~50 real covers from Open Library). A work's `cover` column is set iff its
-  // covers/{id}.jpg file exists on disk, so the DB never claims a cover it
-  // can't serve; every other work gets null and renders an empty Cover cell.
-  const hasCover = (id) => existsSync(join(COVERS_DIR, `${id}.jpg`));
+            // Book covers are only a demo subset (scripts/download-covers.js downloads
+            // ~50 real covers from Open Library). A work's `cover` column is set iff its
+            // covers/{id}.jpg file exists on disk, so the DB never claims a cover it
+            // can't serve; every other work gets null and renders an empty Cover cell.
+            const hasCover = (id) => existsSync(join(coversDir, `${id}.jpg`));
 
-  // Single transaction — without this, sql.js commits per-INSERT and 1000+ rows take minutes.
-  db.run('BEGIN');
+            // Group inserts into one transaction.
+            db.exec("BEGIN");
 
-  const insA = db.prepare('INSERT INTO authors VALUES (?, ?, ?, ?, ?, ?)');
-  for (const a of authors) {
-    insA.run([a.id, a.name, a.birth_year, a.birthplace, a.latitude, a.longitude]);
-  }
-  insA.free();
+            const insA = db.prepare("INSERT INTO authors VALUES (?, ?, ?, ?, ?, ?)");
+            for (const a of authors) {
+                insA.run(a.id, a.name, a.birth_year, a.birthplace, a.latitude, a.longitude);
+            }
 
-  const insC = db.prepare('INSERT INTO categories VALUES (?, ?)');
-  for (const c of categories) {
-    insC.run([c.id, c.name]);
-  }
-  insC.free();
+            const insC = db.prepare("INSERT INTO categories VALUES (?, ?)");
+            for (const c of categories) {
+                insC.run(c.id, c.name);
+            }
 
-  const insW = db.prepare('INSERT INTO works VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
-  let coverCount = 0;
-  for (const [i, w] of works.entries()) {
-    const manifest = i < MANIFEST_ROWS ? SAMPLE_MANIFEST : null;
-    const cover = hasCover(w.id) ? `covers/${w.id}.jpg` : null;
-    if (cover) coverCount++;
-    insW.run([w.id, w.title, w.author_id, w.year, w.description, cover, manifest, fullText.get(w.id) ?? null]);
-  }
-  insW.free();
+            const insW = db.prepare("INSERT INTO works VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            let coverCount = 0;
+            for (const [i, w] of works.entries()) {
+                const manifest = i < MANIFEST_ROWS ? SAMPLE_MANIFEST : null;
+                const cover = hasCover(w.id) ? `covers/${w.id}.jpg` : null;
+                if (cover) coverCount++;
+                insW.run(
+                    w.id,
+                    w.title,
+                    w.author_id,
+                    w.year,
+                    w.description,
+                    cover,
+                    manifest,
+                    fullText.get(w.id) ?? null,
+                );
+            }
 
-  // Category assignments: each work keeps its curated category from
-  // works.json and gains 1-2 extra ones, drawn from a seeded PRNG so the
-  // database is byte-stable across runs (tests assert exact counts).
-  const rand = mulberry32(0x9e3779b9);
-  const insWC = db.prepare('INSERT INTO works_categories VALUES (?, ?, ?)');
-  let junctionId = 0;
-  for (const w of works) {
-    const assigned = new Set([w.category_id]);
-    const extras = 1 + Math.floor(rand() * 2); // 1 or 2 extras
-    while (assigned.size < 1 + extras) {
-      assigned.add(categories[Math.floor(rand() * categories.length)].id);
-    }
-    for (const categoryId of assigned) {
-      insWC.run([++junctionId, w.id, categoryId]);
-    }
-  }
-  insWC.free();
+            // Category assignments: each work keeps its curated category from
+            // works.json and gains 1-2 extra ones, drawn from a seeded PRNG so the
+            // database is byte-stable across runs (tests assert exact counts).
+            const rand = mulberry32(0x9e3779b9);
+            const insWC = db.prepare("INSERT INTO works_categories VALUES (?, ?, ?)");
+            let junctionId = 0;
+            for (const w of works) {
+                const assigned = new Set([w.category_id]);
+                const extras = 1 + Math.floor(rand() * 2); // 1 or 2 extras
+                while (assigned.size < Math.min(categories.length, 1 + extras)) {
+                    assigned.add(categories[Math.floor(rand() * categories.length)].id);
+                }
+                for (const categoryId of assigned) {
+                    insWC.run(++junctionId, w.id, categoryId);
+                }
+            }
 
-  // Text pages + annotations: three "pages" cut from the opening of
-  // "A Scandal in Bohemia" (The Adventures of Sherlock Holmes, work 89),
-  // each page ending at the first paragraph break after ~2400 characters.
-  // Annotation offsets are found with indexOf against each page body —
-  // fully deterministic, no PRNG involved. Longer names come first so
-  // "Sherlock Holmes" wins over a nested "Holmes".
-  const SHERLOCK_WORK_ID = 89;
-  const PAGE_TARGET = 2400;
-  const PAGE_COUNT = 3;
-  const ANNOTATION_NAMES = [
-    ['Sherlock Holmes', 'person'], ['Irene Adler', 'person'], ['Godfrey Norton', 'person'],
-    ['Holmes', 'person'], ['Watson', 'person'], ['Adler', 'person'], ['Boswell', 'person'],
-    ['Baker Street', 'place'], ['Briony Lodge', 'place'], ['Bohemia', 'place'],
-    ['London', 'place'], ['Europe', 'place'], ['Odessa', 'place'], ['Trincomalee', 'place'],
-    ['Warsaw', 'place'], ['La Scala', 'place'], ['Scandinavia', 'place'],
-    ['England', 'place'], ['Egria', 'place'], ['Carlsbad', 'place'],
-  ];
+            // Text pages + annotations: three "pages" cut from the opening of
+            // "A Scandal in Bohemia" (The Adventures of Sherlock Holmes, work 89),
+            // each page ending at the first paragraph break after ~2400 characters.
+            // Annotation offsets are found with indexOf against each page body —
+            // fully deterministic, no PRNG involved. Longer names come first so
+            // "Sherlock Holmes" wins over a nested "Holmes".
+            const SHERLOCK_WORK_ID = 89;
+            const PAGE_TARGET = 2400;
+            const PAGE_COUNT = 3;
+            const ANNOTATION_NAMES = [
+                ["Sherlock Holmes", "person"],
+                ["Irene Adler", "person"],
+                ["Godfrey Norton", "person"],
+                ["Holmes", "person"],
+                ["Watson", "person"],
+                ["Adler", "person"],
+                ["Boswell", "person"],
+                ["Baker Street", "place"],
+                ["Briony Lodge", "place"],
+                ["Bohemia", "place"],
+                ["London", "place"],
+                ["Europe", "place"],
+                ["Odessa", "place"],
+                ["Trincomalee", "place"],
+                ["Warsaw", "place"],
+                ["La Scala", "place"],
+                ["Scandinavia", "place"],
+                ["England", "place"],
+                ["Egria", "place"],
+                ["Carlsbad", "place"],
+            ];
 
-  let pageCount = 0;
-  let annotationCount = 0;
-  const sherlock = fullText.get(SHERLOCK_WORK_ID);
-  if (sherlock) {
-    const text = sherlock.replace(/\r\n/g, '\n'); // normalize before slicing/offsets
-    let pos = text.indexOf('To Sherlock Holmes she is always'); // chapter I prose start
-    const insP = db.prepare('INSERT INTO text_pages VALUES (?, ?, ?, ?, ?)');
-    const insAnn = db.prepare('INSERT INTO annotations VALUES (?, ?, ?, ?, ?, ?)');
-    for (let p = 1; p <= PAGE_COUNT && pos !== -1 && pos < text.length; p++) {
-      let cut = text.indexOf('\n\n', pos + PAGE_TARGET);
-      if (cut === -1) cut = text.length;
-      const body = text.slice(pos, cut).trim();
-      insP.run([p, SHERLOCK_WORK_ID, p, `A Scandal in Bohemia — page ${p}`, body]);
-      pageCount++;
+            let pageCount = 0;
+            let annotationCount = 0;
+            const sherlock = fullText.get(SHERLOCK_WORK_ID);
+            if (sherlock) {
+                const text = sherlock.replace(/\r\n/g, "\n"); // normalize before slicing/offsets
+                let pos = text.indexOf("To Sherlock Holmes she is always"); // chapter I prose start
+                const insP = db.prepare("INSERT INTO text_pages VALUES (?, ?, ?, ?, ?)");
+                const insAnn = db.prepare("INSERT INTO annotations VALUES (?, ?, ?, ?, ?, ?)");
+                for (let p = 1; p <= PAGE_COUNT && pos !== -1 && pos < text.length; p++) {
+                    let cut = text.indexOf("\n\n", pos + PAGE_TARGET);
+                    if (cut === -1) cut = text.length;
+                    const body = text.slice(pos, cut).trim();
+                    insP.run(p, SHERLOCK_WORK_ID, p, `A Scandal in Bohemia — page ${p}`, body);
+                    pageCount++;
 
-      const taken = [];
-      const found = [];
-      for (const [name, type] of ANNOTATION_NAMES) {
-        let idx = body.indexOf(name);
-        while (idx !== -1) {
-          const s = idx, e = idx + name.length;
-          if (!taken.some(([a, b]) => s < b && e > a)) {
-            taken.push([s, e]);
-            found.push({ s, e, type, name });
-          }
-          idx = body.indexOf(name, idx + 1);
+                    const taken = [];
+                    const found = [];
+                    for (const [name, type] of ANNOTATION_NAMES) {
+                        let idx = body.indexOf(name);
+                        while (idx !== -1) {
+                            const s = idx,
+                                e = idx + name.length;
+                            if (!taken.some(([a, b]) => s < b && e > a)) {
+                                taken.push([s, e]);
+                                found.push({ s, e, type, name });
+                            }
+                            idx = body.indexOf(name, idx + 1);
+                        }
+                    }
+                    found.sort((a, b) => a.s - b.s);
+                    for (const f of found)
+                        insAnn.run(++annotationCount, p, f.s, f.e, f.type, f.name);
+                    pos = cut + 2;
+                }
+            }
+
+            db.exec("COMMIT");
+
+            summary = {
+                authors: authors.length,
+                categories: categories.length,
+                works: works.length,
+                covers: coverCount,
+                workCategories: junctionId,
+                fullTexts: fullText.size,
+                textPages: pageCount,
+                annotations: annotationCount,
+            };
+        } finally {
+            db.close();
         }
-      }
-      found.sort((a, b) => a.s - b.s);
-      for (const f of found) insAnn.run([++annotationCount, p, f.s, f.e, f.type, f.name]);
-      pos = cut + 2;
-    }
-    insP.free();
-    insAnn.free();
-  }
-
-  db.run('COMMIT');
-
-  // config.json's "database" key points here.
-  const outputPath = join(__dirname, '..', 'pihka', 'app', 'database', 'sample.db');
-  mkdirSync(dirname(outputPath), { recursive: true });
-  writeFileSync(outputPath, Buffer.from(db.export()));
-
-  console.log(`Created sample database at ${outputPath}`);
-  console.log(`  Authors:          ${authors.length}`);
-  console.log(`  Categories:       ${categories.length}`);
-  console.log(`  Works:            ${works.length}`);
-  console.log(`  Covers:           ${coverCount}`);
-  console.log(`  Work categories:  ${junctionId}`);
-  console.log(`  Full texts:       ${fullText.size}`);
-  console.log(`  Text pages:       ${pageCount}`);
-  console.log(`  Annotations:      ${annotationCount}`);
-
-  db.close();
-  await prepareSampleDatabase(outputPath);
+        await prepareSampleDatabase(temporary, config);
+        return summary;
+    });
 }
 
 /** Tiny seeded PRNG (mulberry32) — keeps the generated DB deterministic. */
 function mulberry32(seed) {
-  let a = seed >>> 0;
-  return function () {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+    let a = seed >>> 0;
+    return function () {
+        a = (a + 0x6d2b79f5) >>> 0;
+        let t = a;
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
 }
 
-createSampleDatabase().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+    createSampleDatabase()
+        .then((summary) => {
+            console.log("Created and prepared sample database:", summary);
+        })
+        .catch((error) => {
+            console.error(error);
+            process.exitCode = 1;
+        });
+}
