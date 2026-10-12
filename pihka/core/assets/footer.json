@@ -6,8 +6,5 @@
     "credits": {
         "en": "<p>Published with <a href=\"https://github.com\" target=\"_blank\" rel=\"noopener noreferrer\">Pihka</a>, a sustainable data-publishing platform for digital humanities research.</p>",
         "nl": "<p>Gepubliceerd met <a href=\"https://github.com\" target=\"_blank\" rel=\"noopener noreferrer\">Pihka</a>, een duurzaam dataplatform voor digital-humanities-onderzoek.</p>"
-    },
-    "logos": [
-        { "src": "core/assets/logo/pihka.svg", "alt": "Pihka" }
-    ]
+    }
 }

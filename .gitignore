@@ -17,6 +17,7 @@ pihka/app/database/*.sqlite
 pihka/app/database/*.pmtiles
 pihka/app/assets/*
 !pihka/app/assets/.gitkeep
+!pihka/app/assets/logo/
 .DS_Store
 *.log
 

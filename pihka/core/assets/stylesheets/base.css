@@ -18,7 +18,7 @@
  *     .facet-label, .facet-divider.
  *   - Variables: all --pico-* (Pico's public API, follows the active
  *     theme) plus the aliases --text, --text-muted, --border, --bg,
- *     --bg-subtle, --accent.
+ *     --bg-subtle, --accent, --pihka-font-small.
  */
 
 /* 1. Resin accent — burnt amber, like resin capturing data in time.
@@ -45,12 +45,34 @@
 /* 2. Shorthand aliases for custom components — track Pico's active theme */
 
 :root {
+  --pico-font-size: 100%;
+  --pico-font-family: system-ui, sans-serif;
+  --pihka-font-small: .875rem;
   --text: var(--pico-color);
   --text-muted: var(--pico-muted-color);
   --border: var(--pico-muted-border-color);
   --bg: var(--pico-background-color);
   --bg-subtle: var(--pico-code-background-color);
   --accent: var(--pico-primary);
+}
+
+/* Three sizes: body/controls, secondary text, headings. Use rem so nested
+   labels never shrink again inside a smaller parent. */
+h1, h2, h3, h4, h5, h6 {
+  font-size: 1.25rem;
+}
+small, sup, .text-meta, .column-type, .component-error,
+.footer-details, .facet-label, .range-values, .facet-chevron,
+.facet-option-count, .facet-options-truncated, .faceted-count,
+.perspective-card-meta, .cell-list-item, .fts-error {
+  font-size: var(--pihka-font-small);
+}
+.text-meta, .column-type, .component-error {
+  color: var(--text-muted);
+}
+.column-type {
+  font-weight: normal;
+  margin-left: .4em;
 }
 
 /* 3. Layout: slim header, full-width content */
@@ -157,10 +179,14 @@ html, body {
   }
 }
 
-#app > header .app-brand {
-  font-weight: 700;
-  color: var(--text);
-  text-decoration: none;
+.app-brand {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+}
+.brand-logo {
+  display: block;
+  color: var(--accent);
 }
 
 #app > header .app-crumb {
@@ -171,60 +197,44 @@ html, body {
 #app > header .app-menu-item a {
   color: var(--text);
   text-decoration: none;
-  font-size: 0.9rem;
 }
 #app > header .app-menu-item a:hover {
   text-decoration: underline;
 }
 
-/* Site footer: a short band — credits + links | logos, laid out with
-   Pico's .grid (two columns, collapsing to one below 768px). */
+/* Shared brand, compact credits and optional partner marks. */
 .site-footer {
   border-top: 1px solid var(--border);
   margin-top: 1.5rem;
-  padding-top: 0.75rem;
-  padding-bottom: 0.75rem;
+  padding-block: .5rem;
   color: var(--text-muted);
   background: var(--bg-subtle);
-  --pico-grid-column-gap: 1.5rem;
 }
-.site-footer .grid {
+.footer-content {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  gap: 1rem 2rem;
 }
-.site-footer small {
-  color: var(--text-muted);
+.footer-details {
+  flex: 1 1 16rem;
 }
-.site-footer small p {
+.footer-details p {
   margin: 0;
 }
-.site-footer .footer-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 1rem;
-  margin-top: 0.25rem;
-  font-size: 0.8rem;
-}
-.site-footer .footer-logos {
+.footer-links, .footer-logos {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
-  gap: 1.5rem;
+  gap: .25rem 1rem;
 }
-.site-footer .footer-logos img {
-  height: 2.25rem;
-  width: auto;
-  opacity: 0.85;
+.footer-logos {
+  margin-left: auto;
 }
-.site-footer .footer-logos a:hover img {
-  opacity: 1;
-}
-/* When stacked (small screens) the logos align left with the text. */
-@media (max-width: 768px) {
-  .site-footer .footer-logos {
-    justify-content: flex-start;
-    margin-top: 0.5rem;
-  }
+.footer-logos img {
+  width: 20rem;
+  max-width: 100%;
+  height: auto;
 }
 
 /* Static menu pages (About, Instructions, …) */
@@ -251,7 +261,6 @@ html, body {
   padding: 0.2rem 0.6rem 0.2rem 2rem; /* room for Pico's magnifier icon */
   background-position: center left 0.6rem;
   height: auto;
-  font-size: 0.85rem;
 }
 
 /* Search results page: one section per matching table */
@@ -275,7 +284,6 @@ html, body {
 .search-results-more {
   display: inline-block;
   margin-top: 0.25rem;
-  font-size: 0.9em;
 }
 
 /* Keep links clean in dense data views; underline on hover only */
@@ -291,7 +299,6 @@ a:hover {
 /* Compact data tables (Pico's defaults are too roomy for a data viewer) */
 
 table {
-  font-size: 0.9rem;
   margin-bottom: 0;
 }
 
@@ -341,13 +348,11 @@ tbody tr:hover {
 
 .facet-header button {
   padding: .1em .5em;
-  font-size: .75em;
   margin-left: auto;
   margin-bottom: 0;
 }
 
 .facet-label {
-  font-size: .8em;
   font-weight: 600;
 }
 
@@ -364,12 +369,10 @@ tbody tr:hover {
 }
 
 .range-value-sep {
-  font-size: .75em;
   color: var(--text-muted);
 }
 
 .range-value-box {
-  font-size: .75em;
   font-weight: 600;
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 10%, transparent);
@@ -474,7 +477,7 @@ tbody tr:hover {
 
 .faceted-view {
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: 260px minmax(0, 1fr);
   gap: 2rem;
   align-items: start;
 }
@@ -486,6 +489,8 @@ tbody tr:hover {
 }
 
 .facet-sidebar {
+  align-self: start;
+  background: var(--bg);
   position: sticky;
   top: 0.5rem;
   max-height: calc(100dvh - 4rem);
@@ -493,10 +498,18 @@ tbody tr:hover {
   padding-right: .5rem;
 }
 
+@media (max-width: 768px) {
+  .facet-sidebar {
+    position: static;
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
+  }
+}
+
 /* Sidebar title row: a .facet-header with centered alignment. */
 .facet-sidebar-header {
   align-items: center;
-  font-size: .95rem;
   margin-bottom: .25rem;
 }
 
@@ -529,7 +542,6 @@ tbody tr:hover {
 .theme-toggle,
 .lang-switcher {
   padding: .3em .7em;
-  font-size: .8em;
   margin-bottom: 0;
 }
 
@@ -559,7 +571,6 @@ tbody tr:hover {
   border: 1px solid var(--border);
   border-radius: 4px;
   cursor: pointer;
-  font-size: .85em;
   background: var(--bg);
   min-height: 2.2em;
 }
@@ -582,7 +593,6 @@ tbody tr:hover {
 .facet-clear {
   cursor: pointer;
   color: var(--text-muted);
-  font-size: 1.1em;
   line-height: 1;
   padding: 0 .2rem;
 }
@@ -592,7 +602,6 @@ tbody tr:hover {
 }
 
 .facet-chevron {
-  font-size: .6em;
   color: var(--text-muted);
   flex-shrink: 0;
 }
@@ -611,7 +620,6 @@ tbody tr:hover {
   padding: .35rem .5rem;
   border: none;
   border-bottom: 1px solid var(--border);
-  font-size: .8em;
   outline: none;
 }
 
@@ -629,7 +637,6 @@ tbody tr:hover {
   gap: .4rem;
   padding: .3rem .6rem;
   cursor: pointer;
-  font-size: .8em;
 }
 
 .facet-option:hover {
@@ -656,7 +663,6 @@ tbody tr:hover {
 
 .facet-option-count {
   color: var(--text-muted);
-  font-size: .85em;
   flex-shrink: 0;
 }
 
@@ -672,7 +678,6 @@ tbody tr:hover {
 .facet-options-truncated {
   padding: .3rem .6rem;
   color: var(--text-muted);
-  font-size: .75em;
   font-style: italic;
 }
 
@@ -688,22 +693,20 @@ tbody tr:hover {
 .faceted-pagination button {
   min-width: 1.6rem;
   padding: .15em .35em;
-  font-size: .8em;
   line-height: 1.4;
   border-radius: 3px;
 }
 
 .faceted-pagination .pagination-active {
   font-weight: 600;
-  background: var(--accent);
+  background: var(--pico-primary-background);
   color: var(--pico-primary-inverse);
-  border-color: var(--accent);
+  border-color: var(--pico-primary-border);
 }
 
 .faceted-pagination .pagination-ellipsis {
   padding: 0 .15rem;
   color: var(--text-muted);
-  font-size: .8em;
 }
 
 /* Result count and page size */
@@ -716,7 +719,6 @@ tbody tr:hover {
 }
 
 .faceted-count {
-  font-size: .8em;
   color: var(--text-muted);
   white-space: nowrap;
 }
@@ -725,7 +727,6 @@ tbody tr:hover {
   width: auto;
   margin: 0;
   padding: .15rem 1.6rem .15rem .35rem;
-  font-size: .8em;
   border-radius: 3px;
 }
 
@@ -743,7 +744,6 @@ article {
 /* Perspective grid */
 
 .perspective-section-title {
-  font-size: 1.1em;
   margin: 1rem 0 .5rem;
 }
 
@@ -760,7 +760,6 @@ article {
   border: 1px solid var(--border);
   border-radius: 3px;
   padding: .05em .4em;
-  font-size: .85em;
   white-space: nowrap;
 }
 
@@ -768,7 +767,6 @@ article {
   background: none;
   border: none;
   color: var(--accent);
-  font-size: .8em;
   cursor: pointer;
   padding: 0 .2em;
 }
@@ -786,7 +784,6 @@ article {
   background: none;
   border: none;
   color: var(--accent);
-  font-size: .8em;
   cursor: pointer;
   padding: 0;
   white-space: nowrap;
@@ -822,7 +819,6 @@ article {
 
 .perspective-card-name {
   font-weight: 600;
-  font-size: 0.95rem;
   color: var(--accent);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -830,7 +826,6 @@ article {
 }
 
 .perspective-card-meta {
-  font-size: 0.8rem;
   color: var(--text-muted);
 }
 
@@ -876,7 +871,6 @@ article {
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--bg);
-  font-size: .8em;
 }
 
 /* The component renders its own clear button; hide the native WebKit one
@@ -909,7 +903,6 @@ article {
   border: none;
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 1.1em;
   line-height: 1;
   padding: 0 .3rem;
 }
@@ -920,6 +913,5 @@ article {
 
 .fts-error {
   margin: .35rem 0 0;
-  font-size: .75em;
   color: var(--pico-del-color);
 }
