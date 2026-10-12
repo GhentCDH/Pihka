@@ -22,7 +22,7 @@ test.beforeEach(async ({ page }) => {
 
 test("download exec: portable rows, binds, callbacks and early termination", async ({ page }) => {
     const result = await page.evaluate(async () => {
-        const { DataSource } = await import("/core/js/utilities-data/datasource.js");
+        const { DataSource } = await import("/core/engine/datasource.js");
         const ds = new DataSource("/contract.db");
         await ds.ready;
         try {
@@ -51,9 +51,9 @@ for (const detail of ["none", "column", "full"]) {
     for (const readOnly of [false, true]) {
         test(`published FTS detail=${detail}, readOnly=${readOnly}`, async ({ page }) => {
             const result = await page.evaluate(async ({ detail, readOnly }) => {
-                const { DataSource } = await import("/core/js/utilities-data/datasource.js");
-                const { fts5Plugin } = await import("/core/js/utilities-data/enrichment/fts5.js");
-                const { DataStore } = await import("/core/js/utilities-data/data-store.js");
+                const { DataSource } = await import("/core/engine/datasource.js");
+                const { fts5Plugin } = await import("/core/engine/enrichment/fts5.js");
+                const { DataStore } = await import("/core/engine/data-store.js");
                 const ds = new DataSource("/contract.db");
                 await ds.ready;
                 const warnings = [], warn = console.warn;
@@ -85,9 +85,9 @@ for (const detail of ["none", "column", "full"]) {
 for (const readOnly of [false, true]) {
     test(`published FTS excluded column, readOnly=${readOnly}`, async ({ page }) => {
         const result = await page.evaluate(async readOnly => {
-            const { DataSource } = await import("/core/js/utilities-data/datasource.js");
-            const { fts5Plugin } = await import("/core/js/utilities-data/enrichment/fts5.js");
-            const { DataStore } = await import("/core/js/utilities-data/data-store.js");
+            const { DataSource } = await import("/core/engine/datasource.js");
+            const { fts5Plugin } = await import("/core/engine/enrichment/fts5.js");
+            const { DataStore } = await import("/core/engine/data-store.js");
             const ds = new DataSource("/contract.db");
             await ds.ready;
             try {
@@ -122,7 +122,7 @@ for (const readOnly of [false, true]) {
 
 test("metadata caches share concurrent work and retry failures", async ({ page }) => {
     const result = await page.evaluate(async () => {
-        const { DataStore } = await import("/core/js/utilities-data/data-store.js");
+        const { DataStore } = await import("/core/engine/data-store.js");
         const meta = { tables: {
             docs: { type: "table", columns: [{ name: "year", type: "INTEGER" }, { name: "author_id", references: { table: "authors", column: "id" } }] },
             authors: { type: "table", columns: [{ name: "id", primaryKey: true }, { name: "name", type: "TEXT" }] },
@@ -156,9 +156,9 @@ test("metadata caches share concurrent work and retry failures", async ({ page }
 for (const readOnly of [false, true]) {
     test(`FTS skips implicit rowid on WITHOUT ROWID, readOnly=${readOnly}`, async ({ page }) => {
         const result = await page.evaluate(async readOnly => {
-            const { DataSource } = await import("/core/js/utilities-data/datasource.js");
-            const { fts5Plugin } = await import("/core/js/utilities-data/enrichment/fts5.js");
-            const { DataStore } = await import("/core/js/utilities-data/data-store.js");
+            const { DataSource } = await import("/core/engine/datasource.js");
+            const { fts5Plugin } = await import("/core/engine/enrichment/fts5.js");
+            const { DataStore } = await import("/core/engine/data-store.js");
             const ds = new DataSource("/contract.db");
             await ds.ready;
             const warnings = [], warn = console.warn;
@@ -205,9 +205,9 @@ for (const readOnly of [false, true]) {
 
 test("FTS identifiers use ASCII-insensitive canonical schema names and exclusions", async ({ page }) => {
     const result = await page.evaluate(async () => {
-        const { DataSource } = await import("/core/js/utilities-data/datasource.js");
-        const { fts5Plugin } = await import("/core/js/utilities-data/enrichment/fts5.js");
-        const { DataStore } = await import("/core/js/utilities-data/data-store.js");
+        const { DataSource } = await import("/core/engine/datasource.js");
+        const { fts5Plugin } = await import("/core/engine/enrichment/fts5.js");
+        const { DataStore } = await import("/core/engine/data-store.js");
         const ds = new DataSource("/contract.db");
         await ds.ready;
         try {
@@ -253,7 +253,7 @@ for (const phase of ["immediate", "fetch", "body", "loading", "sqlite"]) {
             });
         }
         const result = await page.evaluate(async phase => {
-            const { DataSource } = await import("/core/js/utilities-data/datasource.js");
+            const { DataSource } = await import("/core/engine/datasource.js");
             const fetch = globalThis.fetch;
             const bytes = await (await fetch("/contract.db")).arrayBuffer();
             let ds, signal, fetches = 0, readyEvents = 0;

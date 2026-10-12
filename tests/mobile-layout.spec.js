@@ -63,7 +63,7 @@ test("mobile: minimal HTTP detail keeps a wide table locally scrollable", async 
         await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
         await page.route("**/app/config.json", route => route.fulfill({ json: {
             database: `http://127.0.0.1:${server.address().port}/fixture.db`,
-            components: ["extensions/http-vfs/http-vfs-component.js"],
+            enginePlugins: ["extensions/http-vfs/http-vfs-component.js"], uiPlugins: [],
             datasource: { type: "http-vfs" },
         } }));
         await page.goto("/#/en/records/1/table");

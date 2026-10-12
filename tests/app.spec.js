@@ -145,7 +145,7 @@ test("page size preference persists across navigation", async ({ page }) => {
   await page.locator(".faceted-pagesize").selectOption("50");
   await expect(page.locator(".faceted-count")).toContainText("Showing 1 to 50");
   // Leave and come back without a pageSize in the URL
-  await page.locator(".app-brand").click();
+  await page.locator("header .app-brand").click();
   await page.locator("a.perspective-card", { hasText: "Works" }).click();
   await expect(page).not.toHaveURL(/pageSize/);
   await expect(page.locator(".faceted-count")).toContainText("Showing 1 to 50");
@@ -156,7 +156,7 @@ test("view preference persists across navigation", async ({ page }) => {
   await page.locator(".view-toggles button", { hasText: "cards" }).click();
   await expect(page).toHaveURL(/\/works\/cards/);
   // The home card now targets the remembered view
-  await page.locator(".app-brand").click();
+  await page.locator("header .app-brand").click();
   await page.locator("a.perspective-card", { hasText: "Works" }).click();
   await expect(page).toHaveURL(/\/works\/cards/);
 });
@@ -576,7 +576,7 @@ test("geo-filter extension: bounds filter type + location facet", async ({ page 
 // facet works. Shared by the fault-injection tests below.
 async function expectCoreWorks(page) {
   await page.waitForSelector("#app header", { timeout: 10000 });
-  await page.locator("header a", { hasText: "Pihka" }).click();
+  await page.locator("header").getByRole("link", { name: "Pihka", exact: true }).click();
   await page.locator("a.perspective-card", { hasText: /Authors/ }).click();
   await expect(page.locator("tbody tr")).toHaveCount(25);
   await expect(page.locator(".facet-sidebar")).toContainText("1010 Authors");
@@ -609,27 +609,33 @@ test("fault: runtime throws in registered callbacks degrade to fallbacks", async
   await page.route("**/extensions/geo-filter/geo-filter-component.js", r => r.fulfill({
     contentType: "text/javascript",
     body: `
-      import { registerFilterType } from "/core/js/utilities-data/filter-registry.js";
-      import { registerFacetRenderer } from "/core/js/utilities-ui/facet-renderers.js";
-      import { registerView } from "/core/js/utilities-ui/view-registry.js";
-      registerFilterType("hostile", {
-        reservedParams: ["bbox"],
-        decode() { throw new Error("hostile decode"); },
+      export function register(api) {
+        api.registerFilterCodec("hostile", {
+          reservedParams: ["bbox"],
+          decode() { throw new Error("hostile decode"); },
+        });
+        api.registerComponent({ kind: "facet", id: "hostile-hidden", supplemental: true,
+          availableFor() { throw new Error("hostile availableFor"); },
+          component: () => "should never render",
+        });
+        api.registerComponent({ kind: "facet", id: "hostile-facet", supplemental: true,
+          component: () => { throw new Error("hostile facet render"); },
+        });
+        api.registerComponent({ kind: "view",
+          id: "hostileview", context: "list", icon: "☠",
+          component: () => { throw new Error("hostile view render"); },
+        });
+      }
+    `,
+  }));
+  await page.route("**/extensions/geo-filter/geo-filter-engine.js", r => r.fulfill({
+    contentType: "text/javascript",
+    body: `export function register(api) {
+      api.registerFilterType("hostile", {
         buildSql() { throw new Error("hostile sql"); },
         filterMeta() { throw new Error("hostile meta"); },
       });
-      registerFacetRenderer("hostile-hidden", {
-        availableFor() { throw new Error("hostile availableFor"); },
-        component: () => "should never render",
-      });
-      registerFacetRenderer("hostile-facet", {
-        component: () => { throw new Error("hostile facet render"); },
-      });
-      registerView({
-        id: "hostileview", context: "list", icon: "☠",
-        component: () => { throw new Error("hostile view render"); },
-      });
-    `,
+    }`,
   }));
   // bbox param now belongs to the throwing decode — must be inert, not fatal.
   await page.goto("/#/en/authors/table?bbox=-10,35,30,60");
@@ -664,20 +670,20 @@ test("fault: hanging extension load times out and boot continues", async ({ page
 
 // --- Site footer and menu pages -------------------------------------------
 
-test("footer: app override renders credits, links, logos on every page", async ({ page }) => {
+test("footer: app override renders logos without duplicate credit links on every page", async ({ page }) => {
   await gotoRoute(page, "/en/authors/table");
   const footer = page.locator("#app > footer");
   await expect(footer).toBeVisible();
   // app/footer.json override wins over the core default
-  await expect(footer).toContainText("Ghent Centre for Digital Humanities");
-  await expect(footer.locator(".footer-logos img")).toHaveCount(2);
-  await expect(footer.locator(".footer-links a")).toHaveAttribute("href", "mailto:ghentcdh@ugent.be");
+  await expect(footer.getByRole("img", { name: "Ghent Centre for Digital Humanities" })).toBeVisible();
+  await expect(footer.locator(".footer-logos img")).toHaveCount(1);
+  await expect(footer.locator(".footer-links, .footer-details")).toHaveCount(0);
   // provenance is intentionally not shown in the footer
   await expect(footer).not.toContainText("provenance");
   await expect(footer.locator(".footer-provenance")).toHaveCount(0);
   // footer is present on a detail page too
   await gotoRoute(page, "/en/authors/1/table");
-  await expect(page.locator("#app > footer")).toContainText("Ghent Centre for Digital Humanities");
+  await expect(page.locator("#app > footer").getByRole("img", { name: "Ghent Centre for Digital Humanities" })).toBeVisible();
 });
 
 test("menu: header links navigate to static pages", async ({ page }) => {

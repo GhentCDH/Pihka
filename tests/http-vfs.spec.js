@@ -101,7 +101,7 @@ test.afterAll(async () => {
 async function configure(page, { mode = "ok", type = "http-vfs", extra = {} } = {}) {
     await page.route("**/app/config.json", route => route.fulfill({ json: {
         database: `${origin}/fixture.db?${mode}`,
-        components: ["extensions/http-vfs/http-vfs-component.js"],
+        enginePlugins: ["extensions/http-vfs/http-vfs-component.js"], uiPlugins: [],
         datasource: { type },
         tables: { padding: { hidden: true }, works_tags: { hidden: true } },
         ...extra,
@@ -313,7 +313,7 @@ test("downloader configuration loads no HTTP VFS assets", async ({ page, context
         const response = await route.fetch();
         const config = await response.json();
         delete config.datasource;
-        config.components = config.components.filter(path => !path.includes("/http-vfs/"));
+        config.enginePlugins = config.enginePlugins.filter(path => !path.includes("/http-vfs/"));
         await route.fulfill({ json: config });
     });
     const assets = [];
@@ -343,7 +343,7 @@ test("default demo reads its published database through ranges", async ({ page, 
     await expect(page.locator("section tbody tr").first()).toBeVisible();
 });
 
-test("HTTP VFS: isolated hosting does not initialize an OPFS worker", async ({ page, context }) => {
+test("HTTP VFS: isolated hosting does not initialize OPFS or OPFS Web Locks workers", async ({ page, context }) => {
     const opfsRequests = [];
     context.on("request", request => {
         if (request.url().includes("sqlite3-opfs-async-proxy")) opfsRequests.push(request.url());

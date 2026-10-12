@@ -28,7 +28,7 @@ test.beforeEach(async ({ page }) => {
     await page.route("**/published.db", route => route.fulfill({ body: bytes }));
     await page.route("**/app/config.json", route => route.fulfill({ json: {
         database: "published.db",
-        components: [],
+        enginePlugins: [], uiPlugins: [],
         perspectives: [{ id: "published", table: "PUBLISHED_VIEW", query: "SELECT 'replacement' AS title" }],
     } }));
 });
@@ -38,8 +38,8 @@ for (const readOnly of [false, true]) {
         await page.route("**/published.html", route => route.fulfill({ contentType: "text/html", body: `<script type="importmap">{"imports":{"@sqlite.org/sqlite-wasm":"/core/vendor/@sqlite.org/sqlite-wasm/dist/index.mjs"}}</script>` }));
         await page.goto("/published.html");
         const result = await page.evaluate(async readOnly => {
-            const { DataSource } = await import("/core/js/utilities-data/datasource.js");
-            const { createPerspectiveViews } = await import("/core/js/utilities-data/perspective-views.js");
+            const { DataSource } = await import("/core/engine/datasource.js");
+            const { createPerspectiveViews } = await import("/core/engine/perspective-views.js");
             const ds = new DataSource("/published.db");
             await ds.ready;
             try {
@@ -103,7 +103,7 @@ test("mixed published tokenizers search short words without unfiltered trigram g
 
 test("short search hint appears when only trigram perspectives are searchable", async ({ page }) => {
     await page.route("**/app/config.json", route => route.fulfill({ json: {
-        database: "published.db", components: [], tables: { words: { hidden: true } },
+        database: "published.db", enginePlugins: [], uiPlugins: [], tables: { words: { hidden: true } },
     } }));
     await page.goto("/#/en/search?q=to");
     await expect(page.locator("main")).toContainText("Type at least 3 characters to search.");
