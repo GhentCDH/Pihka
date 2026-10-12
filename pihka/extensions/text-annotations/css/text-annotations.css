@@ -26,7 +26,7 @@
     padding: 0.1em 0.6em;
     border: 1px solid var(--pico-muted-border-color, #ccc);
     border-radius: 999px;
-    font-size: 0.8em;
+    font-size: var(--pihka-font-small);
 }
 
 .annotated-text-legend-chip::before {
@@ -39,7 +39,7 @@
 
 .annotated-text-empty {
     color: var(--text-muted, inherit);
-    font-size: 0.9em;
+    font-size: var(--pihka-font-small);
 }
 
 .annotated-text-badge {
@@ -47,7 +47,7 @@
     padding: 0.1em 0.5em;
     border: 1px solid var(--pico-muted-border-color, #ccc);
     border-radius: 999px;
-    font-size: 0.8em;
+    font-size: var(--pihka-font-small);
     text-decoration: none;
     white-space: nowrap;
 }

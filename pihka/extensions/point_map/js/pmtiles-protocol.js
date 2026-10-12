@@ -1,3 +1,4 @@
+// @ts-check
 import { Protocol } from "../vendor/pmtiles/dist/esm/index.js";
 import { loadMaplibre } from "./maplibre-shim.js";
 

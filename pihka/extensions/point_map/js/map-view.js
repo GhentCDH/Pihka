@@ -1,3 +1,5 @@
+// @ts-check
+import { RegistryContext, useRegistry } from "../../../core/ui/index.js";
 import { h, Fragment, render } from "preact";
 import { useEffect, useRef } from "preact/hooks";
 import { loadMaplibre } from "./maplibre-shim.js";
@@ -67,6 +69,7 @@ export default function MapView({
     fill = false,
     popupComponent: PopupComponent = MapPopup,
 }) {
+    const registry = useRegistry();
     const containerRef = useRef(null);
     const mapRef = useRef(null);
     const maplibreRef = useRef(null);
@@ -81,7 +84,7 @@ export default function MapView({
     // time, so they never go stale and prop changes never force a marker —
     // let alone a map — rebuild.
     const popupPropsRef = useRef(null);
-    popupPropsRef.current = { PopupComponent, tableName, columns, fkResolved, lang, perspectiveId };
+    popupPropsRef.current = { PopupComponent, tableName, columns, fkResolved, lang, perspectiveId, registry };
     const pointsRef = useRef(points);
     pointsRef.current = points;
 
@@ -212,9 +215,17 @@ export default function MapView({
                 };
                 const el = entry.marker.getElement();
                 el.style.cursor = "pointer";
-                el.addEventListener("click", (e) => {
+                el.setAttribute("role", "button");
+                el.tabIndex = 0;
+                const activate = (e) => {
                     e.stopPropagation();
                     openPopup(maplibregl, map, entry.point, popupNodesRef, popupsRef, popupPropsRef.current);
+                };
+                el.addEventListener("click", activate);
+                el.addEventListener("keydown", (e) => {
+                    if (e.key !== "Enter" && e.key !== " ") return;
+                    e.preventDefault();
+                    activate(e);
                 });
                 markers.set(key, entry);
             }
@@ -254,14 +265,14 @@ export default function MapView({
 }
 
 function openPopup(maplibregl, map, point, popupNodesRef, popupsRef, popupProps) {
-    const { PopupComponent, tableName, columns, fkResolved, lang, perspectiveId } = popupProps;
+    const { PopupComponent, tableName, columns, fkResolved, lang, perspectiveId, registry } = popupProps;
     const node = document.createElement("div");
     popupNodesRef.current.add(node);
 
     render(
-        h(PopupComponent, {
+        h(RegistryContext.Provider, {value:registry}, h(PopupComponent, {
             tableName, columns, row: point.row, fkResolved, lang, perspectiveId,
-        }),
+        })),
         node,
     );
 

@@ -1,3 +1,4 @@
+// @ts-check
 import { h } from "preact";
 import MapView from "./map-view.js";
 import { findGeoColumns, rowsToPoints } from "./geo.js";

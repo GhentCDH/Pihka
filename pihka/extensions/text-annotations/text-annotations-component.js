@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Text-annotations extension, based on @ghentcdh/annotated-text
  * (https://github.com/GhentCDH/annotated-text): stand-off annotations —
@@ -7,7 +8,7 @@
  * Enable it like any component module, then mark the column holding the
  * text:
  *
- *   "components": ["extensions/text-annotations/text-annotations-component.js"],
+ *   "uiPlugins": ["extensions/text-annotations/text-annotations-component.js"],
  *   "tables": {
  *     "text_pages": { "columns": { "body": { "type": "annotated-text" } } }
  *   }
@@ -22,21 +23,21 @@
  * vendor/@ghentcdh/annotated-text/ (see deps.json and `npm run vendorize`).
  */
 
-import { registerView } from "../../core/js/utilities-ui/view-registry.js";
-import { registerCellRenderer } from "../../core/js/utilities-ui/cell-renderers.js";
-import { ensureStylesheet } from "../../core/js/utilities-ui/stylesheets.js";
 import { AnnotatedTextDetailView } from "./js/annotated-text-detail-view.js";
 import { AnnotatedTextCell } from "./js/annotated-text-cell.js";
 
-ensureStylesheet(new URL("./vendor/@ghentcdh/annotated-text/index.css", import.meta.url).href);
-ensureStylesheet(new URL("./css/text-annotations.css", import.meta.url).href);
+export function register(api) {
+api.stylesheet(new URL("./vendor/@ghentcdh/annotated-text/index.css", import.meta.url).href);
+api.stylesheet(new URL("./css/text-annotations.css", import.meta.url).href);
 
-registerCellRenderer("annotated-text", AnnotatedTextCell);
+api.registerComponent({kind:"cell",id:"annotated-text",component:AnnotatedTextCell});
 
-registerView({
+api.registerComponent({ kind: "view",
     id: "annotated-text",
     context: "detail",
     icon: "🖍",
     availableFor: (columns) => columns.some(c => c.displayType === "annotated-text"),
     component: AnnotatedTextDetailView,
 });
+
+}

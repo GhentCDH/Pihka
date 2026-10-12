@@ -1,10 +1,11 @@
+// @ts-check
 /**
  * IIIF manifest viewer extension, based on TIFY (https://tify.rocks).
  *
  * Enable it like any component module, then mark the column holding
  * IIIF manifest URLs:
  *
- *   "components": ["extensions/iiif-viewer/iiif-viewer-component.js"],
+ *   "uiPlugins": ["extensions/iiif-viewer/iiif-viewer-component.js"],
  *   "tables": {
  *     "works": { "columns": { "manifest": { "type": "iiif" } } }
  *   }
@@ -15,21 +16,21 @@
  * and `npm run vendorize`).
  */
 
-import { registerView } from "../../core/js/utilities-ui/view-registry.js";
-import { registerCellRenderer } from "../../core/js/utilities-ui/cell-renderers.js";
-import { ensureStylesheet } from "../../core/js/utilities-ui/stylesheets.js";
 import { IiifDetailView } from "./js/iiif-detail-view.js";
 import { IiifCell } from "./js/iiif-cell.js";
 
-ensureStylesheet(new URL("./vendor/tify/dist/tify.css", import.meta.url).href);
-ensureStylesheet(new URL("./css/iiif-viewer.css", import.meta.url).href);
+export function register(api) {
+api.stylesheet(new URL("./vendor/tify/dist/tify.css", import.meta.url).href);
+api.stylesheet(new URL("./css/iiif-viewer.css", import.meta.url).href);
 
-registerCellRenderer("iiif", IiifCell);
+api.registerComponent({kind:"cell",id:"iiif",component:IiifCell});
 
-registerView({
+api.registerComponent({ kind: "view",
     id: "iiif",
     context: "detail",
     icon: "📖",
     availableFor: (columns) => columns.some(c => c.displayType === "iiif"),
     component: IiifDetailView,
 });
+
+}

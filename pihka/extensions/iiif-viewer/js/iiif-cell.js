@@ -1,5 +1,6 @@
+// @ts-check
 import { h } from "preact";
-import { buildPath } from "../../../core/js/utilities-ui/router.js";
+import { buildPath } from "../../../core/ui/index.js";
 
 /**
  * Cell renderer for "iiif" columns: a small badge linking to the row's

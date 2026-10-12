@@ -1,3 +1,4 @@
+// @ts-check
 import { h } from "preact";
 import { useEffect, useRef } from "preact/hooks";
 import { loadMaplibre } from "./maplibre-shim.js";
@@ -115,7 +116,7 @@ export default function MapBoundsFilter({ geoMeta, activeBounds, onBoundsChange 
             }, "× clear"),
         ),
         h("div", { ref: containerRef, class: "map-bounds-canvas" }),
-        h("p", { style: "font-size:.7em;color:var(--text-muted);margin:.15rem 0 .25rem" },
+        h("p", { style: "font-size:var(--pihka-font-small);color:var(--text-muted);margin:.15rem 0 .25rem" },
             activeBounds ? "Showing items in the map view" : "Move the map to filter by location",
         ),
     );

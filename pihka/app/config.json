@@ -11,13 +11,6 @@
             "immutable": true
         }
     },
-    "components": [
-        "extensions/http-vfs/http-vfs-component.js",
-        "extensions/iiif-viewer/iiif-viewer-component.js",
-        "extensions/point_map/point-map-component.js",
-        "extensions/geo-filter/geo-filter-component.js",
-        "extensions/text-annotations/text-annotations-component.js"
-    ],
     "perspectives": [
         {
             "id": "author-overview",
@@ -238,5 +231,15 @@
                 }
             }
         }
-    }
+    },
+    "enginePlugins": [
+        "extensions/http-vfs/http-vfs-component.js",
+        "extensions/geo-filter/geo-filter-engine.js"
+    ],
+    "uiPlugins": [
+        "extensions/iiif-viewer/iiif-viewer-component.js",
+        "extensions/point_map/point-map-component.js",
+        "extensions/geo-filter/geo-filter-component.js",
+        "extensions/text-annotations/text-annotations-component.js"
+    ]
 }

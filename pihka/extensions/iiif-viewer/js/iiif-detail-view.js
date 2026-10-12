@@ -1,3 +1,4 @@
+// @ts-check
 import { h } from "preact";
 import { useEffect, useRef } from "preact/hooks";
 import Tify from "../vendor/tify/dist/tify.js";

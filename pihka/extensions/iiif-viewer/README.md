@@ -9,7 +9,7 @@ Enable the extension and mark the column holding manifest URLs in
 
 ```json
 {
-    "components": ["extensions/iiif-viewer/iiif-viewer-component.js"],
+    "uiPlugins": ["extensions/iiif-viewer/iiif-viewer-component.js"],
     "tables": {
         "works": {
             "columns": {
@@ -36,8 +36,10 @@ so a row whose id is literally `iiif` is unreachable via legacy
 
 ## Dependencies
 
-TIFY is vendored under `vendor/tify/` (declared in `deps.json`, downloaded
-by `npm run vendorize`), including its runtime-fetched UI translations.
+TIFY 0.36.2 is vendored under `vendor/tify/` (declared in `deps.json`, downloaded
+by `npm run vendorize`, with exact versions and hashes in `deps.lock.json`),
+including its runtime-fetched UI translations. Use
+`npm run vendorize -- --extension=iiif-viewer --update` to update it explicitly.
 The extension imports it by relative path — the page import map is not
 involved.
 
@@ -46,3 +48,5 @@ involved.
 TIFY is licensed under **AGPL-3.0** (see `vendor/tify/LICENSE`). Pihka core
 is MIT; this extension is optional, and deployments that include it
 distribute TIFY under the AGPL's terms.
+
+Module installation is explicit: the entrypoint exports `register(api)`. See [architecture and plugin migration](../../../ARCHITECTURE.md).

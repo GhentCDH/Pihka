@@ -1,5 +1,5 @@
-import { registerDataSource } from "../../core/js/utilities-data/datasource-registry.js";
-import { readMetadata } from "../../core/js/utilities-data/datasource.js";
+// @ts-check
+import { readMetadata } from "../../core/engine/metadata.js";
 
 export class HttpDataSource extends EventTarget {
     capabilities = { readOnly: true };
@@ -12,9 +12,7 @@ export class HttpDataSource extends EventTarget {
 
     constructor(url, options = {}) {
         super();
-        // This source uses HTTP only. Disable SQLite's optional OPFS worker,
-        // including on hosts whose COOP/COEP headers enable SharedArrayBuffer.
-        this.#worker = new globalThis.Worker(new URL("./worker.js?opfs-disable", import.meta.url), { type: "module" });
+        this.#worker = new globalThis.Worker(new URL("./worker.js", import.meta.url), { type: "module" });
         this.#worker.onmessage = ({ data }) => {
             const request = this.#active;
             if (!request || data?.id !== request.message.id) return;
@@ -78,11 +76,12 @@ export class HttpDataSource extends EventTarget {
         }
     }
 
+    /** @param {string} sql @param {{bind?: any, rowMode?: string, callback?: Function}} [options] */
     async exec(sql, options = {}) {
         if (typeof sql !== "string") throw new TypeError("HTTP datasource sql must be a string");
         if (!options || typeof options !== "object" || Array.isArray(options)) throw new TypeError("HTTP datasource exec options must be an object");
         for (const key of Reflect.ownKeys(options)) {
-            if (!["bind", "rowMode", "callback"].includes(key)) throw new TypeError(`Unsupported HTTP datasource exec option: ${String(key)}`);
+            if (typeof key !== "string" || !["bind", "rowMode", "callback"].includes(key)) throw new TypeError(`Unsupported HTTP datasource exec option: ${String(key)}`);
         }
         const { bind, rowMode = "object", callback } = options;
         if (!["object", "array"].includes(rowMode)) throw new TypeError("HTTP datasource rowMode must be object or array");
@@ -104,4 +103,6 @@ export class HttpDataSource extends EventTarget {
     async close() { this.#fail(new Error("HTTP datasource closed")); }
 }
 
-registerDataSource("http-vfs", (url, options) => new HttpDataSource(url, options));
+export function register({ registerDataSource }) {
+    registerDataSource("http-vfs", (url, options) => new HttpDataSource(url, options));
+}

@@ -9,7 +9,8 @@ Enable the extension in `app/config.json`:
 
 ```json
 {
-    "components": ["extensions/geo-filter/geo-filter-component.js"]
+    "enginePlugins": ["extensions/geo-filter/geo-filter-engine.js"],
+    "uiPlugins": ["extensions/geo-filter/geo-filter-component.js"]
 }
 ```
 
@@ -41,7 +42,7 @@ any other extension. Refresh with `npm run download-world-pmtiles`
 
 MapLibre and PMTiles are vendored under `vendor/` (see `deps.json`), but
 several map extensions may be enabled at once: `js/maplibre-shim.js` and
-`js/pmtiles-protocol.js` guard through globals so the maplibre UMD bundle
+`js/pmtiles-protocol.js` guard through globals so the MapLibre ES module
 loads and the `pmtiles://` protocol registers only once per page,
 whichever extension gets there first. The maplibre CSS is deduped via
 `ensureStylesheet`'s `key` option; the same goes for
@@ -54,3 +55,8 @@ those belong in the extension's own stylesheet (here `css/geo-filter.css`).
 
 `maplibre-gl` (BSD-3-Clause), `pmtiles` (BSD-3-Clause), `fflate` (MIT) —
 license files vendored alongside.
+
+Module installation is explicit: the entrypoint exports `register(api)`. See [architecture and plugin migration](../../../ARCHITECTURE.md).
+
+MapLibre 6 requires WebGL2. Its module worker is vendored beside the main
+ES module and loads from the same static host; no CDN or blob worker is needed.

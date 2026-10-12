@@ -1,7 +1,8 @@
+// @ts-check
 import { h } from "preact";
 import { useEffect, useId } from "preact/hooks";
-import { useQuery, QueryStatus } from "../../../core/js/utilities-ui/use-query.js";
-import { navigate } from "../../../core/js/utilities-ui/router.js";
+import { useQuery, QueryStatus } from "../../../core/ui/index.js";
+import { navigate } from "../../../core/ui/index.js";
 import { createAnnotatedText, createHighlightStyle } from "../vendor/@ghentcdh/annotated-text/index.js";
 
 /**
@@ -68,7 +69,7 @@ export function AnnotatedTextDetailView({ table, columns, row, store, lang }) {
         const typeName = textColOf("type");
 
         const { rows } = await store.queryTable(rel.table, {
-            filters: { [rel.column]: { type: "multi", selected: new Set([rel.value]) } },
+            filters: { [rel.column]: { type: "multi", selected: [rel.value] } },
             sort: { column: "start", direction: "asc" },
             pageSize: null,
         });

@@ -1,6 +1,8 @@
+// @ts-check
 import { h } from "preact";
-import DataViewDetailTable from "../../../core/js/components/data-views/data-view-detail-table.js";
-import { buildPath } from "../../../core/js/utilities-ui/router.js";
+import { registeredComponent } from "../../../core/ui/index.js";
+const DataViewDetailTable = registeredComponent("view", "table", "detail");
+import { buildPath } from "../../../core/ui/index.js";
 
 /**
  * Default popup body for a marker. Renders the same detail-table layout
@@ -23,7 +25,7 @@ export default function MapPopup({ tableName, columns, row, fkResolved, lang, pe
         : null;
 
     return h("div", { class: "map-popup", style: "max-width:24rem;max-height:60vh;overflow:auto" },
-        h(DataViewDetailTable, { tableName, columns, row, fkResolved, lang }),
+        h(DataViewDetailTable, { presentation: "embedded", tableName, columns, row, fkResolved, lang }),
         detailHref && h("p", { style: "margin:.5rem 0 0;text-align:right" },
             h("a", { href: detailHref }, "View details →"),
         ),

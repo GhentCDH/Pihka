@@ -1,10 +1,11 @@
+// @ts-check
 /**
  * Point map extension: renders rows with lat/lon columns as markers on a
  * MapLibre + PMTiles basemap served from assets/world.pmtiles.
  *
  * Enable it like any component module:
  *
- *   "components": ["extensions/point_map/point-map-component.js"]
+ *   "uiPlugins": ["extensions/point_map/point-map-component.js"]
  *
  * Any table or perspective with numeric latitude/longitude columns
  * (lat/latitude + lon/lng/longitude) then gets ⌖ list and detail views.
@@ -14,19 +15,18 @@
  * page even when several map extensions are enabled.
  */
 
-import { registerView } from "../../core/js/utilities-ui/view-registry.js";
-import { ensureStylesheet } from "../../core/js/utilities-ui/stylesheets.js";
 import { findGeoColumns } from "./js/geo.js";
 import DataViewListMap from "./js/data-view-list-map.js";
 import DataViewDetailMap from "./js/data-view-detail-map.js";
 
-ensureStylesheet(new URL("./vendor/maplibre-gl/dist/maplibre-gl.css", import.meta.url).href, { key: "maplibre-gl-css" });
-ensureStylesheet(new URL("./css/maplibre-pico-reset.css", import.meta.url).href, { key: "maplibre-pico-reset" });
-ensureStylesheet(new URL("./css/point-map.css", import.meta.url).href);
+export function register(api) {
+api.stylesheet(new URL("./vendor/maplibre-gl/dist/maplibre-gl.css", import.meta.url).href, { key: "maplibre-gl-css" });
+api.stylesheet(new URL("./css/maplibre-pico-reset.css", import.meta.url).href, { key: "maplibre-pico-reset" });
+api.stylesheet(new URL("./css/point-map.css", import.meta.url).href);
 
 const hasGeo = (columns) => !!findGeoColumns(columns);
 
-registerView({
+api.registerComponent({ kind: "view",
     id: "map",
     context: "list",
     component: DataViewListMap,
@@ -35,10 +35,12 @@ registerView({
     availableFor: hasGeo,
 });
 
-registerView({
+api.registerComponent({ kind: "view",
     id: "map",
     context: "detail",
     component: DataViewDetailMap,
     icon: "⌖",
     availableFor: hasGeo,
 });
+
+}

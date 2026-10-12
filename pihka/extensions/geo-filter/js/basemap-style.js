@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Basemap style for the viewport-filter mini map. The extension serves its
  * own basemap copy from ../assets/world.pmtiles — swap that file (and, if

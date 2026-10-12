@@ -1,3 +1,4 @@
+// @ts-check
 // The upstream synchronous VFS uses XHR directly and does not validate range
 // responses. Install this worker-local transport before installing that VFS.
 // Validation runs in send(), before upstream can put any bytes in its cache.

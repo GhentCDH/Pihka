@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * Pure helpers for map data extraction. No maplibre/pmtiles imports — these
  * functions are safe to call from any component, even before the map

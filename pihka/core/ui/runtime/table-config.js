@@ -1,0 +1,107 @@
+// @ts-check
+/**
+ * Annotate schema metadata in place with display configuration.
+ * Tables gain `hidden` and `label`; columns gain `hidden`, `label`,
+ * `displayType`, and `format`.
+ *
+ * Note: hiding is a display concern, not access control — the data stays
+ * in the published .sqlite file.
+ *
+ * @param {{ tables: Object }} meta - from DataSource#metadata()
+ * @param {Object} config - parsed app/config.json
+ */
+export function applyTableConfig(meta, config, registry) {
+    const tablesCfg = config?.tables;
+    if (!tablesCfg || typeof tablesCfg !== "object") return;
+
+    for (const [tableName, tableMeta] of Object.entries(meta.tables)) {
+        const cfg = tablesCfg[tableName];
+        if (!cfg) continue;
+
+        tableMeta.hidden = cfg.hidden === true;
+        tableMeta.label = cfg.label ?? null;
+
+        const columnsCfg = cfg.columns;
+        if (!columnsCfg || typeof columnsCfg !== "object") continue;
+
+        for (const col of tableMeta.columns) {
+            const c = columnsCfg[col.name];
+            if (!c) continue;
+
+            col.hidden = c.hidden === true;
+            col.label = c.label ?? null;
+            col.format = c.format ?? null;
+            // "list" columns: separator the values were aggregated with
+            // (e.g. GROUP_CONCAT(x, '|')) and how many to show collapsed.
+            col.separator = typeof c.separator === "string" ? c.separator : null;
+            col.limit = typeof c.limit === "number" ? c.limit : null;
+            // Render values as links into another perspective's detail pages
+            // (used for view columns, which have no FK metadata).
+            col.linkTo = typeof c.linkTo === "string" ? c.linkTo : null;
+            if (c.type != null) {
+                col.displayType = c.type;
+                if (!registry.get("cell", c.type)) {
+                    console.warn(
+                        `[table-config] ${tableName}.${col.name}: unknown type "${c.type}" — falling back to plain text`
+                        + ` (expected one of ${registry.list("cell").map(d => d.id).join(", ")})`,
+                    );
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Resolve a possibly-multilingual label to a display string.
+ * Strings pass through; objects pick the current language, then English,
+ * then the first available language; anything missing yields the fallback.
+ *
+ * @param {string|Object|null|undefined} label
+ * @param {string|null} lang - current language code
+ * @param {string} fallback - usually the raw column/table name
+ * @returns {string}
+ */
+export function localize(label, lang, fallback) {
+    if (!label) return fallback;
+    if (typeof label === "string") return label;
+    return label[lang] || label.en || Object.values(label)[0] || fallback;
+}
+
+/**
+ * The columns a view should display (hidden ones filtered out).
+ *
+ * @param {Array} columns
+ * @returns {Array}
+ */
+export function visibleColumns(columns) {
+    return columns.filter(c => !c.hidden);
+}
+
+/**
+ * Format a value according to a column's configured display type.
+ * Only "number" and "date" reach here (url/asset need markup, handled by
+ * the cell renderer). Falls back to the raw string for unparseable input.
+ *
+ * @param {Object} col - column metadata (displayType, format)
+ * @param {*} value
+ * @param {string|null} lang - locale for Intl formatting
+ * @returns {string}
+ */
+export function formatValue(col, value, lang) {
+    if (value == null || value === "") return "";
+
+    if (col.displayType === "number") {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return String(value);
+        return new Intl.NumberFormat(lang || undefined, col.format || {}).format(n);
+    }
+
+    if (col.displayType === "date") {
+        // Accepts ISO-ish strings and millisecond epochs via new Date().
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return String(value);
+        return new Intl.DateTimeFormat(lang || undefined, col.format || {}).format(d);
+    }
+
+    return String(value);
+}

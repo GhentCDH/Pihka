@@ -7,12 +7,12 @@ cache; it adds no runtime dependencies to core and requires no build step or CDN
 
 ## Configuration
 
-Add the module to your existing `components` array and select the datasource:
+Add the module to your existing `enginePlugins` array and select the datasource:
 
 ```json
 {
     "database": "app/database/catalog-v1.sqlite",
-    "components": ["extensions/http-vfs/http-vfs-component.js"],
+    "enginePlugins": ["extensions/http-vfs/http-vfs-component.js"],
     "datasource": {
         "type": "http-vfs",
         "options": {
@@ -57,7 +57,8 @@ No `SharedArrayBuffer`, COOP, or COEP headers are required. SQLite and synchrono
 XHR run in a module worker, not on the UI thread. Browser support requires module
 workers and WebAssembly. CSP must permit the local worker/WASM and database origin.
 Hosts may still set isolation headers; the HTTP worker explicitly disables
-SQLite's unrelated OPFS initialization with its supported `opfs-disable` URL flag.
+SQLite's unrelated persistence VFSes through `sqlite3ApiConfig.disable.vfs`
+before initialization, including the newer OPFS Web Locks variant.
 
 Malformed responses, changed validators, and transport failures are rejected.
 However, synchronous XHR buffers a response before it can be validated. A server
@@ -132,10 +133,19 @@ the extension is not a replacement for publishing appropriate indexes.
 
 ## Dependencies and Maintenance
 
-`deps.json` pins the official SQLite WASM distribution, the ISC-licensed
+`deps.json` pins the official SQLite WASM distribution at `3.53.4-build2`, the ISC-licensed
 `sqlite-wasm-http` 1.2.0 VFS, and the ISC-licensed `lru-cache` 7.18.3 browser module.
 Only the needed VFS modules are imported, not the upstream worker pool or bundler
 entry. The separate worker uses the current official SQLite API.
+It disables the unused browser-persistence VFSes through SQLite's documented
+[`sqlite3ApiConfig.disable.vfs`](https://sqlite.org/wasm/doc/trunk/cookbook.md)
+configuration, including both OPFS proxy workers on isolated hosts.
+
+Core's download source and this extension vendor SQLite WASM independently using
+the same manifest and lock workflow. The application does not use `sql.js`;
+maintenance scripts use Node's built-in `node:sqlite`. `lru-cache` stays on the
+latest 7.x release required by `sqlite-wasm-http` (`^7.18.2`); a newer major would
+require an upstream dependency/API migration.
 
 Regenerate only this extension with:
 
@@ -146,10 +156,16 @@ npm run vendorize -- --extension=http-vfs
 `vendor-patches.json` applies checked, uniquely matching replacements: current
 SQLite callback naming, read-only initialization/truncation, 65536-byte page
 headers, bounded read-ahead, EOF cache accounting, and short-read/error reporting.
-Bare dependency imports are rewritten to relative URLs. Transport validation is
+Bare dependency imports use the same checked patches to produce relative URLs. Transport validation is
 authored separately in `validated-http.js`; it is installed only inside this
 extension's worker. Review patches and rerun tests whenever upgrading dependencies.
 
 ```bash
 npm test -- tests/http-vfs.spec.js tests/datasource-contract.spec.js
 ```
+
+Module installation is explicit: the entrypoint exports `register(api)`. See [architecture and plugin migration](../../../ARCHITECTURE.md).
+
+Vendoring reproduces `deps.lock.json` by default; add `--update` only for an
+intentional upgrade. Verify locally with `npm run vendorize:check`. See
+[maintenance tooling](../../../scripts/README.md) for locks and rollback.

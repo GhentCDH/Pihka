@@ -11,7 +11,7 @@ Enable the extension and mark the column holding the text in
 
 ```json
 {
-    "components": ["extensions/text-annotations/text-annotations-component.js"],
+    "uiPlugins": ["extensions/text-annotations/text-annotations-component.js"],
     "tables": {
         "text_pages": {
             "columns": {
@@ -63,9 +63,11 @@ unreachable via legacy `/{perspective}/{id}` URLs.
 
 ## Dependencies
 
-`@ghentcdh/annotated-text` is vendored under
+`@ghentcdh/annotated-text` 1.1.1 is vendored under
 `vendor/@ghentcdh/annotated-text/` (declared in `deps.json`, downloaded
-by `npm run vendorize`). The published bundle is fully self-contained —
+by `npm run vendorize`, with exact versions and hashes in `deps.lock.json`).
+Use `npm run vendorize -- --extension=text-annotations --update` to update it
+explicitly. The published bundle is fully self-contained —
 its own dependencies (d3, lodash-es, …) are pre-bundled — so the
 extension imports a single file by relative path; the page import map is
 not involved.
@@ -74,5 +76,7 @@ not involved.
 
 `@ghentcdh/annotated-text` is **MIT**-licensed, built at the
 [Ghent Centre for Digital Humanities](https://www.ghentcdh.ugent.be/)
-(no LICENSE file ships in the npm package; see the
-[upstream repository](https://github.com/GhentCDH/annotated-text)).
+(see the vendored [LICENCE](vendor/@ghentcdh/annotated-text/LICENCE) and
+[release provenance](THIRD-PARTY-NOTICES.md)).
+
+Module installation is explicit: the entrypoint exports `register(api)`. See [architecture and plugin migration](../../../ARCHITECTURE.md).
