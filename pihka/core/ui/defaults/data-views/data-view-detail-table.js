@@ -26,7 +26,7 @@ export default function DataViewDetailTable({ tableName, columns, row, fkResolve
                             h("th", { style: "text-align:left;white-space:nowrap;width:1%;padding-right:1.5rem" },
                                 localize(col.label, lang, col.name)),
                             h("td", null,
-                                h(CellValue, { col, value: row[col.name], row, columns, fkResolved, lang, perspectiveId, imageHeight: "8rem" })),
+                                h(CellValue, { col, value: row[col.name], row, columns, fkResolved, lang, perspectiveId, context: "detail", imageHeight: "8rem" })),
                         ),
                     ),
                 ),

@@ -13,14 +13,14 @@ import { localize, visibleColumns } from "../../runtime/table-config.js";
  *   lang          - (optional) current language code
  *   perspectiveId - (optional) perspective id, for registered cell renderers
  */
-export default function DataViewDetailCard({ columns, row, fkResolved, lang = null, perspectiveId = null }) {
+export default function DataViewDetailCard({ columns, row, fkResolved, lang = null, perspectiveId = null, context = "detail" }) {
     return h("article", null,
         h("dl", { style: "margin:0" },
             visibleColumns(columns).flatMap(col => [
                 h("dt", { key: `${col.name}-dt`, class: "text-meta", style: "margin-top:.5em" },
                     localize(col.label, lang, col.name)),
                 h("dd", { key: `${col.name}-dd`, style: "margin:0" },
-                    h(CellValue, { col, value: row[col.name], row, columns, fkResolved, lang, perspectiveId, imageHeight: "6rem" })),
+                    h(CellValue, { col, value: row[col.name], row, columns, fkResolved, lang, perspectiveId, context, imageHeight: "6rem" })),
             ]),
         ),
     );

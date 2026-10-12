@@ -56,6 +56,7 @@
                 },
                 "full_text": {
                     "type": "text",
+                    "maxWords": 30,
                     "fts": false,
                     "label": {
                         "en": "Full text",

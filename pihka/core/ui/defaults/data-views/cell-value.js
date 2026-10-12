@@ -34,9 +34,11 @@ const PREVIEW_CHARS = 300;
  *   imageHeight   - CSS max-height for image rendering (context-dependent)
  *   row           - (optional) full row object, for registered renderers
  *   columns       - (optional) row's column schema, for registered renderers
+ *   context       - list (default) or detail; passed to registered renderers
+ *   detailHref    - derived record URL passed to renderers, null without a single PK
  *   perspectiveId - (optional) current perspective, for registered renderers
  */
-export default function CellValue({ col, value, fkResolved, lang, imageHeight = "4rem", row = null, columns = null, perspectiveId = null }) {
+export default function CellValue({ col, value, fkResolved, lang, imageHeight = "4rem", row = null, columns = null, perspectiveId = null, context = "list" }) {
     const raw = value ?? "";
 
     // Foreign key → resolved display name + link to referenced entity
@@ -66,7 +68,13 @@ export default function CellValue({ col, value, fkResolved, lang, imageHeight = 
 
     const type = col.displayType || (isImagePath(String(raw)) ? "asset" : "plain");
     const renderer = getCellRenderer(type);
-    return renderer ? h(renderer, { col, value: raw, row, columns, fkResolved, lang, perspectiveId, imageHeight }) : String(raw);
+    const primaryKey = columns?.filter(column => column.primaryKey) ?? [];
+    const key = primaryKey.length === 1 ? primaryKey[0] : null;
+    const target = key?.linkTo || perspectiveId;
+    const id = key && row ? row[key.name] : null;
+    const detailHref = target && id != null
+        ? buildPath(`/${lang || "en"}/${target}/${encodeURIComponent(id)}/table`) : null;
+    return renderer ? h(renderer, { col, value: raw, row, columns, fkResolved, lang, perspectiveId, imageHeight, context, detailHref }) : String(raw);
 }
 
 /**
@@ -100,8 +108,22 @@ function ListValue({ col, value }) {
  * PREVIEW_CHARS with an inline "Show more/less" toggle. Same self-contained
  * pattern as ListValue, so it works identically in list and detail views.
  */
-function TextPreview({ value }) {
+function TextPreview({ col, value, context, detailHref, lang }) {
     const [expanded, setExpanded] = useState(false);
+    value = String(value);
+    if (col.maxWords) {
+        if (context === "detail") return h("span", { class: "cell-text" }, value);
+        const words = value.match(/\S+/g) ?? [];
+        if (words.length <= col.maxWords) return value;
+        const preview = words.slice(0, col.maxWords).join(" ") + "… ";
+        const more = lang === "nl" ? "Lees meer" : "Read more";
+        return h("span", { class: "cell-text" },
+            expanded ? value + " " : preview,
+            detailHref ? h("a", { href: detailHref }, more)
+                : h("button", { type: "button", class: "cell-text-toggle", onClick: () => setExpanded(e => !e) },
+                    expanded ? (lang === "nl" ? "Toon minder" : "Show less") : more),
+        );
+    }
     if (value.length <= PREVIEW_CHARS) return value;
 
     const preview = value.slice(0, PREVIEW_CHARS).trimEnd();

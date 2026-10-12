@@ -17,7 +17,7 @@ export default function DataViewListCards({ columns, rows, fkResolved, lang = nu
                 style: "display:grid;grid-template-columns:repeat(auto-fill,minmax(16rem,1fr));gap:1rem",
             },
                 rows.map((row, i) =>
-                    h(DataViewDetailCard, { key: i, columns, row, fkResolved, lang, perspectiveId }),
+                    h(DataViewDetailCard, { key: i, context: "list", columns, row, fkResolved, lang, perspectiveId }),
                 ),
             ),
     );

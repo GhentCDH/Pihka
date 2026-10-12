@@ -32,6 +32,7 @@ export function applyTableConfig(meta, config, registry) {
             col.hidden = c.hidden === true;
             col.label = c.label ?? null;
             col.format = c.format ?? null;
+            col.maxWords = Number.isInteger(c.maxWords) && c.maxWords > 0 ? c.maxWords : null;
             // "list" columns: separator the values were aggregated with
             // (e.g. GROUP_CONCAT(x, '|')) and how many to show collapsed.
             col.separator = typeof c.separator === "string" ? c.separator : null;
