@@ -33,18 +33,19 @@ for (const mode of ["download", "http-vfs"]) {
             const map = globalThis.testClusterMap;
             const cluster = map.queryRenderedFeatures({ layers: ["pm-clusters"] })[0];
             const [point] = await map.getSource("pm-points").getClusterLeaves(cluster.properties.cluster_id, 1, 0);
-            map.jumpTo({ center: point.geometry.coordinates, zoom: 15 });
+            map.jumpTo({ center: point.geometry.coordinates, zoom: 15, bearing: 45, pitch: 40 });
         });
         await expect.poll(() => page.evaluate(() => globalThis.testClusterMap.querySourceFeatures("pm-points").filter(feature => !feature.properties.cluster).length)).toBeGreaterThan(0);
-        const position = await page.evaluate(() => {
+        const position = await page.evaluate(async () => {
             const map = globalThis.testClusterMap;
             const point = map.querySourceFeatures("pm-points").find(feature => !feature.properties.cluster);
-            map.jumpTo({ center: point.geometry.coordinates, zoom: 15 });
+            map.jumpTo({ center: point.geometry.coordinates, zoom: 15, bearing: 45, pitch: 40 });
+            await new Promise(resolve => map.once("idle", resolve));
             const bounds = map.getCanvas().getBoundingClientRect();
             return { x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2 };
         });
         await expect.poll(() => page.evaluate(() => globalThis.testClusterMap.queryRenderedFeatures({ layers: ["pm-unclustered"] }).length)).toBeGreaterThan(0);
-        await page.mouse.click(position.x, position.y);
+        await page.mouse.click(position.x, position.y - 12);
         await expect(page.locator(".maplibregl-popup-content table")).toBeVisible();
         await expect(page.locator(".maplibregl-popup-content")).toContainText("View details");
         expect(errors).toEqual([]);

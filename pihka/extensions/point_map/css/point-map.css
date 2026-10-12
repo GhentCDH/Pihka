@@ -14,3 +14,20 @@
 .map-list-section {
     min-height: 18rem;
 }
+
+.point-map-pin {
+    width: 24px;
+    height: 28px;
+    text-align: center;
+}
+
+.point-map-pin img {
+    display: block;
+    margin: 0 auto;
+}
+
+.point-map-pin:focus-visible {
+    outline: 2px solid var(--pico-primary);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
