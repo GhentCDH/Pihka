@@ -1,4 +1,4 @@
-e# Pihka - Sustainable data publication platform
+# Pihka - Sustainable data publication platform
 
 ## Abstract
 
@@ -36,6 +36,16 @@ Pikah means resin in Finnish. The metaphor used here is that resin captures the 
 
 
 Pihka should not optimize for bandwidth but for ease of use, clarity and dependency limitation. 
+
+### Independent query engine and replaceable user interface
+
+The implementation separates a browser-based query engine from presentation. A single `openDataset` entry point loads a datasource, discovers structural metadata, prepares or discovers search indexes and perspectives, and returns a query facade with explicit cleanup. Queries and filters use plain data; SQL and database handles remain inside the engine. Labels, visibility, formatting, routes, and widget choices belong to the user interface.
+
+The default datasource downloads and deserializes a complete SQLite file. An optional HTTP VFS reads immutable published databases through HTTP ranges. The default prioritizes simplicity; the optional source accommodates larger publications without making range support mandatory for every host. Both implementations share query contracts and are tested independently. The range source requires prebuilt indexes and views and never silently falls back to downloading.
+
+The current UI uses vendored Preact without transpilation. Its shell, pages, views, cells, and facets register through one UI component registry. Default components use the same mechanism as optional components, including tables embedded in search results, related records, and map popups. The registry has no framework dependency; Preact rendering and error boundaries reside in the UI runtime. Replacing the framework entails replacing its runtime and renderers, while preserving the engine and query contracts.
+
+Engine and UI plugins have separate configuration lists and explicit registration functions. Registries belong to individual sessions, and failed plugin installation does not leave partial registrations. This small set of boundaries avoids a general-purpose plugin framework while making the dependency graph testable. Architecture checks, real-browser tests for both datasources, and interactive Chrome DevTools MCP checks verify these boundaries and user-facing behavior.
 
 ### Javascript programming language
 
@@ -86,7 +96,7 @@ Static map hosting:
 ### Extension: Mapping without external services
 
 
-DH project often have a mapping component. Similarly to the rest of Pihka mapping can be done without the need for external services or software running on a server. A hybrid approach is proposed: a locally hosted, detailed pmfile of the region of interest combined with an on-line third party service which serves the rest of the world in less detail. The rest of the world backup is a - by defenition - unreliable third party which will go offline. If the third party goes offline the main focus is still captured by the local pmfile.
+DH project often have a mapping component. Similarly to the rest of Pihka mapping can be done without the need for external services or software running on a server. The implementation uses locally hosted PMTiles basemaps, with independently swappable assets for the map and location-filter extensions. A publication can provide a basemap suited to its region of interest without depending on a third-party tile service.
 
 Protomaps https://protomaps.com/  and the associated PMTiles technology. 
 
