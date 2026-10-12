@@ -518,8 +518,7 @@ tbody tr:hover {
 }
 
 .faceted-content table {
-  width: max-content;
-  min-width: 100%;
+  width: 100%;
 }
 
 /* Toolbar: view toggles + pagination + count + page size in one row */
@@ -914,4 +913,32 @@ article {
 .fts-error {
   margin: .35rem 0 0;
   color: var(--pico-del-color);
+}
+
+/* Text wraps before the table needs horizontal scrolling. */
+.table-scroll th, .table-scroll td {
+  overflow-wrap: anywhere;
+  padding: .4rem .5rem;
+}
+.table-scroll img { max-width: 100%; }
+.table-scroll table { margin-bottom: 0; }
+
+/* Keep the footer accessible below the desktop table workspace. */
+@media (min-width: 769px) and (min-height: 600px) {
+  #app:has(.faceted-content .table-scroll.fill-height) {
+    position: relative;
+    height: 100dvh;
+  }
+  #app:has(.faceted-content .table-scroll.fill-height) > main {
+    padding-bottom: .5rem;
+  }
+  #app:has(.faceted-content .table-scroll.fill-height) .faceted-content > section {
+    margin-bottom: 0;
+  }
+  #app:has(.faceted-content .table-scroll.fill-height) > .site-footer {
+    position: absolute;
+    top: 100%;
+    width: 100%;
+    margin-top: 0;
+  }
 }
