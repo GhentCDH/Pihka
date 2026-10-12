@@ -7,6 +7,6 @@ Stop only for missing user decisions or destructive actions. Commit and publish 
 - [x] Add configurable word previews and document renderer context.
 - [x] Fit tables to available width and move footer below desktop table workspace.
 - [x] Test both transports, inspect Chrome, run lint/type checks.
-- [ ] Create Conventional Commits and push refactor/main.
+- [x] Create Conventional Commits and push refactor/main.
 
 Verification: 10 focused Playwright checks passed across download/HTTP VFS; lint, type checks and diff checks passed. Chrome MCP: Dutch works table fits at 1440px, footer below viewport; narrower layouts retain scroll fallback.
