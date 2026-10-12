@@ -27,6 +27,7 @@ test("download and real HTTP VFS return equivalent query, relation and export va
                 const pageTwo = await store.queryTable("works", { ...sorted, page: 1, pageSize: 2 });
                 const search = await store.queryTable("works", { ...sorted, search: "Lighthouse" });
                 const view = await store.queryTable("published_view", sorted);
+                const viewRow = await store.queryRow("published_view", 1);
                 const bounded = await store.queryTable("authors", { ...sorted, filters: { _viewport: { type: "bounds", latCol: "lat", lonCol: "lon", minLat: 51, maxLat: 52, minLon: -1, maxLon: 1 } } });
                 const author = await store.queryRow("authors", 1);
                 const related = await store.queryRelated("authors", author.row);
@@ -34,7 +35,7 @@ test("download and real HTTP VFS return equivalent query, relation and export va
                 // Raw JSON export is the same all-rows contract used by the export view.
                 const exported = JSON.stringify(all.rows);
                 const clean = r => ({ rows: r.rows, totalRows: r.totalRows, page: r.page, totalPages: r.totalPages, fkResolved: r.fkResolved });
-                return { all: clean(all), filtered: clean(filtered), roundtripped: clean(roundtripped), junction: clean(junction), pageTwo: clean(pageTwo), search: clean(search), view: clean(view), bounded: clean(bounded), author, related, counts, exported };
+                return { all: clean(all), filtered: clean(filtered), roundtripped: clean(roundtripped), junction: clean(junction), pageTwo: clean(pageTwo), search: clean(search), view: clean(view), viewRow, bounded: clean(bounded), author, related, counts, exported };
             } finally { await session.close(); }
         }, mode));
     }
@@ -47,5 +48,6 @@ test("download and real HTTP VFS return equivalent query, relation and export va
     expect(results[0].search.rows.map(r => r.title)).toEqual(["To the Lighthouse"]);
     expect(results[0].bounded.rows.map(r => r.name)).toEqual(["Virginia Woolf"]);
     expect(results[0].view.totalRows).toBe(35);
+    expect(results[0].viewRow.row.title).toBe("Mrs Dalloway");
     expect(JSON.parse(results[0].exported)).toHaveLength(35);
 });

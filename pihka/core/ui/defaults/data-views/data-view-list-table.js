@@ -48,8 +48,8 @@ function ColumnHeader({ col, lang, sort, onSort }) {
 function Cell({ col, value, row, columns, fkResolved, lang, perspectiveId }) {
     const raw = value ?? "";
 
-    // Primary key → link to detail page
-    if (col.primaryKey && perspectiveId && lang) {
+    // Primary key → default detail link; explicit linkTo config wins.
+    if (col.primaryKey && !col.linkTo && perspectiveId && lang) {
         return h("td", null,
             h("a", { href: buildPath(`/${lang}/${perspectiveId}/${raw}/table`) }, raw),
         );

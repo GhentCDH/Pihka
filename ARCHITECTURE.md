@@ -200,3 +200,9 @@ Node SQLite, and publication reuses engine metadata/FTS/perspective helpers thro
 a small adapter. Shared script utilities cover file I/O only; data-selection rules
 remain local. The test server remains test infrastructure. See
 [maintenance tooling](scripts/README.md) for the dependency and failure contracts.
+
+### Table and perspective options
+
+Presentation metadata retains per-extension `tables.<table>.options`. A perspective's `options` shallowly overrides the table's option namespaces; list plugins receive this resolved bag. The public UI helper `extensionOptions(options, key)` selects one namespace. These settings never enter the query engine.
+
+For published SQL views, a literal `id` column is treated as the row identifier when SQLite reports no primary key, preserving detail navigation on id-bearing perspectives for both transports. Authors must ensure these identifiers are unique. Views without an id retain no detail identifier.

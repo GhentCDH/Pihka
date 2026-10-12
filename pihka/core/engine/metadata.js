@@ -42,6 +42,12 @@ export async function readMetadata(ds) {
                 },
             });
 
+            // Views expose no declared PK. Preserve the convention that an
+            // explicit id column identifies rows in a published perspective.
+            if (type === "view" && !columns.some(c => c.primaryKey)) {
+                const idColumn = columns.find(c => c.name === "id");
+                if (idColumn) idColumn.primaryKey = true;
+            }
             tables[name] = { type, columns };
         }
 

@@ -60,3 +60,5 @@ export async function mountUI({ element, registry, store, schema, config, footer
     );
     return { ...presentation, unmount: () => render(null, element) };
 }
+
+export { extensionOptions } from "./runtime/extension-options.js";

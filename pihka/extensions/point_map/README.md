@@ -51,11 +51,20 @@ extension-specific rules to it.
 
 Vendored under `vendor/` (declared in `deps.json`, downloaded by
 `npm run vendorize`): `maplibre-gl` (BSD-3-Clause), `pmtiles`
-(BSD-3-Clause), and `fflate` (MIT, pmtiles' gzip fallback — vendorize
-rewrites pmtiles' bare `fflate` import to a relative path). The extension
+(BSD-3-Clause). The extension
 imports everything by relative path; the page import map is not involved.
 
 Module installation is explicit: the entrypoint exports `register(api)`. See [architecture and plugin migration](../../../ARCHITECTURE.md).
 
 MapLibre 6 requires WebGL2. Its module worker is vendored beside the main
 ES module and loads from the same static host; no CDN or blob worker is needed.
+
+## Clustering
+
+Set `tables.<table>.options.point_map.clustering` to `true`, `false`, or
+`"auto"`. Omitted settings behave like `"auto"`: clustering starts above
+1,000 visible points. A configured perspective can override the table's
+`point_map` options through its own `options` bag. Cluster circles show counts
+and zoom in when clicked; individual points open registered detail-table
+popups. With clustering disabled, DOM markers also support keyboard activation.
+Count labels use the bundled glyph asset.

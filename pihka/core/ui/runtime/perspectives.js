@@ -17,6 +17,10 @@ import { getPref } from "./prefs.js";
  * @property {number} page_size
  * @property {string|null} query - SQL backing the perspective's view
  * @property {Array|null} facets
+ * @property {Object|null} options - free-form view options, namespaced per
+ *   extension, read via
+ *   extension-options.js. Resolved as the backing table's `config.tables`
+ *   options merged with (overridden by) this perspective's own `options`.
  * @property {"perspective"|"table"} kind - configured perspective or
  *   auto-generated table card (drives homepage grouping)
  */
@@ -97,6 +101,11 @@ function normalizePerspective(p, meta, kind, registry) {
             .map(d => d.id);
     }
 
+    const tableOptions = meta?.tables?.[p.table]?.options;
+    const options = tableOptions || p.options
+        ? { ...(tableOptions || {}), ...(p.options || {}) }
+        : null;
+
     return {
         id:            String(p.id),
         name:          String(p.name ?? p.id),
@@ -110,6 +119,7 @@ function normalizePerspective(p, meta, kind, registry) {
         default_sort:  p.default_sort || null,
         page_size:     typeof p.page_size === "number" ? p.page_size : 25,
         facets:        Array.isArray(p.facets) ? p.facets : null,
+        options,
         kind,
     };
 }

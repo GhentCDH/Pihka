@@ -71,3 +71,15 @@ Update checkboxes immediately after verification, attach evidence, and reread th
 - Chrome MCP completed both modes: full-file HTTP 200 versus real Range/206 verified; search/filter/cards/export/local IIIF/maps/annotations/mobile checked. See tests/chrome-results.md. Screenshots inspected inline; connector denied file saving.
 - Independent reviews fixed config normalization robustness, BFCache cleanup listener, unknown cell fallback, cards duplicate section IDs, progress listener order and test-server PMTiles ranges. No unresolved blockers.
 - Final verification: 125/125 Playwright tests; 18/18 engine, registry, presentation and dependency-boundary tests; lint, TypeScript and diff checks pass. Both actual download and HTTP VFS implementations exercised. Published databases, vendored dependencies and package-lock.json unchanged. All changes remain on refactor.
+
+## Publication — 2026-10-12
+
+- [x] Commit implementation in practical Conventional Commit batches on refactor.
+- [x] Verify default app selects http-vfs; Pages serves main:/docs (symlink to pihka).
+- [x] Preserve newer main changes (map clustering, extension options, view identifiers).
+- [x] Verify integrated browser suite, engine/scripts, lint and typecheck.
+At commit time, the remaining publication step is pushing refactor and main and verifying Pages/live HTTP Range querying; the final session report records that outcome.
+
+No additional user decisions required. Publishing was explicitly requested.
+
+- Integrated release verification: 138 browser tests passed, including both transports and clustering; 18 engine/architecture and 17 script tests passed; lint/typecheck/offline vendor checks pass. Explicit linkTo destinations retain precedence over inferred view identifiers.

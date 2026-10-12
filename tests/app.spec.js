@@ -539,6 +539,13 @@ test("point_map extension: geo tables get map views and the location facet", asy
 });
 
 test("point_map extension: filtering updates markers without rebuilding the map", async ({ page }) => {
+  // This checks DOM marker reuse; clustering is covered separately.
+  await page.route("**/app/config.json", async route => {
+    const response = await route.fetch();
+    const config = await response.json();
+    config.tables.authors = { ...config.tables.authors, options: { point_map: { clustering: false } } };
+    await route.fulfill({ json: config });
+  });
   await gotoRoute(page, "/en/authors/map");
   await expect(page.locator(".maplibregl-marker").first()).toBeVisible({ timeout: 10000 });
   const before = await page.locator("section .maplibregl-marker").count();
