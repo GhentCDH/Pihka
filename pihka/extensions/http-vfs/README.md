@@ -42,8 +42,10 @@ versioned URLs avoid disrupting sessions with cached pages.
 
 - Serve HEAD with status 200 and the database's exact `Content-Length`.
 - Serve range GETs with status 206, exact `Content-Range`, and the requested bytes.
-- Serve database bytes without HTTP compression (`Content-Encoding: identity` or
-  no encoding). Compressing JS/WASM is fine.
+- Serve database range responses without HTTP compression (`Content-Encoding: identity`
+  or no encoding). If a host compresses HEAD (as GitHub Pages does), the adapter
+  probes bytes 0–99 to discover the uncompressed size and validators. Compressed
+  range responses remain unsupported. Compressing JS/WASM is fine.
 - Provide a strong `ETag` consistently on HEAD and GET, unless using the explicit
   immutable-URL option. Honor conditional requests and do not transform bytes.
 - For cross-origin databases, allow the app origin, HEAD/GET and preflight OPTIONS;

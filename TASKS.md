@@ -83,3 +83,5 @@ At commit time, the remaining publication step is pushing refactor and main and 
 No additional user decisions required. Publishing was explicitly requested.
 
 - Integrated release verification: 138 browser tests passed, including both transports and clustering; 18 engine/architecture and 17 script tests passed; lint/typecheck/offline vendor checks pass. Explicit linkTo destinations retain precedence over inferred view identifiers.
+
+- Initial Pages deployment built commit 7bc4804 successfully but Chrome exposed compressed HEAD metadata on GitHub Pages. Range GETs are identity/206. Added a bounded identity probe and regression tests; deployment verification continues.

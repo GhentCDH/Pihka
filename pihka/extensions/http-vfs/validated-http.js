@@ -13,6 +13,8 @@ export function installValidatedHttp({ maxReadBytes = 1024 * 1024, immutable = f
             if (async !== false || !["HEAD", "GET"].includes(method)) throw new Error("Unsupported VFS request");
             this.method = method;
             this.url = url;
+            this.requestHeaders = [];
+            this.probe = null;
             super.open(method, url, false);
         }
 
@@ -26,7 +28,16 @@ export function installValidatedHttp({ maxReadBytes = 1024 * 1024, immutable = f
                 if (this.end - this.start + 1 > maxReadBytes) throw new Error("HTTP VFS request exceeds maxReadBytes");
                 value = `bytes=${this.start}-${this.end}`;
             }
+            this.requestHeaders.push([name, value]);
             super.setRequestHeader(name, value);
+        }
+
+        getResponseHeader(name) {
+            if (this.probe) {
+                if (name.toLowerCase() === "content-length") return String(this.probeSize);
+                return this.probe.getResponseHeader(name);
+            }
+            return super.getResponseHeader(name);
         }
 
         send() {
@@ -39,7 +50,26 @@ export function installValidatedHttp({ maxReadBytes = 1024 * 1024, immutable = f
                 // Synchronous XHR buffers the response: maxReadBytes bounds the
                 // requested range, not bytes received from a noncompliant server.
                 super.send();
-                const encoding = this.getResponseHeader("Content-Encoding");
+                let encoding = this.getResponseHeader("Content-Encoding");
+                // Some static hosts compress HEAD's full representation, but
+                // serve byte ranges without compression. Discover that identity
+                // representation with a bounded probe; never use compressed size
+                // or validators as SQLite offsets or identity validators.
+                if (this.method === "HEAD" && this.status === 200 && encoding && encoding.toLowerCase() !== "identity") {
+                    const probe = new NativeXHR();
+                    probe.open("GET", this.url, false);
+                    probe.responseType = "arraybuffer";
+                    for (const [name, value] of this.requestHeaders) probe.setRequestHeader(name, value);
+                    probe.setRequestHeader("Range", "bytes=0-99");
+                    probe.send();
+                    const range = /^bytes 0-99\/(\d+)$/.exec(probe.getResponseHeader("Content-Range") || "");
+                    if (probe.status !== 206 || !range || !(probe.response instanceof ArrayBuffer) || probe.response.byteLength !== 100) {
+                        throw new Error("Identity probe requires 206, exact Content-Range and 100 bytes");
+                    }
+                    this.probe = probe;
+                    this.probeSize = Number(range[1]);
+                    encoding = this.getResponseHeader("Content-Encoding");
+                }
                 if (encoding && encoding.toLowerCase() !== "identity") throw new Error("Database must use identity Content-Encoding");
                 if (this.method === "HEAD") {
                     const length = this.getResponseHeader("Content-Length");

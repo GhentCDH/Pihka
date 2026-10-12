@@ -4,6 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { gzipSync } from "node:zlib";
 
 let server, origin, directory, bytes;
 const requests = [];
@@ -67,6 +68,11 @@ test.beforeAll(async () => {
         if (req.method === "HEAD") {
             res.statusCode = mode === "missing" ? 404 : 200;
             res.setHeader("Content-Length", bytes.length);
+            if (mode === "compressed-head" || mode === "compressed-range") {
+                res.setHeader("Content-Encoding", "gzip");
+                res.setHeader("Content-Length", 1234);
+                res.setHeader("ETag", 'W/"compressed"');
+            }
             res.end();
             return;
         }
@@ -86,6 +92,10 @@ test.beforeAll(async () => {
         res.setHeader("Content-Range", `bytes ${mode === "wrong" ? start + 1 : start}-${end}/${bytes.length}`);
         let body = bytes.subarray(start, end + 1);
         if (mode === "short") body = body.subarray(0, body.length - 1);
+        if (mode === "compressed-range") {
+            res.setHeader("Content-Encoding", "gzip");
+            body = gzipSync(body);
+        }
         entry.bytes = body.length;
         res.end(body);
     });
@@ -136,7 +146,21 @@ test("HTTP VFS: real cross-origin ranges, prebuilt FTS modes/mapping, filters, d
     expect((await download).suggestedFilename()).toBe("works-selection.csv");
 });
 
-for (const mode of ["missing", "ignored", "wrong", "short", "changed", "416", "later-error", "no-etag", "weak", "invalid-etag", "lost-etag", "precondition"]) {
+test("HTTP VFS: compressed HEAD discovers identity size and validators through a range probe", async ({ page }) => {
+    requests.length = 0;
+    await configure(page, { mode: "compressed-head" });
+    await page.goto("/#/en/works/table?q=Lighthouse");
+    await expect(page.locator("section tbody tr")).toHaveCount(1);
+    await expect(page.locator("section tbody")).toContainText("To the Lighthouse");
+    const reads = requests.filter(r => r.method === "GET");
+    expect(reads[0].range).toBe("bytes=0-99");
+    expect(reads[0].ifMatch).toBeUndefined();
+    expect(reads.slice(1).every(r => r.ifMatch === '"v1"')).toBe(true);
+    expect(reads.every(r => r.range)).toBe(true);
+    expect(reads.reduce((total, r) => total + r.bytes, 0)).toBeLessThan(bytes.length / 4);
+});
+
+for (const mode of ["missing", "ignored", "wrong", "short", "changed", "416", "later-error", "no-etag", "weak", "invalid-etag", "lost-etag", "precondition", "compressed-range"]) {
     test(`HTTP VFS: rejects ${mode} responses without a downloader fallback`, async ({ page }) => {
         requests.length = 0;
         await configure(page, { mode });
