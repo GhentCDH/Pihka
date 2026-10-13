@@ -213,7 +213,11 @@ export class DataStore {
         // searching, otherwise no order.
         let orderClause = "";
         if (sort && sort.column) {
-            orderClause = `ORDER BY ${quote(sort.column)} ${sort.direction === "DESC" ? "DESC" : "ASC"}`;
+            // For all rows, a sequential scan plus an in-memory sort beats walking
+            // the sort index, whose row lookups become random page reads over
+            // HTTP. Unary "+" disables the index but keeps the column collation.
+            const key = pageSize == null ? `+${quote(sort.column)}` : quote(sort.column);
+            orderClause = `ORDER BY ${key} ${sort.direction === "DESC" ? "DESC" : "ASC"}`;
         } else if (ftsInfo) {
             orderClause = `ORDER BY ${quote(ftsInfo.table)}.rank`;
         }
