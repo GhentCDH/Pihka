@@ -63,7 +63,7 @@ must already exist in the published database; this source is strictly read-only.
 
 # credits
 
-https://picocss.com/docs
+Styling: [Pico CSS](https://picocss.com/docs) via [Blades CSS' maintained Pico fork](https://blades.dev/css/pico/) (Pico itself is archived).
 
 
 ## License

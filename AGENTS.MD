@@ -40,7 +40,7 @@ pihka/
       components/     # Preact components using h() hyperscript (no JSX)
       utilities-data/ # Reusable data layer — SQLite access, SQL, schema, config, asset paths (no preact)
       utilities-ui/   # Preact-dependent plumbing (router, signal, prefs, view-registry, cell-renderers, perspectives)
-    assets/stylesheets/  # pico.min.css (PicoCSS base) + base.css (custom vars/overrides)
+    assets/stylesheets/  # pico.min.css (Pico CSS, Blades' maintained fork — see core/THIRD-PARTY-NOTICES.md) + base.css (custom vars/overrides)
     vendor/           # Vendored npm packages (downloaded by vendorize-deps.js)
       importmap.json  # Generated import map for vendored packages
   extensions/         # Optional reusable components, each with its own vendored deps
