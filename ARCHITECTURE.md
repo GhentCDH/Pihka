@@ -167,6 +167,15 @@ facets. Hidden annotation tables retain their previous no-highlights behavior.
 Unknown cell types remain declared in UI metadata and fall back to plain text.
 Numeric coordinate controls are replaced only when a usable location facet exists.
 
+Supplemental facets (`supplemental: true`) render after the other controls and
+receive `{ autoFilterMeta, facetMeta, filters, actions, lang }`. `facetMeta` holds
+the configured facets' options and counts (null without configured facets), and
+`availableFor(autoFilterMeta, facetMeta)` sees both. `replacesFacets(facetMeta)`
+returns field names whose own controls the facet hides; it then renders at the
+position of the first replaced field. The engine still counts replaced fields,
+so a facet can lay out several configured fields as one control (for example a
+grid) and change them through `actions.onMultiChange`.
+
 Shareable filters/sort/page/view/search remain in hash URLs. Device preferences
 remain local, with URL > preference > configuration precedence. Static assets
 resolve relative to the deployed app, including subdirectory hosting.
