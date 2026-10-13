@@ -1,8 +1,9 @@
 /*
  * Pihka base styles.
  *
- * PicoCSS does the heavy lifting (typography, forms, buttons, tables,
- * light/dark themes). This file only:
+ * Pico CSS does the heavy lifting (typography, forms, buttons, tables,
+ * light/dark themes) — Blades' maintained fork (https://blades.dev/css/pico/),
+ * as upstream Pico is archived. This file only:
  *   1. Re-tints Pico's primary color to resin amber (pihka).
  *   2. Aliases a handful of shorthand variables to Pico's theme variables
  *      so custom components follow light/dark mode automatically.
