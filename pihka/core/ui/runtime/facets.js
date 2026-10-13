@@ -1,7 +1,12 @@
 // @ts-check
 import { localize } from "./table-config.js";
 import { guardedDefinition } from "./component-host.js";
-/** One sequence for configured, inferred and plugin facet controls. */
+/**
+ * One sequence for configured, inferred and plugin facet controls.
+ * Supplemental facets may hide controls through `replacesFacets(facetMeta)`
+ * and then take the position of the first control they replace. Descriptors
+ * carry a `placement`: "sidebar" (default) or "top" (above the results).
+ */
 export function normalizeFacets({ facetMeta, autoFilterMeta, filters, actions, lang }, registry) {
     const result = [];
     const range = (field, meta, col = {}) =>
@@ -36,26 +41,55 @@ export function normalizeFacets({ facetMeta, autoFilterMeta, filters, actions, l
                         : actions.onMultiChange(field, selected),
             },
         });
+    const supplemental = registry
+        .list("facet")
+        .map(guardedDefinition)
+        .filter((def) => def.supplemental && (!def.availableFor || def.availableFor(autoFilterMeta, facetMeta)));
+    const owners = new Map(
+        supplemental.flatMap((def) => replacedFacets(def, facetMeta).map((field) => [field, def])),
+    );
+    const placed = new Set();
+    const place = (def) => {
+        if (placed.has(def)) return;
+        placed.add(def);
+        result.push({
+            id: def.id,
+            renderer: def.id,
+            placement: def.placement === "top" ? "top" : "sidebar",
+            props: { autoFilterMeta, facetMeta, filters, actions, lang },
+        });
+    };
+    // A replacing facet takes the position of the first control it replaces.
+    const replaced = (field) => {
+        const owner = owners.get(field);
+        if (owner) place(owner);
+        return !!owner;
+    };
     if (facetMeta != null) {
         for (const [field, meta] of Object.entries(facetMeta)) {
+            if (replaced(field)) continue;
             if (meta.type === "range") range(field, meta);
             else if (["dropdown", "checkbox", "values"].includes(meta.type)) values(field, meta);
         }
     } else if (autoFilterMeta) {
         for (const col of autoFilterMeta.multiColumns || [])
-            values(col.name, autoFilterMeta.multiMeta[col.name]);
+            if (!replaced(col.name)) values(col.name, autoFilterMeta.multiMeta[col.name]);
         for (const col of autoFilterMeta.rangeColumns || [])
-            range(col.name, autoFilterMeta.rangeMeta[col.name], col);
+            if (!replaced(col.name)) range(col.name, autoFilterMeta.rangeMeta[col.name], col);
         for (const col of autoFilterMeta.m2mColumns || [])
-            values(col.name, autoFilterMeta.m2mMeta[col.name], true);
+            if (!replaced(col.name)) values(col.name, autoFilterMeta.m2mMeta[col.name], true);
     }
-    for (const def of registry.list("facet").map(guardedDefinition)) {
-        if (def.supplemental && (!def.availableFor || def.availableFor(autoFilterMeta)))
-            result.push({
-                id: def.id,
-                renderer: def.id,
-                props: { autoFilterMeta, filters, actions, lang },
-            });
-    }
+    supplemental.forEach(place);
     return result;
+}
+
+function replacedFacets(def, facetMeta) {
+    if (typeof def.replacesFacets !== "function") return [];
+    try {
+        const fields = def.replacesFacets(facetMeta);
+        return Array.isArray(fields) ? fields.filter((f) => typeof f === "string") : [];
+    } catch (error) {
+        console.warn(`[pihka] facet ${def.id} facet replacement failed`, error);
+        return [];
+    }
 }

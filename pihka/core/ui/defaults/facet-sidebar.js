@@ -27,7 +27,8 @@ export default function FacetSidebar({
 }) {
     const hasActiveFilters = Object.keys(filters).length > 0 || (search && search.length > 0);
 
-    const descriptors = normalizeFacets({facetMeta,autoFilterMeta,filters,actions,lang},useRegistry());
+    const descriptors = normalizeFacets({facetMeta,autoFilterMeta,filters,actions,lang},useRegistry())
+        .filter(d => d.placement !== "top");
 
     return h("aside", { class: "facet-sidebar" },
         h("div", { class: "facet-header facet-sidebar-header" },

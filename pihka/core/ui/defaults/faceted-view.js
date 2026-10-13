@@ -1,6 +1,7 @@
 // @ts-check
-import { registeredComponent } from "../runtime/component-host.js";
+import { registeredComponent, ComponentHost, useRegistry } from "../runtime/component-host.js";
 import { h } from "preact";
+import { normalizeFacets } from "../runtime/facets.js";
 import { useQuery, QueryStatus } from "../runtime/use-query.js";
 const FacetSidebar = registeredComponent("control", "facets");
 const Pagination = registeredComponent("control", "pagination");
@@ -51,6 +52,7 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
     }, [needsAllRows, store, p.table, filtersKey, sort?.column, sort?.direction, search], !loading && !error);
 
     const { params } = useRouter();
+    const registry = useRegistry();
     if (error || facetQuery.error || allQuery.error) return h(QueryStatus, { error: error || facetQuery.error || allQuery.error });
     const pending = loading || facetQuery.loading || allQuery.loading;
     const facetMeta = facetQuery.data ?? facetQuery.previousData;
@@ -69,6 +71,10 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
     // One object for everything views/sidebar can do — no per-callback
     // prop drilling.
     const viewActions = { ...actions, onClearAll, onViewChange };
+    const topFacets = normalizeFacets(
+        { facetMeta, autoFilterMeta: filterMeta, filters, actions: viewActions, lang },
+        registry,
+    ).filter(d => d.placement === "top");
 
     const firstRow = totalRows > 0 ? page * pageSize + 1 : 0;
     const lastRow = Math.min((page + 1) * pageSize, totalRows);
@@ -128,6 +134,11 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
                         ),
                     ),
                 ),
+            ),
+
+            // Facets placed above the results stay visible while results load.
+            topFacets.length > 0 && h("div", { class: "faceted-top-facets" },
+                topFacets.map(d => h(ComponentHost, { ...d.props, key: d.id, kind: "facet", id: d.renderer })),
             ),
 
             // Active view
