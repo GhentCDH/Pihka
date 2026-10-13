@@ -84,6 +84,9 @@ WAL-format databases are rejected. Supported SQLite page sizes are 512 through
 This datasource never creates FTS indexes or runtime perspective views. Publish
 configured perspective tables/views in the database beforehand. Query-defined
 perspectives without a published backing relation are warned about and skipped.
+For large joined perspectives, set `"materialize": true`: `prepareSampleDatabase`
+then publishes the query as a table with indexes on its facet fields and default
+sort, so filters and counts use indexes instead of scanning the joined tables.
 
 Search discovers compatible external-content FTS5 tables from the schema; no
 specific index name is required. Use `detail=full` (the default), a `trigram` or
