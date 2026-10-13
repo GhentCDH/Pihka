@@ -43,12 +43,15 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
 
     // Non-paginated views (e.g. the map) show every row matching the
     // current filters, not just the current page, so they need their own
-    // unpaginated query.
+    // unpaginated query. Unordered views (e.g. the map) skip the sort: an
+    // index-ordered scan over a large table turns into random page reads,
+    // which are slow through HTTP range requests.
     const needsAllRows = !!viewDef && !viewDef.paginated;
+    const allSort = viewDef?.ordered === false ? null : sort;
     const allQuery = useQuery(async () => {
         if (!needsAllRows) return null;
-        return (await store.queryTable(p.table, { filters, sort, search, pageSize: null })).rows;
-    }, [needsAllRows, store, p.table, filtersKey, sort?.column, sort?.direction, search], !loading && !error);
+        return (await store.queryTable(p.table, { filters, sort: allSort, search, pageSize: null })).rows;
+    }, [needsAllRows, store, p.table, filtersKey, allSort?.column, allSort?.direction, search], !loading && !error);
 
     const { params } = useRouter();
     if (error || facetQuery.error || allQuery.error) return h(QueryStatus, { error: error || facetQuery.error || allQuery.error });
