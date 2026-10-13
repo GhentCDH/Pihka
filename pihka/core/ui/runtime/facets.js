@@ -4,7 +4,8 @@ import { guardedDefinition } from "./component-host.js";
 /**
  * One sequence for configured, inferred and plugin facet controls.
  * Supplemental facets may hide controls through `replacesFacets(facetMeta)`
- * and then take the position of the first control they replace.
+ * and then take the position of the first control they replace. Descriptors
+ * carry a `placement`: "sidebar" (default) or "top" (above the results).
  */
 export function normalizeFacets({ facetMeta, autoFilterMeta, filters, actions, lang }, registry) {
     const result = [];
@@ -54,6 +55,7 @@ export function normalizeFacets({ facetMeta, autoFilterMeta, filters, actions, l
         result.push({
             id: def.id,
             renderer: def.id,
+            placement: def.placement === "top" ? "top" : "sidebar",
             props: { autoFilterMeta, facetMeta, filters, actions, lang },
         });
     };

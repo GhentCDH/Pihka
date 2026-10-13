@@ -133,7 +133,8 @@ html, body {
   flex-direction: column;
   min-height: 0;
 }
-.faceted-view:has(.fill-height) .faceted-toolbar {
+.faceted-view:has(.fill-height) .faceted-toolbar,
+.faceted-view:has(.fill-height) .faceted-top-facets {
   flex: 0 0 auto;
 }
 /* The wrapper <section id={table}> between .faceted-content and the view
@@ -534,6 +535,14 @@ tbody tr:hover {
 .view-toggles {
   display: flex;
   gap: .25rem;
+}
+
+/* Supplemental facets with placement "top", one row below the toolbar */
+.faceted-top-facets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem 1.5rem;
+  margin-bottom: .5rem;
 }
 
 .view-toggles button,

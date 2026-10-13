@@ -174,7 +174,9 @@ the configured facets' options and counts (null without configured facets), and
 returns field names whose own controls the facet hides; it then renders at the
 position of the first replaced field. The engine still counts replaced fields,
 so a facet can lay out several configured fields as one control (for example a
-grid) and change them through `actions.onMultiChange`.
+grid) and change them through `actions.onMultiChange`. With `placement: "top"` a
+supplemental facet renders in a row below the result toolbar instead of the
+sidebar; that row stays visible while results load.
 
 Shareable filters/sort/page/view/search remain in hash URLs. Device preferences
 remain local, with URL > preference > configuration precedence. Static assets

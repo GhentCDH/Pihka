@@ -34,6 +34,14 @@ test('a replacing facet hides its fields and takes the first replaced position',
     assert.deepEqual(descriptors.map(d => d.id), ['grid', 'year', 'noun_class']);
 });
 
+test('supplemental facets default to the sidebar and may be placed on top', () => {
+    const descriptors = normalize({ id: 'side' }, { id: 'grid', placement: 'top' }, { id: 'odd', placement: 'footer' });
+    const placement = Object.fromEntries(descriptors.map(d => [d.id, d.placement]));
+    assert.equal(placement.side, 'sidebar');
+    assert.equal(placement.grid, 'top');
+    assert.equal(placement.odd, 'sidebar');
+});
+
 test('unavailable or failing replacements leave configured facets intact', t => {
     t.mock.method(console, 'warn', () => {});
     for (const def of [
