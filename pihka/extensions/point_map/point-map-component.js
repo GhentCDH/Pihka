@@ -32,6 +32,7 @@ api.registerComponent({ kind: "view",
     component: DataViewListMap,
     icon: "⌖",
     paginated: false, // maps need every filtered row, not one page
+    ordered: false, // marker order does not matter, so skip the sort
     availableFor: hasGeo,
 });
 
