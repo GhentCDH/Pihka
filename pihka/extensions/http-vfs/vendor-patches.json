@@ -39,6 +39,10 @@
         [
             "return capi.SQLITE_ERROR;\n            }\n        },\n        xSync:",
             "return capi.SQLITE_IOERR;\n            }\n        },\n        xSync:"
+        ],
+        [
+            "data = entry.pageCache.get(data);\n                    if (data instanceof Uint8Array) {",
+            "data = entry.pageCache.get(data);\n                    // A re-downloaded, shorter super-page may no longer cover this page.\n                    if (data instanceof Uint8Array && Number(offset - newPageStart) + n <= data.byteLength) {"
         ]
     ]
 }
