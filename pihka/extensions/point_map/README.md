@@ -40,7 +40,8 @@ their row's category, with a legend:
 ```
 
 `maxTypes` and `neutral` work as in the area view below. Rows with an empty
-category fall in "—". Cluster circles keep one color.
+category fall in "—". With clustering, each color clusters on its own and
+its clusters take that color, so clusters of different colors can overlap.
 
 ## Area maps
 
