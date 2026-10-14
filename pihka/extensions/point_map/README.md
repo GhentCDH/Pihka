@@ -24,6 +24,34 @@ Any table or perspective whose schema has numeric latitude/longitude columns
 
 Without the extension, geo tables simply have no map views.
 
+## Area maps
+
+A table or perspective can also get a ▦ **areas list view**, in the style of a
+dialect atlas: every row is colored by a category column, and the region
+around each location takes the color of its nearest location's category.
+Set the column in the options:
+
+```json
+"options": {
+    "point_map": {
+        "areas": {
+            "colorBy": "lexical_type",
+            "maxDistanceKm": 150,
+            "maxTypes": 10,
+            "neutral": ["no reconstruction"]
+        }
+    }
+}
+```
+
+Only `colorBy` is required; the view stays hidden without it. The `maxTypes`
+most frequent categories get their own color, the rest share a grey "other".
+`neutral` values are grey and draw no area. A location with several
+categories takes its most frequent one. The regions come from a lat/lon grid
+(at most 80,000 cells) and reach `maxDistanceKm` from a location; the area
+layer is drawn below the basemap water, so seas stay blue. They show where
+the data is, not real dialect borders. The calculation is in `js/areas.js`.
+
 ## Basemap
 
 The world basemap is served from `assets/world.pmtiles` — fully static, no
