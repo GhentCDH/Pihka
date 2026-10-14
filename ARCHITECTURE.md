@@ -134,7 +134,8 @@ export function register(api) {
 
 Kinds are `shell`, `page`, `control`, `view`, `cell`, and `facet`. Views distinguish
 `list` and `detail`; cells use the configured display type as their ID. Definitions
-can specify `availableFor`. View definitions can specify `paginated` (default
+can specify `availableFor`; for list views it receives `(columns, options)`, the
+resolved perspective options, so a view can require configuration. View definitions can specify `paginated` (default
 true) and `ordered` (default true). A non-paginated view with `ordered: false`
 (the map) receives every filtered row without the sort, so large published
 tables are read in row order instead of through random index lookups. Existing list/detail data props remain available, including the UI's
