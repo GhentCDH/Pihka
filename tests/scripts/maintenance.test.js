@@ -159,6 +159,62 @@ test("sample generation prepares FTS, views, rows and annotations before install
     reopened.close();
 });
 
+test("materialized perspectives publish indexed tables, refresh on rerun and fail loudly", async (t) => {
+    const root = await fixture(t);
+    const path = join(root, "materialize.db");
+    const seed = new DatabaseSync(path);
+    seed.exec(`
+        CREATE TABLE zones(id INTEGER PRIMARY KEY, code TEXT);
+        CREATE TABLE words(id INTEGER PRIMARY KEY, term TEXT, zone_id INTEGER REFERENCES zones(id));
+        INSERT INTO zones VALUES (1, 'A'), (2, 'B');
+        INSERT INTO words VALUES (10, 'mbwa', 1), (11, 'ngombe', 2), (12, 'mti', 1);
+    `);
+    seed.close();
+    const perspective = {
+        id: "words",
+        table: "word_search",
+        materialize: true,
+        query: "SELECT w.id, w.term, z.code AS zone FROM words w JOIN zones z ON z.id = w.zone_id",
+        facets: [{ field: "zone", type: "dropdown" }],
+        default_sort: "term",
+    };
+    await prepareSampleDatabase(path, { perspectives: [perspective] });
+
+    const db = new DatabaseSync(path);
+    assert.equal(db.prepare("SELECT type FROM sqlite_schema WHERE name = 'word_search'").get().type, "table");
+    assert.equal(db.prepare("SELECT pk FROM pragma_table_info('word_search') WHERE name = 'id'").get().pk, 1);
+    assert.deepEqual(
+        db.prepare("SELECT name FROM pragma_index_list('word_search') ORDER BY name").all().map((r) => r.name),
+        ["word_search_term_idx", "word_search_zone_idx"],
+    );
+    assert.equal(db.prepare("SELECT count(*) AS n FROM word_search WHERE zone = 'A'").get().n, 2);
+    assert.equal(
+        db.prepare("SELECT count(*) AS n FROM word_search_fts WHERE word_search_fts MATCH 'ngombe'").get().n,
+        1,
+    );
+    db.prepare("INSERT INTO words VALUES (13, 'nyumba', 2)").run();
+    db.close();
+
+    await prepareSampleDatabase(path, { perspectives: [perspective] });
+    const refreshed = new DatabaseSync(path);
+    assert.equal(refreshed.prepare("SELECT count(*) AS n FROM word_search").get().n, 4);
+    assert.equal(
+        refreshed.prepare("SELECT count(*) AS n FROM word_search_fts WHERE word_search_fts MATCH 'nyumba'").get().n,
+        1,
+    );
+    refreshed.close();
+
+    await assert.rejects(
+        prepareSampleDatabase(path, {
+            perspectives: [{ ...perspective, query: "SELECT w.term FROM words w" }],
+        }),
+        /must return an "id" column/,
+    );
+    const kept = new DatabaseSync(path);
+    assert.equal(kept.prepare("SELECT count(*) AS n FROM word_search").get().n, 4);
+    kept.close();
+});
+
 test("PMTiles validates options, quotes by argument arrays, and dry runs write nothing", async (t) => {
     const root = join(await fixture(t), "extensions with spaces");
     assert.deepEqual(parseOptions([]), { dryRun: false, maxzoom: 4, extension: "point_map" });

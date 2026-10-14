@@ -1,14 +1,14 @@
 {
     "version": 1,
     "manifestHash": "54e171bd26c53cfefe885e1a60d18b2f1ece1218624b62d59e4c0db758f33517",
-    "patchesHash": "fa831567a94b06dc85741affc94d8224a075c235d0d4f4e758eac0923bc0dbbd",
+    "patchesHash": "6d3c7c0a90ee87f71ee86a673494b8654c81d65673d25236c6a0728fbb37aaef",
     "packages": {
         "sqlite-wasm-http": {
             "version": "1.2.0",
             "files": {
                 "dist/vfs-sync-http.js": {
                     "sourceSha256": "663457fe6ab955f9332adb9f00309b5585ed628e7e67ba410df0bcf42401d063",
-                    "sha256": "c6330b2bc442d0f2a69ebbb050e6b18f6ee7213228cc880366e701ed08a4e41b"
+                    "sha256": "13eed7fdb020b3aa1acd397ab918cd9ea7f3d4f1bef9ed5505d30a42e009589d"
                 },
                 "dist/vfs-http-types.js": {
                     "sourceSha256": "bac2e39647b88bbdc471bd17147d1ce582bb61721bbeb206a1b88c8db11aa82d",

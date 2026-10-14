@@ -135,7 +135,9 @@ export function register(api) {
 Kinds are `shell`, `page`, `control`, `view`, `cell`, and `facet`. Views distinguish
 `list` and `detail`; cells use the configured display type as their ID. Definitions
 can specify `availableFor`. View definitions can specify `paginated` (default
-true). Existing list/detail data props remain available, including the UI's
+true) and `ordered` (default true). A non-paginated view with `ordered: false`
+(the map) receives every filtered row without the sort, so large published
+tables are read in row order instead of through random index lookups. Existing list/detail data props remain available, including the UI's
 presentation facade as `store`. List contexts receive columns/rows/FK values;
 details receive columns/row/table. `presentation` distinguishes page and embedded
 rendering. Search, related sections and popups resolve registered table views.
@@ -217,3 +219,5 @@ remain local. The test server remains test infrastructure. See
 Presentation metadata retains per-extension `tables.<table>.options`. A perspective's `options` shallowly overrides the table's option namespaces; list plugins receive this resolved bag. The public UI helper `extensionOptions(options, key)` selects one namespace. These settings never enter the query engine.
 
 For published SQL views, a literal `id` column is treated as the row identifier when SQLite reports no primary key, preserving detail navigation on id-bearing perspectives for both transports. Authors must ensure these identifiers are unique. Views without an id retain no detail identifier.
+
+A perspective with `"materialize": true` is published as a table instead of a view. Only the publishing step (`prepareSampleDatabase` → `materializePerspectives`) does this: it creates the table from the query with `id INTEGER PRIMARY KEY`, adds one index per facet field and for `default_sort`, and replaces an earlier table of the same name. The browser never materializes. At runtime the published table is reused like any relation; on an unprepared writable database the perspective falls back to a normal view, and the read-only HTTP VFS source skips it. Use it for large joined perspectives, where every facet count or sort on a view would scan the joined tables through range requests.

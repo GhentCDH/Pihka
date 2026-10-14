@@ -103,7 +103,8 @@ export function installSyncHttpVfs(sqlite3, options) {
                     // This page is present as a segment of a super-page
                     const newPageStart = BigInt(data) * pageSize;
                     data = entry.pageCache.get(data);
-                    if (data instanceof Uint8Array) {
+                    // A re-downloaded, shorter super-page may no longer cover this page.
+                    if (data instanceof Uint8Array && Number(offset - newPageStart) + n <= data.byteLength) {
                         // Not all subpages are valid, there are two possible cases
                         // where a non-valid superpage can be referenced:
                         // * the superpage was too big to fit in the cache

@@ -16,6 +16,15 @@ const MARKER_URL = new URL("../assets/marker.svg", import.meta.url).href;
 const CLUSTER_SOURCE_ID = "pm-points";
 const EMPTY_FC = { type: "FeatureCollection", features: [] };
 
+// Run `update` once the cluster source exists. The source is added in the
+// map's single "load" event, so only wait for that while it is missing:
+// isStyleLoaded() is also false while tiles or source data load, and a
+// later "load" never fires, which would drop the update.
+function whenClusterSource(map, update) {
+    if (map.getSource(CLUSTER_SOURCE_ID)) update();
+    else map.once("load", update);
+}
+
 /**
  * Minimal MapLibre style targeting the Protomaps basemap schema.
  *
@@ -349,16 +358,14 @@ export default function MapView({
                 const setClusterData = () => {
                     if (!stale && !unmountedRef.current) map.getSource(CLUSTER_SOURCE_ID)?.setData(pointsToGeoJSON(points));
                 };
-                if (map.isStyleLoaded() && map.getSource(CLUSTER_SOURCE_ID)) setClusterData();
-                else map.once("load", setClusterData);
+                whenClusterSource(map, setClusterData);
             } else {
                 // Clear the cluster source so leftover cluster circles from
                 // a previous cluster-mode render don't linger.
                 const clearClusterSource = () => {
                     if (!stale && !unmountedRef.current) map.getSource(CLUSTER_SOURCE_ID)?.setData(EMPTY_FC);
                 };
-                if (map.isStyleLoaded() && map.getSource(CLUSTER_SOURCE_ID)) clearClusterSource();
-                else map.once("load", clearClusterSource);
+                whenClusterSource(map, clearClusterSource);
 
                 const { tableName: table, columns: cols } = popupPropsRef.current;
 
