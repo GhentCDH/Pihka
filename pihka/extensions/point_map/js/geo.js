@@ -57,7 +57,6 @@ export function rowsToPoints(rows, latCol, lonCol) {
  * `points` array is stored) — clustering copies properties into its
  * internal index, and rows can be wide or contain non-JSON-safe values
  * (e.g. BLOB columns), whereas the index just needs to be a number.
- * A point's optional `color` is kept too, for colored pins.
  */
 export function pointsToGeoJSON(points) {
     return {
@@ -65,7 +64,7 @@ export function pointsToGeoJSON(points) {
         features: (points ?? []).map((p, i) => ({
             type: "Feature",
             geometry: { type: "Point", coordinates: [p.lon, p.lat] },
-            properties: p.color ? { __pmIndex: i, color: p.color } : { __pmIndex: i },
+            properties: { __pmIndex: i },
         })),
     };
 }

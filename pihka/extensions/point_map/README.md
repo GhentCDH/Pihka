@@ -41,8 +41,9 @@ their row's category, with a legend:
 
 The `maxTypes` most frequent categories get their own color, the rest share
 a grey "other". `neutral` values are grey too and keep their own legend
-entry. Rows with an empty category fall in "—". Cluster circles keep one
-color.
+entry. Rows with an empty category fall in "—". With clustering, each color
+clusters on its own and its clusters take that color, so clusters of
+different colors can overlap.
 
 ## Basemap
 
