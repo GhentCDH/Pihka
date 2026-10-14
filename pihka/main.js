@@ -23,8 +23,11 @@ async function main() {
                 : 10000;
         const options = { baseUrl: baseUrl.href, timeoutMs };
         const enginePlugins = await loadPluginModules(config.enginePlugins, options);
+        const databaseUrl = new URL(config.database || "app/database/sample.db", baseUrl);
+        if (config.databaseVersion)
+            databaseUrl.searchParams.set("v", String(config.databaseVersion));
         session = await openDataset({
-            databaseUrl: new URL(config.database || "app/database/sample.db", baseUrl).href,
+            databaseUrl: databaseUrl.href,
             config: normalizeEngineConfig(config),
             plugins: enginePlugins,
             onProgress: ({ phase, bytes }) =>
