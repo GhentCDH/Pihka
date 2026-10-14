@@ -89,22 +89,23 @@ export function preferredView(p) {
 function normalizePerspective(p, meta, kind, registry) {
     const view = registry.get("view", p.view, "list") ? p.view : "table";
 
+    const tableOptions = meta?.tables?.[p.table]?.options;
+    const options = tableOptions || p.options
+        ? { ...(tableOptions || {}), ...(p.options || {}) }
+        : null;
+
     let allowedViews;
     if (Array.isArray(p.allowed_views)) {
         allowedViews = p.allowed_views.filter(v => registry.get("view", v, "list"));
     } else {
         // Auto-expand to every registered list view whose availableFor
-        // predicate accepts this table's columns (e.g. map needs lat/lon).
+        // predicate accepts this table's columns (e.g. map needs lat/lon)
+        // and resolved options (e.g. a view that needs configuration).
         const columns = meta?.tables?.[p.table]?.columns ?? [];
         allowedViews = registry.list("view", "list").map(guardedDefinition)
-            .filter(d => !d.availableFor || d.availableFor(columns))
+            .filter(d => !d.availableFor || d.availableFor(columns, options))
             .map(d => d.id);
     }
-
-    const tableOptions = meta?.tables?.[p.table]?.options;
-    const options = tableOptions || p.options
-        ? { ...(tableOptions || {}), ...(p.options || {}) }
-        : null;
 
     return {
         id:            String(p.id),
