@@ -6,6 +6,7 @@ import { loadMaplibre } from "./maplibre-shim.js";
 import { ensurePmtilesProtocol } from "./pmtiles-protocol.js";
 import MapPopup from "./map-popup.js";
 import { pointsToGeoJSON } from "./geo.js";
+import { OTHER_COLOR, PALETTE } from "./categories.js";
 
 const TILES_URL = "pmtiles://" + new URL("../assets/world.pmtiles", import.meta.url).href;
 // Built by hand (not via `new URL(...)`) because the URL constructor
@@ -15,6 +16,24 @@ const GLYPHS_URL = new URL("../assets/glyphs/", import.meta.url).href + "{fontst
 const MARKER_URL = new URL("../assets/marker.svg", import.meta.url).href;
 const CLUSTER_SOURCE_ID = "pm-points";
 const EMPTY_FC = { type: "FeatureCollection", features: [] };
+
+// assets/marker.svg in another color, for points with a `color`.
+const pinUrl = (color) =>
+    "data:image/svg+xml," +
+    encodeURIComponent(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="28" viewBox="0 0 20 28">` +
+            `<path d="M10 27C8 24 1 16 1 10a9 9 0 0 1 18 0c0 6-7 14-9 17Z" fill="${color}" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>` +
+            `<circle cx="10" cy="10" r="3" fill="#fff"/></svg>`,
+    );
+const markerUrl = (point) => (point.color ? pinUrl(point.color) : MARKER_URL);
+
+// Render at 3× density; the SVG and DOM pins share a 20 × 28 footprint.
+async function loadPinImage(url) {
+    const image = new window.Image(60, 84);
+    image.src = url;
+    await image.decode();
+    return image;
+}
 
 // Run `update` once the cluster source exists. The source is added in the
 // map's single "load" event, so only wait for that while it is missing:
@@ -151,10 +170,14 @@ export default function MapView({
                 await ensurePmtilesProtocol();
                 if (unmountedRef.current) return null;
 
-                // Render at 3× density; the SVG and DOM pins share a 20 × 28 footprint.
-                const markerImg = new window.Image(60, 84);
-                markerImg.src = MARKER_URL;
-                await markerImg.decode();
+                // The clustered layer picks a pin image by name: "marker",
+                // or "marker-<color>" for each color categorize() can assign.
+                const pinImages = await Promise.all([
+                    loadPinImage(MARKER_URL).then((image) => ["marker", image]),
+                    ...[...PALETTE, OTHER_COLOR].map((color) =>
+                        loadPinImage(pinUrl(color)).then((image) => [`marker-${color}`, image]),
+                    ),
+                ]);
                 if (unmountedRef.current) return null;
 
                 const first = (pointsRef.current ?? [])[0];
@@ -196,9 +219,8 @@ export default function MapView({
                 map.on("load", () => {
                     if (map.getSource(CLUSTER_SOURCE_ID)) return;
 
-                    if (!map.hasImage("marker")) {
-                        map.addImage("marker", markerImg, { pixelRatio: 3 });
-                    }
+                    for (const [id, image] of pinImages)
+                        if (!map.hasImage(id)) map.addImage(id, image, { pixelRatio: 3 });
 
                     map.addSource(CLUSTER_SOURCE_ID, {
                         type: "geojson",
@@ -250,7 +272,7 @@ export default function MapView({
                         source: CLUSTER_SOURCE_ID,
                         filter: ["!", ["has", "point_count"]],
                         layout: {
-                            "icon-image": "marker",
+                            "icon-image": ["case", ["has", "color"], ["concat", "marker-", ["get", "color"]], "marker"],
                             "icon-size": 1,
                             "icon-anchor": "bottom",
                             "icon-rotation-alignment": "viewport",
@@ -396,6 +418,8 @@ export default function MapView({
                     const existing = markers.get(key);
                     if (existing) {
                         existing.point = p;
+                        const url = markerUrl(p);
+                        if (existing.image.src !== url) existing.image.src = url;
                         const at = existing.marker.getLngLat();
                         if (at.lng !== p.lon || at.lat !== p.lat) {
                             existing.marker.setLngLat([p.lon, p.lat]);
@@ -405,7 +429,7 @@ export default function MapView({
                     const element = document.createElement("div");
                     element.className = "point-map-pin";
                     const image = document.createElement("img");
-                    image.src = MARKER_URL;
+                    image.src = markerUrl(p);
                     image.width = 20;
                     image.height = 28;
                     image.alt = "";
@@ -413,6 +437,7 @@ export default function MapView({
                     element.append(image);
                     const entry = {
                         point: p,
+                        image,
                         marker: new maplibregl.Marker({
                             element,
                             anchor: "bottom",

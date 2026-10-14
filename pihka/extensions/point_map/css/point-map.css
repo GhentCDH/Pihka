@@ -31,3 +31,55 @@
     outline-offset: 2px;
     border-radius: 4px;
 }
+
+/* Category legend: floats over the lower left of the map. */
+.point-legend-host {
+    position: relative;
+}
+
+.point-legend {
+    position: absolute;
+    left: 0.6rem;
+    bottom: 1.8rem;
+    z-index: 2;
+    max-width: min(22rem, 70%);
+    max-height: 60%;
+    overflow: auto;
+    padding: 0.5rem 0.7rem;
+    font-size: var(--pihka-font-small, 0.875rem);
+    background: color-mix(in srgb, var(--bg, #fff) 92%, transparent);
+    border: 1px solid var(--border, #ccc);
+    border-radius: var(--pico-border-radius, 4px);
+}
+
+.point-legend ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.point-legend li {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: 0;
+    padding: 0.1rem 0;
+    list-style: none;
+}
+
+.point-legend-swatch {
+    flex: 0 0 auto;
+    width: 0.9rem;
+    height: 0.9rem;
+    border-radius: 2px;
+}
+
+.point-legend-swatch.neutral {
+    border: 1px dashed var(--text-muted, #777);
+}
+
+.point-legend-count {
+    margin-left: auto;
+    padding-left: 0.6rem;
+    color: var(--text-muted);
+}

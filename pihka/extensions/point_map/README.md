@@ -24,6 +24,26 @@ Any table or perspective whose schema has numeric latitude/longitude columns
 
 Without the extension, geo tables simply have no map views.
 
+## Colored markers
+
+Set `colorBy` to a category column to give the map view's pins the color of
+their row's category, with a legend:
+
+```json
+"options": {
+    "point_map": {
+        "colorBy": "lexical_type",
+        "maxTypes": 10,
+        "neutral": ["—"]
+    }
+}
+```
+
+The `maxTypes` most frequent categories get their own color, the rest share
+a grey "other". `neutral` values are grey too and keep their own legend
+entry. Rows with an empty category fall in "—". Cluster circles keep one
+color.
+
 ## Basemap
 
 The world basemap is served from `assets/world.pmtiles` — fully static, no
