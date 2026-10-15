@@ -104,3 +104,17 @@ test('bounds engine metadata preserves numeric coordinate ranges', async () => {
     assert.equal(meta.geoMeta.latCol, 'lat');
     await session.close();
 });
+
+test('values facet `only` limits options and orders them as configured', async () => {
+    const fake = fixture();
+    fake.source.exec = async (sql, { callback } = {}) => {
+        const rows = sql.includes('GROUP BY') ? [{ value: 'a', count: 5 }, { value: 'b', count: 3 }, { value: 'c', count: 1 }] : [];
+        rows.forEach(row => callback?.(row)); return rows;
+    };
+    const session = await openDataset(options(fake.plugin));
+    const meta = await session.store.getFacetMeta('things', [
+        { field: 'score', type: 'values', only: ['c', 'a', 'z'] },
+    ]);
+    assert.deepEqual(meta.score.options.map(o => o.value), ['c', 'a']);
+    await session.close();
+});

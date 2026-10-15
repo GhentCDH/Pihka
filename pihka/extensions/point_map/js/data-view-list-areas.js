@@ -7,6 +7,7 @@ import { buildStyle, openPopup } from "./map-view.js";
 import { loadMaplibre } from "./maplibre-shim.js";
 import { ensurePmtilesProtocol } from "./pmtiles-protocol.js";
 import MapPopup from "./map-popup.js";
+import MapLegend from "./map-legend.js";
 import { areaFeatures, categorize, categoryOf, coreBounds, sites } from "./areas.js";
 
 const AREAS = "pa-areas";
@@ -158,26 +159,10 @@ export default function DataViewListAreas({ name, id, columns, rows, fkResolved,
         !points.length && h("p", { class: "text-meta" }, nl ? "Geen locaties om te tonen." : "No location data to display."),
         h("div", { ref: containerRef, class: "map-canvas fill-height", style: points.length ? "" : "display:none" }),
         points.length > 0 &&
-            h(
-                "div",
-                { class: "point-areas-legend" },
-                tooMany &&
-                    h("p", { class: "text-meta" },
-                        nl ? "Te veel locaties voor gebieden; alleen punten." : "Too many locations for areas; showing points only."),
-                h(
-                    "ul",
-                    null,
-                    legend.map((item) =>
-                        h(
-                            "li",
-                            { key: item.value ?? "\u0000other" },
-                            h("span", { class: item.neutral ? "point-areas-swatch neutral" : "point-areas-swatch", style: `background:${item.color}` }),
-                            h("span", { class: "point-areas-label" },
-                                item.value ?? (nl ? `overige (${item.types} types)` : `other (${item.types} types)`)),
-                            h("span", { class: "point-areas-count" }, item.count),
-                        ),
-                    ),
-                ),
-            ),
+            h(MapLegend, {
+                legend,
+                lang,
+                note: tooMany && (nl ? "Te veel locaties voor gebieden; alleen punten." : "Too many locations for areas; showing points only."),
+            }),
     );
 }

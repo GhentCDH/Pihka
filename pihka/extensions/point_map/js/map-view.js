@@ -6,6 +6,7 @@ import { loadMaplibre } from "./maplibre-shim.js";
 import { ensurePmtilesProtocol } from "./pmtiles-protocol.js";
 import MapPopup from "./map-popup.js";
 import { pointsToGeoJSON } from "./geo.js";
+import { OTHER_COLOR, PALETTE } from "./areas.js";
 
 const TILES_URL = "pmtiles://" + new URL("../assets/world.pmtiles", import.meta.url).href;
 // Built by hand (not via `new URL(...)`) because the URL constructor
@@ -13,15 +14,55 @@ const TILES_URL = "pmtiles://" + new URL("../assets/world.pmtiles", import.meta.
 // MapLibre's glyphs spec requires.
 const GLYPHS_URL = new URL("../assets/glyphs/", import.meta.url).href + "{fontstack}/{range}.pbf";
 const MARKER_URL = new URL("../assets/marker.svg", import.meta.url).href;
-const CLUSTER_SOURCE_ID = "pm-points";
 const EMPTY_FC = { type: "FeatureCollection", features: [] };
 
-// Run `update` once the cluster source exists. The source is added in the
-// map's single "load" event, so only wait for that while it is missing:
+// One clustered source per pin color, so a cluster only joins points of
+// one color and takes that color. Uncolored points use the first group,
+// which keeps the original ids.
+const CLUSTER_GROUPS = [
+    { color: null, fill: "#b35309", source: "pm-points", clusters: "pm-clusters", count: "pm-cluster-count", unclustered: "pm-unclustered" },
+    ...[...PALETTE, OTHER_COLOR].map((color, i) => ({
+        color,
+        fill: color,
+        source: `pm-points-${i}`,
+        clusters: `pm-clusters-${i}`,
+        count: `pm-cluster-count-${i}`,
+        unclustered: `pm-unclustered-${i}`,
+    })),
+];
+const GROUP_BY_COLOR = new Map(CLUSTER_GROUPS.map((group) => [group.color, group]));
+const groupOf = (point) => GROUP_BY_COLOR.get(point.color ?? null) ?? CLUSTER_GROUPS[0];
+
+function setClusterData(map, points) {
+    const features = new Map(CLUSTER_GROUPS.map((group) => [group, []]));
+    pointsToGeoJSON(points).features.forEach((feature, i) => features.get(groupOf(points[i])).push(feature));
+    for (const [group, list] of features) map.getSource(group.source)?.setData({ type: "FeatureCollection", features: list });
+}
+
+// assets/marker.svg in another color, for points with a `color`.
+const pinUrl = (color) =>
+    "data:image/svg+xml," +
+    encodeURIComponent(
+        `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="28" viewBox="0 0 20 28">` +
+            `<path d="M10 27C8 24 1 16 1 10a9 9 0 0 1 18 0c0 6-7 14-9 17Z" fill="${color}" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>` +
+            `<circle cx="10" cy="10" r="3" fill="#fff"/></svg>`,
+    );
+const markerUrl = (point) => (point.color ? pinUrl(point.color) : MARKER_URL);
+
+// Render at 3× density; the SVG and DOM pins share a 20 × 28 footprint.
+async function loadPinImage(url) {
+    const image = new window.Image(60, 84);
+    image.src = url;
+    await image.decode();
+    return image;
+}
+
+// Run `update` once the cluster sources exist. They are added in the
+// map's single "load" event, so only wait for that while they are missing:
 // isStyleLoaded() is also false while tiles or source data load, and a
 // later "load" never fires, which would drop the update.
 function whenClusterSource(map, update) {
-    if (map.getSource(CLUSTER_SOURCE_ID)) update();
+    if (map.getSource(CLUSTER_GROUPS[0].source)) update();
     else map.once("load", update);
 }
 
@@ -151,10 +192,10 @@ export default function MapView({
                 await ensurePmtilesProtocol();
                 if (unmountedRef.current) return null;
 
-                // Render at 3× density; the SVG and DOM pins share a 20 × 28 footprint.
-                const markerImg = new window.Image(60, 84);
-                markerImg.src = MARKER_URL;
-                await markerImg.decode();
+                // One pin image per cluster group, named after its source.
+                const pinImages = await Promise.all(
+                    CLUSTER_GROUPS.map((group) => loadPinImage(group.color ? pinUrl(group.color) : MARKER_URL)),
+                );
                 if (unmountedRef.current) return null;
 
                 const first = (pointsRef.current ?? [])[0];
@@ -189,82 +230,83 @@ export default function MapView({
                     "top-right",
                 );
 
-                // Clustered rendering path: a GeoJSON source + GPU-rendered
-                // circle/symbol layers, added once and always present
-                // (empty when the `cluster` prop is off) so switching modes
-                // never needs to touch the map/style, only source data.
+                // Clustered rendering path: GeoJSON sources + GPU-rendered
+                // circle/symbol layers per color group, added once and always
+                // present (empty when the `cluster` prop is off) so switching
+                // modes never needs to touch the map/style, only source data.
                 map.on("load", () => {
-                    if (map.getSource(CLUSTER_SOURCE_ID)) return;
+                    if (map.getSource(CLUSTER_GROUPS[0].source)) return;
 
-                    if (!map.hasImage("marker")) {
-                        map.addImage("marker", markerImg, { pixelRatio: 3 });
-                    }
+                    CLUSTER_GROUPS.forEach((group, i) => {
+                        if (!map.hasImage(group.source)) map.addImage(group.source, pinImages[i], { pixelRatio: 3 });
+                        map.addSource(group.source, {
+                            type: "geojson",
+                            data: EMPTY_FC,
+                            cluster: true,
+                            clusterMaxZoom: 14,
+                            clusterRadius: 60,
+                        });
+                        map.addLayer({
+                            id: group.clusters,
+                            type: "circle",
+                            source: group.source,
+                            filter: ["has", "point_count"],
+                            paint: {
+                                "circle-color": group.fill,
+                                "circle-opacity": 0.75,
+                                "circle-radius": [
+                                    "step",
+                                    ["get", "point_count"],
+                                    20,
+                                    50,
+                                    25,
+                                    250,
+                                    35,
+                                    1000,
+                                    45,
+                                    10000,
+                                    60,
+                                ],
+                                "circle-stroke-width": 3,
+                                "circle-stroke-color": "#fff",
+                            },
+                        });
+                        map.addLayer({
+                            id: group.count,
+                            type: "symbol",
+                            source: group.source,
+                            filter: ["has", "point_count"],
+                            layout: {
+                                "text-field": ["get", "point_count_abbreviated"],
+                                "text-font": ["Noto Sans Regular"],
+                                "text-size": 12,
+                            },
+                            paint: { "text-color": "#fff" },
+                        });
+                        map.addLayer({
+                            id: group.unclustered,
+                            type: "symbol",
+                            source: group.source,
+                            filter: ["!", ["has", "point_count"]],
+                            layout: {
+                                "icon-image": group.source,
+                                "icon-size": 1,
+                                "icon-anchor": "bottom",
+                                "icon-rotation-alignment": "viewport",
+                                "icon-pitch-alignment": "viewport",
+                            },
+                        });
+                    });
 
-                    map.addSource(CLUSTER_SOURCE_ID, {
-                        type: "geojson",
-                        data: EMPTY_FC,
-                        cluster: true,
-                        clusterMaxZoom: 14,
-                        clusterRadius: 60,
-                    });
-                    map.addLayer({
-                        id: "pm-clusters",
-                        type: "circle",
-                        source: CLUSTER_SOURCE_ID,
-                        filter: ["has", "point_count"],
-                        paint: {
-                            "circle-color": "#b35309",
-                            "circle-opacity": 0.75,
-                            "circle-radius": [
-                                "step",
-                                ["get", "point_count"],
-                                20,
-                                50,
-                                25,
-                                250,
-                                35,
-                                1000,
-                                45,
-                                10000,
-                                60,
-                            ],
-                            "circle-stroke-width": 3,
-                            "circle-stroke-color": "#fff",
-                        },
-                    });
-                    map.addLayer({
-                        id: "pm-cluster-count",
-                        type: "symbol",
-                        source: CLUSTER_SOURCE_ID,
-                        filter: ["has", "point_count"],
-                        layout: {
-                            "text-field": ["get", "point_count_abbreviated"],
-                            "text-font": ["Noto Sans Regular"],
-                            "text-size": 12,
-                        },
-                        paint: { "text-color": "#fff" },
-                    });
-                    map.addLayer({
-                        id: "pm-unclustered",
-                        type: "symbol",
-                        source: CLUSTER_SOURCE_ID,
-                        filter: ["!", ["has", "point_count"]],
-                        layout: {
-                            "icon-image": "marker",
-                            "icon-size": 1,
-                            "icon-anchor": "bottom",
-                            "icon-rotation-alignment": "viewport",
-                            "icon-pitch-alignment": "viewport",
-                        },
-                    });
-
-                    map.on("click", "pm-clusters", async (e) => {
+                    const clusterLayers = CLUSTER_GROUPS.map((group) => group.clusters);
+                    const unclusteredLayers = CLUSTER_GROUPS.map((group) => group.unclustered);
+                    map.on("click", clusterLayers, async (e) => {
                         const clusterId = e.features?.[0]?.properties?.cluster_id;
                         const center = e.features?.[0]?.geometry?.coordinates;
                         if (clusterId == null || !center) return;
-                        // Capture `center` before the await — MapLibre may
-                        // reuse/clear `e.features` once the handler yields.
-                        const source = map.getSource(CLUSTER_SOURCE_ID);
+                        // Capture `center` and the source before the await —
+                        // MapLibre may reuse/clear `e.features` once the handler yields.
+                        const source = map.getSource(e.features[0].source);
                         try {
                             const zoom = await source.getClusterExpansionZoom(clusterId);
                             if (!unmountedRef.current) map.easeTo({ center, zoom });
@@ -272,7 +314,7 @@ export default function MapView({
                             if (!unmountedRef.current) console.warn("[MapView] cluster expansion failed:", error);
                         }
                     });
-                    map.on("click", "pm-unclustered", (e) => {
+                    map.on("click", unclusteredLayers, (e) => {
                         const idx = e.features?.[0]?.properties?.__pmIndex;
                         const point = idx != null ? pointsRef.current?.[idx] : null;
                         if (!point) return;
@@ -285,16 +327,10 @@ export default function MapView({
                             popupPropsRef.current,
                         );
                     });
-                    map.on("mouseenter", "pm-clusters", () => {
+                    map.on("mouseenter", [...clusterLayers, ...unclusteredLayers], () => {
                         map.getCanvas().style.cursor = "pointer";
                     });
-                    map.on("mouseleave", "pm-clusters", () => {
-                        map.getCanvas().style.cursor = "";
-                    });
-                    map.on("mouseenter", "pm-unclustered", () => {
-                        map.getCanvas().style.cursor = "pointer";
-                    });
-                    map.on("mouseleave", "pm-unclustered", () => {
+                    map.on("mouseleave", [...clusterLayers, ...unclusteredLayers], () => {
                         map.getCanvas().style.cursor = "";
                     });
                 });
@@ -355,15 +391,15 @@ export default function MapView({
                 for (const [, entry] of markersRef.current) entry.marker.remove();
                 markersRef.current.clear();
 
-                const setClusterData = () => {
-                    if (!stale && !unmountedRef.current) map.getSource(CLUSTER_SOURCE_ID)?.setData(pointsToGeoJSON(points));
+                const updateClusterData = () => {
+                    if (!stale && !unmountedRef.current) setClusterData(map, points ?? []);
                 };
-                whenClusterSource(map, setClusterData);
+                whenClusterSource(map, updateClusterData);
             } else {
-                // Clear the cluster source so leftover cluster circles from
+                // Clear the cluster sources so leftover cluster circles from
                 // a previous cluster-mode render don't linger.
                 const clearClusterSource = () => {
-                    if (!stale && !unmountedRef.current) map.getSource(CLUSTER_SOURCE_ID)?.setData(EMPTY_FC);
+                    if (!stale && !unmountedRef.current) setClusterData(map, []);
                 };
                 whenClusterSource(map, clearClusterSource);
 
@@ -396,6 +432,8 @@ export default function MapView({
                     const existing = markers.get(key);
                     if (existing) {
                         existing.point = p;
+                        const url = markerUrl(p);
+                        if (existing.image.src !== url) existing.image.src = url;
                         const at = existing.marker.getLngLat();
                         if (at.lng !== p.lon || at.lat !== p.lat) {
                             existing.marker.setLngLat([p.lon, p.lat]);
@@ -405,7 +443,7 @@ export default function MapView({
                     const element = document.createElement("div");
                     element.className = "point-map-pin";
                     const image = document.createElement("img");
-                    image.src = MARKER_URL;
+                    image.src = markerUrl(p);
                     image.width = 20;
                     image.height = 28;
                     image.alt = "";
@@ -413,6 +451,7 @@ export default function MapView({
                     element.append(image);
                     const entry = {
                         point: p,
+                        image,
                         marker: new maplibregl.Marker({
                             element,
                             anchor: "bottom",

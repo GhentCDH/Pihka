@@ -368,7 +368,9 @@ export class DataStore {
      * Return bounds or counted values for semantic facet requests.
      *
      * @param {string} table
-     * @param {Array} facetConfigs - from perspective.facets
+     * @param {Array} facetConfigs - from perspective.facets. A `values` facet
+     *   may set `only: [...]` to limit its options to those values, shown in
+     *   that order.
      * @param {Object} currentFilters - current filter state
      * @returns {Promise<Object>} - { [field]: { type, label, options?, min?, max? } }
      */
@@ -407,6 +409,13 @@ export class DataStore {
                         display: String(r.value ?? ""),
                         count: r.count,
                     }));
+                }
+
+                if (Array.isArray(facet.only)) {
+                    const rank = new Map(facet.only.map((v, i) => [v, i]));
+                    options = options
+                        .filter(o => rank.has(o.value))
+                        .sort((a, b) => rank.get(a.value) - rank.get(b.value));
                 }
 
                 result[field] = { type: "values", options };

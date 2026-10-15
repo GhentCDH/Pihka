@@ -24,6 +24,25 @@ Any table or perspective whose schema has numeric latitude/longitude columns
 
 Without the extension, geo tables simply have no map views.
 
+## Colored markers
+
+Set `colorBy` to a category column to give the map view's pins the color of
+their row's category, with a legend:
+
+```json
+"options": {
+    "point_map": {
+        "colorBy": "lexical_type",
+        "maxTypes": 10,
+        "neutral": ["—"]
+    }
+}
+```
+
+`maxTypes` and `neutral` work as in the area view below. Rows with an empty
+category fall in "—". With clustering, each color clusters on its own and
+its clusters take that color, so clusters of different colors can overlap.
+
 ## Area maps
 
 A table or perspective can also get a ▦ **areas list view**, in the style of a

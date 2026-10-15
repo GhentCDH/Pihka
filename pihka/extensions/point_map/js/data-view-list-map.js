@@ -1,7 +1,9 @@
 // @ts-check
 import { h } from "preact";
 import MapView from "./map-view.js";
+import MapLegend from "./map-legend.js";
 import { findGeoColumns, rowsToPoints } from "./geo.js";
+import { categorize, categoryOf } from "./areas.js";
 import { extensionOptions } from "../../../core/ui/index.js";
 
 // Above this many points, "auto" clustering mode switches on. Individual
@@ -32,6 +34,10 @@ function resolveCluster(mode, count) {
  *   perspectiveId - perspective id (for popup link)
  *   options       - resolved view options; this component reads its own
  *                   slice via extensionOptions(options, "point_map")
+ *
+ * With `point_map.colorBy` set to a category column, pins take the color
+ * of their row's category and a legend is shown. `maxTypes` and `neutral`
+ * work as in the area view (see areas.js).
  */
 export default function DataViewListMap({
     name,
@@ -58,15 +64,16 @@ export default function DataViewListMap({
     }
 
     const points = rowsToPoints(rows, geo.latCol, geo.lonCol);
-    const { clustering } = extensionOptions(options, "point_map");
+    const { clustering, colorBy, maxTypes, neutral } = extensionOptions(options, "point_map");
     const cluster = resolveCluster(clustering, points.length);
+    const legend = typeof colorBy === "string" ? colorPoints(points, colorBy, { maxTypes, neutral }) : null;
 
     // MapView stays mounted through empty point sets (it renders its own
     // "no location data" note) so the live map survives a filter that
     // momentarily matches no mappable rows — no teardown, no flicker.
     return h(
         "section",
-        { class: "map-list-section fill-height", id: id ?? name },
+        { class: legend ? "map-list-section fill-height point-areas" : "map-list-section fill-height", id: id ?? name },
         h(MapView, {
             points,
             columns,
@@ -77,5 +84,13 @@ export default function DataViewListMap({
             fill: true,
             cluster,
         }),
+        legend && points.length > 0 && h(MapLegend, { legend, lang }),
     );
+}
+
+/** Set each point's `color` from its category and return the legend. */
+function colorPoints(points, column, settings) {
+    const { legend, colorOf } = categorize(points, column, settings);
+    for (const point of points) point.color = colorOf(categoryOf(point, column));
+    return legend;
 }

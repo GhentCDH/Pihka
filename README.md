@@ -46,6 +46,13 @@ The development server supplies weak ETags, so the demo explicitly uses
 reload after preparation. For deployment, publish a new versioned database URL
 for each revision, or use a host with strong ETags and remove that option.
 
+### Database version
+
+Set `"databaseVersion": "2026.10.14"` in `app/config.json` to request the
+database as `sample.db?v=2026.10.14`. Serve the file with a long cache lifetime
+(the included `Caddyfile` does). After you update the database, change the
+version string: browsers keep the cached copy until the version changes.
+
 ## Using your own data
 
 1. Place your `.sqlite` file in `app/database`
