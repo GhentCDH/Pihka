@@ -5,132 +5,16 @@ import { useEffect, useRef } from "preact/hooks";
 import { loadMaplibre } from "./maplibre-shim.js";
 import { ensurePmtilesProtocol } from "./pmtiles-protocol.js";
 import MapPopup from "./map-popup.js";
-import { pointsToGeoJSON } from "./geo.js";
-import { OTHER_COLOR, PALETTE } from "./categories.js";
+import {
+    addClusterLayers,
+    buildStyle,
+    loadPinImages,
+    markerUrl,
+    setClusterData,
+    whenClusterSource,
+} from "./map-layers.js";
 
-const TILES_URL = "pmtiles://" + new URL("../assets/world.pmtiles", import.meta.url).href;
-// Built by hand (not via `new URL(...)`) because the URL constructor
-// percent-encodes the literal "{fontstack}"/"{range}" template braces that
-// MapLibre's glyphs spec requires.
-const GLYPHS_URL = new URL("../assets/glyphs/", import.meta.url).href + "{fontstack}/{range}.pbf";
-const MARKER_URL = new URL("../assets/marker.svg", import.meta.url).href;
-const EMPTY_FC = { type: "FeatureCollection", features: [] };
-
-// One clustered source per pin color, so a cluster only joins points of
-// one color and takes that color. Uncolored points use the first group,
-// which keeps the original ids.
-const CLUSTER_GROUPS = [
-    { color: null, fill: "#b35309", source: "pm-points", clusters: "pm-clusters", count: "pm-cluster-count", unclustered: "pm-unclustered" },
-    ...[...PALETTE, OTHER_COLOR].map((color, i) => ({
-        color,
-        fill: color,
-        source: `pm-points-${i}`,
-        clusters: `pm-clusters-${i}`,
-        count: `pm-cluster-count-${i}`,
-        unclustered: `pm-unclustered-${i}`,
-    })),
-];
-const GROUP_BY_COLOR = new Map(CLUSTER_GROUPS.map((group) => [group.color, group]));
-const groupOf = (point) => GROUP_BY_COLOR.get(point.color ?? null) ?? CLUSTER_GROUPS[0];
-
-function setClusterData(map, points) {
-    const features = new Map(CLUSTER_GROUPS.map((group) => [group, []]));
-    pointsToGeoJSON(points).features.forEach((feature, i) => features.get(groupOf(points[i])).push(feature));
-    for (const [group, list] of features) map.getSource(group.source)?.setData({ type: "FeatureCollection", features: list });
-}
-
-// assets/marker.svg in another color, for points with a `color`.
-const pinUrl = (color) =>
-    "data:image/svg+xml," +
-    encodeURIComponent(
-        `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="28" viewBox="0 0 20 28">` +
-            `<path d="M10 27C8 24 1 16 1 10a9 9 0 0 1 18 0c0 6-7 14-9 17Z" fill="${color}" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/>` +
-            `<circle cx="10" cy="10" r="3" fill="#fff"/></svg>`,
-    );
-const markerUrl = (point) => (point.color ? pinUrl(point.color) : MARKER_URL);
-
-// Render at 3× density; the SVG and DOM pins share a 20 × 28 footprint.
-async function loadPinImage(url) {
-    const image = new window.Image(60, 84);
-    image.src = url;
-    await image.decode();
-    return image;
-}
-
-// Run `update` once the cluster sources exist. They are added in the
-// map's single "load" event, so only wait for that while they are missing:
-// isStyleLoaded() is also false while tiles or source data load, and a
-// later "load" never fires, which would drop the update.
-function whenClusterSource(map, update) {
-    if (map.getSource(CLUSTER_GROUPS[0].source)) update();
-    else map.once("load", update);
-}
-
-/**
- * Minimal MapLibre style targeting the Protomaps basemap schema.
- *
- * The world.pmtiles archive ships with vector layers like `earth`, `water`,
- * `boundaries`, and `places`. We render just enough of them for a usable
- * basemap; richer styling would mean shipping a much larger style JSON.
- */
-export function buildStyle() {
-    return {
-        version: 8,
-        glyphs: GLYPHS_URL,
-        sources: {
-            protomaps: {
-                type: "vector",
-                url: TILES_URL,
-                attribution: "© OpenStreetMap, Protomaps",
-            },
-        },
-        layers: [
-            { id: "background", type: "background", paint: { "background-color": "#aac7e8" } },
-            {
-                id: "earth",
-                type: "fill",
-                source: "protomaps",
-                "source-layer": "earth",
-                paint: { "fill-color": "#f3eddc" },
-            },
-            {
-                id: "landcover",
-                type: "fill",
-                source: "protomaps",
-                "source-layer": "landcover",
-                paint: { "fill-color": "#d6e2c3", "fill-opacity": 0.7 },
-            },
-            {
-                id: "landuse",
-                type: "fill",
-                source: "protomaps",
-                "source-layer": "landuse",
-                paint: { "fill-color": "#e6e0c8", "fill-opacity": 0.5 },
-            },
-            {
-                id: "water",
-                type: "fill",
-                source: "protomaps",
-                "source-layer": "water",
-                paint: { "fill-color": "#aac7e8" },
-            },
-            {
-                id: "boundaries",
-                type: "line",
-                source: "protomaps",
-                "source-layer": "boundaries",
-                paint: { "line-color": "#888", "line-width": 0.6, "line-dasharray": [2, 2] },
-            },
-            {
-                id: "roads",
-                type: "line",
-                source: "protomaps",
-                "source-layer": "roads",
-                paint: { "line-color": "#cdb892", "line-width": 0.5 },
-            },
-        ],
-    };
-}
+export { buildStyle };
 
 /**
  * Shared map component. Both the list-view and detail-view map wrappers
@@ -192,10 +76,7 @@ export default function MapView({
                 await ensurePmtilesProtocol();
                 if (unmountedRef.current) return null;
 
-                // One pin image per cluster group, named after its source.
-                const pinImages = await Promise.all(
-                    CLUSTER_GROUPS.map((group) => loadPinImage(group.color ? pinUrl(group.color) : MARKER_URL)),
-                );
+                const pinImages = await loadPinImages();
                 if (unmountedRef.current) return null;
 
                 const first = (pointsRef.current ?? [])[0];
@@ -234,106 +115,23 @@ export default function MapView({
                 // circle/symbol layers per color group, added once and always
                 // present (empty when the `cluster` prop is off) so switching
                 // modes never needs to touch the map/style, only source data.
-                map.on("load", () => {
-                    if (map.getSource(CLUSTER_GROUPS[0].source)) return;
-
-                    CLUSTER_GROUPS.forEach((group, i) => {
-                        if (!map.hasImage(group.source)) map.addImage(group.source, pinImages[i], { pixelRatio: 3 });
-                        map.addSource(group.source, {
-                            type: "geojson",
-                            data: EMPTY_FC,
-                            cluster: true,
-                            clusterMaxZoom: 14,
-                            clusterRadius: 60,
-                        });
-                        map.addLayer({
-                            id: group.clusters,
-                            type: "circle",
-                            source: group.source,
-                            filter: ["has", "point_count"],
-                            paint: {
-                                "circle-color": group.fill,
-                                "circle-opacity": 0.75,
-                                "circle-radius": [
-                                    "step",
-                                    ["get", "point_count"],
-                                    20,
-                                    50,
-                                    25,
-                                    250,
-                                    35,
-                                    1000,
-                                    45,
-                                    10000,
-                                    60,
-                                ],
-                                "circle-stroke-width": 3,
-                                "circle-stroke-color": "#fff",
-                            },
-                        });
-                        map.addLayer({
-                            id: group.count,
-                            type: "symbol",
-                            source: group.source,
-                            filter: ["has", "point_count"],
-                            layout: {
-                                "text-field": ["get", "point_count_abbreviated"],
-                                "text-font": ["Noto Sans Regular"],
-                                "text-size": 12,
-                            },
-                            paint: { "text-color": "#fff" },
-                        });
-                        map.addLayer({
-                            id: group.unclustered,
-                            type: "symbol",
-                            source: group.source,
-                            filter: ["!", ["has", "point_count"]],
-                            layout: {
-                                "icon-image": group.source,
-                                "icon-size": 1,
-                                "icon-anchor": "bottom",
-                                "icon-rotation-alignment": "viewport",
-                                "icon-pitch-alignment": "viewport",
-                            },
-                        });
-                    });
-
-                    const clusterLayers = CLUSTER_GROUPS.map((group) => group.clusters);
-                    const unclusteredLayers = CLUSTER_GROUPS.map((group) => group.unclustered);
-                    map.on("click", clusterLayers, async (e) => {
-                        const clusterId = e.features?.[0]?.properties?.cluster_id;
-                        const center = e.features?.[0]?.geometry?.coordinates;
-                        if (clusterId == null || !center) return;
-                        // Capture `center` and the source before the await —
-                        // MapLibre may reuse/clear `e.features` once the handler yields.
-                        const source = map.getSource(e.features[0].source);
-                        try {
-                            const zoom = await source.getClusterExpansionZoom(clusterId);
-                            if (!unmountedRef.current) map.easeTo({ center, zoom });
-                        } catch (error) {
-                            if (!unmountedRef.current) console.warn("[MapView] cluster expansion failed:", error);
-                        }
-                    });
-                    map.on("click", unclusteredLayers, (e) => {
-                        const idx = e.features?.[0]?.properties?.__pmIndex;
-                        const point = idx != null ? pointsRef.current?.[idx] : null;
-                        if (!point) return;
-                        openPopup(
-                            maplibreRef.current,
-                            map,
-                            point,
-                            popupNodesRef,
-                            popupsRef,
-                            popupPropsRef.current,
-                        );
-                    });
-                    map.on("mouseenter", [...clusterLayers, ...unclusteredLayers], () => {
-                        map.getCanvas().style.cursor = "pointer";
-                    });
-                    map.on("mouseleave", [...clusterLayers, ...unclusteredLayers], () => {
-                        map.getCanvas().style.cursor = "";
-                    });
-                });
+                map.on("load", () =>
+                    addClusterLayers(map, pinImages, {
+                        isActive: () => !unmountedRef.current,
+                        onPointClick: (idx) => {
+                            const point = pointsRef.current?.[idx];
+                            if (!point) return;
+                            openPopup(
+                                maplibreRef.current,
+                                map,
+                                point,
+                                popupNodesRef,
+                                popupsRef,
+                                popupPropsRef.current,
+                            );
+                        },
+                    }),
+                );
 
                 return map;
             })().catch((err) => {
