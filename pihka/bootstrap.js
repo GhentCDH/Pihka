@@ -16,7 +16,7 @@ export function normalizeEngineConfig(config = {}) {
         enrichment: config.enrichment,
         perspectives: (Array.isArray(config.perspectives) ? config.perspectives : [])
             .filter((p) => p && typeof p === "object")
-            .map(({ id, table, query }) => ({ id, table, query })),
+            .map(({ id, table, query, fts }) => ({ id, table, query, fts: fts === true })),
         columns,
     };
 }

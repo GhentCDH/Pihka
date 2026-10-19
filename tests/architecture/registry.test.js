@@ -29,7 +29,7 @@ test('timed-out import cannot install after completing late', async () => {
 test('composition extracts only semantic engine settings', () => {
     const config = normalizeEngineConfig({tables:{works:{hidden:true,columns:{count:{type:'number',label:'Count'},body:{type:'text',fts:false}}}}, perspectives:[{id:'summary',table:'summary',query:'SELECT 1',label:'Summary'}]});
     assert.deepEqual(config.columns.works, {count:{numeric:true,noFts:false},body:{numeric:false,noFts:true}});
-    assert.deepEqual(config.perspectives,[{id:'summary',table:'summary',query:'SELECT 1'}]);
+    assert.deepEqual(config.perspectives,[{id:'summary',table:'summary',query:'SELECT 1',fts:false}]);
     assert.ok(!JSON.stringify(config).includes('hidden'));
     assert.ok(!JSON.stringify(config).includes('label'));
     assert.deepEqual(normalizeEngineConfig({perspectives:'invalid',tables:{works:{columns:{title:null}}}}).perspectives, []);

@@ -32,11 +32,21 @@ function resolveFtsMode(config) {
     return DEFAULT_MODE;
 }
 
+// Perspective views indexed on request only: an index on a view over an
+// indexed table lists the same records twice in search.
+function ftsViews(config) {
+    const perspectives = Array.isArray(config?.perspectives) ? config.perspectives : [];
+    return new Set(perspectives
+        .filter(p => p?.fts === true && typeof p.table === "string")
+        .map(p => foldIdentifier(p.table)));
+}
+
 /**
  * Build an external-content FTS5 virtual table for every user table that
- * has at least one text column and a single INTEGER PRIMARY KEY. Views
- * (such as perspective views) qualify through their INTEGER `id` column,
- * which metadata marks as the primary key.
+ * has at least one text column and a single INTEGER PRIMARY KEY. Views of
+ * perspectives with `fts: true` qualify through their INTEGER `id` column,
+ * which metadata marks as the primary key. Published indexes over views
+ * are reused without that setting.
  *
  * Annotates each enriched table on `meta` so consumers can discover what's
  * searchable:
@@ -90,8 +100,11 @@ export async function fts5Plugin(ds, meta, config) {
         }
         target.fts ??= { table: name, columns: columns.map(c => c.name), mode: tokenizer, rowid: rowidColumn?.name ?? rowidOption };
     }
+    const views = ftsViews(config);
     for (const [name, tableMeta] of Object.entries(meta.tables)) {
-        if (!INDEXABLE_TYPES.has(tableMeta.type)) continue; // skip virtuals
+        const indexable = tableMeta.type === "table"
+            || (tableMeta.type === "view" && views.has(foldIdentifier(name)));
+        if (!indexable) continue;
         if (tableMeta.fts || ds.capabilities?.readOnly) continue;
         try {
             await buildIndex(ds, name, tableMeta, mode);

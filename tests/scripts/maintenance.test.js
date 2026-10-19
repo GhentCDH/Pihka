@@ -159,6 +159,35 @@ test("sample generation prepares FTS, views, rows and annotations before install
     reopened.close();
 });
 
+test("perspective views get an FTS index only with fts: true", async (t) => {
+    const root = await fixture(t);
+    const path = join(root, "views.db");
+    const seed = new DatabaseSync(path);
+    seed.exec(`
+        CREATE TABLE words(id INTEGER PRIMARY KEY, term TEXT);
+        INSERT INTO words VALUES (1, 'mbwa'), (2, 'ngombe');
+    `);
+    seed.close();
+    const query = "SELECT id, term FROM words";
+    await prepareSampleDatabase(path, {
+        perspectives: [
+            { id: "plain", table: "plain_words", query },
+            { id: "searchable", table: "searchable_words", query, fts: true },
+        ],
+    });
+
+    const db = new DatabaseSync(path);
+    const fts = (name) => db.prepare("SELECT count(*) AS n FROM sqlite_schema WHERE name = ?").get(name).n;
+    assert.equal(fts("words_fts"), 1);
+    assert.equal(fts("plain_words_fts"), 0);
+    assert.equal(fts("searchable_words_fts"), 1);
+    assert.equal(
+        db.prepare("SELECT count(*) AS n FROM searchable_words_fts WHERE searchable_words_fts MATCH 'ngombe'").get().n,
+        1,
+    );
+    db.close();
+});
+
 test("materialized perspectives publish indexed tables, refresh on rerun and fail loudly", async (t) => {
     const root = await fixture(t);
     const path = join(root, "materialize.db");
