@@ -157,7 +157,7 @@ export function App({ perspectives, store, defaultLang, languages = null, menu =
                 key: `${tableName}:${rowId}`,
                 tableName: displayName, table: tableName, store, perspectives,
                 view, lang: effectiveLang,
-                perspectiveId, rowId,
+                perspectiveId, rowId, options: p?.options ?? null,
             }),
         );
     }
