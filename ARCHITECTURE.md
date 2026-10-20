@@ -206,7 +206,7 @@ remain local. The test server remains test infrastructure. See
 
 ### Table and perspective options
 
-Presentation metadata retains per-extension `tables.<table>.options`. A perspective's `options` shallowly overrides the table's option namespaces; list plugins receive this resolved bag. The public UI helper `extensionOptions(options, key)` selects one namespace. These settings never enter the query engine.
+Presentation metadata retains per-extension `tables.<table>.options`. A perspective's `options` shallowly overrides the table's option namespaces; list and detail views receive this resolved bag as their `options` prop. The public UI helper `extensionOptions(options, key)` selects one namespace. These settings never enter the query engine.
 
 For published SQL views, a literal `id` column is treated as the row identifier when SQLite reports no primary key, preserving detail navigation on id-bearing perspectives for both transports. Authors must ensure these identifiers are unique. Views without an id retain no detail identifier.
 

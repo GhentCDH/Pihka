@@ -2,6 +2,8 @@
 import { h } from "preact";
 import MapView from "./map-view.js";
 import { findGeoColumns, rowToPoint } from "./geo.js";
+import { resolveTheme } from "./theme.js";
+import { extensionOptions } from "../../../core/ui/index.js";
 
 /**
  * Renders a single row's location on a map.
@@ -13,8 +15,9 @@ import { findGeoColumns, rowToPoint } from "./geo.js";
  *   fkResolved    - FK display map for popup
  *   lang          - language code (for popup link)
  *   perspectiveId - perspective id (for popup link)
+ *   options       - resolved view options; `point_map.theme` sets the colors
  */
-export default function DataViewDetailMap({ tableName, columns, row, fkResolved, lang, perspectiveId }) {
+export default function DataViewDetailMap({ tableName, columns, row, fkResolved, lang, perspectiveId, options }) {
     const geo = findGeoColumns(columns);
     if (!geo) {
         return h("p", { style: "color:var(--text-muted)" },
@@ -40,5 +43,6 @@ export default function DataViewDetailMap({ tableName, columns, row, fkResolved,
         lang,
         perspectiveId,
         fill: true,
+        theme: resolveTheme(extensionOptions(options, "point_map").theme),
     });
 }

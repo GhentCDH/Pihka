@@ -4,6 +4,7 @@ import MapView from "./map-view.js";
 import MapLegend from "./map-legend.js";
 import { findGeoColumns, rowsToPoints } from "./geo.js";
 import { categorize, categoryOf } from "./categories.js";
+import { resolveTheme } from "./theme.js";
 import { extensionOptions } from "../../../core/ui/index.js";
 
 // Above this many points, "auto" clustering mode switches on. Individual
@@ -37,7 +38,8 @@ function resolveCluster(mode, count) {
  *
  * With `point_map.colorBy` set to a category column, pins take the color
  * of their row's category and a legend is shown. `maxTypes` and `neutral`
- * are passed to `categorize()` (see categories.js).
+ * are passed to `categorize()` (see categories.js). `point_map.theme` sets
+ * the colors (see theme.js).
  */
 export default function DataViewListMap({
     name,
@@ -64,9 +66,12 @@ export default function DataViewListMap({
     }
 
     const points = rowsToPoints(rows, geo.latCol, geo.lonCol);
-    const { clustering, colorBy, maxTypes, neutral } = extensionOptions(options, "point_map");
+    const { clustering, colorBy, maxTypes, neutral, theme: themeConfig } = extensionOptions(options, "point_map");
+    const theme = resolveTheme(themeConfig);
     const cluster = resolveCluster(clustering, points.length);
-    const legend = typeof colorBy === "string" ? colorPoints(points, colorBy, { maxTypes, neutral }) : null;
+    const legend = typeof colorBy === "string"
+        ? colorPoints(points, colorBy, { maxTypes, neutral, palette: theme.palette, other: theme.other })
+        : null;
 
     // MapView stays mounted through empty point sets (it renders its own
     // "no location data" note) so the live map survives a filter that
@@ -83,6 +88,7 @@ export default function DataViewListMap({
             perspectiveId,
             fill: true,
             cluster,
+            theme,
         }),
         legend && points.length > 0 && h(MapLegend, { legend, lang }),
     );

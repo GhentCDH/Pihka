@@ -29,8 +29,10 @@ const RELATED_PAGE_SIZE = 10;
  *   lang          - current language code
  *   perspectiveId - perspective id for URL building
  *   rowId         - row id for URL building
+ *   options       - the perspective's resolved view options, passed to the
+ *                   detail view as list views get them
  */
-export default function DetailView({ tableName, table, columns, row, fkResolved, related = [], store, view, lang, perspectiveId, rowId }) {
+export default function DetailView({ tableName, table, columns, row, fkResolved, related = [], store, view, lang, perspectiveId, rowId, options = null }) {
     const activeView = view || "table";
     const effectiveLang = lang || "en";
 
@@ -60,7 +62,7 @@ export default function DetailView({ tableName, table, columns, row, fkResolved,
         // Render active view
         !row
             ? h("p", null, "Row not found.")
-            : h(viewDef.component, { tableName, table, columns, row, fkResolved, lang: effectiveLang, perspectiveId, store }),
+            : h(viewDef.component, { tableName, table, columns, row, fkResolved, lang: effectiveLang, perspectiveId, store, options }),
 
         // Related objects: rows from other tables referencing this one.
         row && related.length > 0 && related.map(rel =>
