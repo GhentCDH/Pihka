@@ -13,6 +13,7 @@ import {
     setClusterData,
     whenClusterSource,
 } from "./map-layers.js";
+import { DEFAULT_THEME } from "./theme.js";
 
 export { buildStyle };
 
@@ -32,6 +33,8 @@ export { buildStyle };
  *   popupComponent  - optional override, defaults to MapPopup
  *   cluster         - render points via a clustered GeoJSON source/layers
  *                      instead of individual pin markers. Default false.
+ *   theme           - colors from resolveTheme() (see theme.js), read when
+ *                      the map is created. Default DEFAULT_THEME.
  */
 export default function MapView({
     points,
@@ -44,6 +47,7 @@ export default function MapView({
     fill = false,
     popupComponent: PopupComponent = MapPopup,
     cluster = false,
+    theme = DEFAULT_THEME,
 }) {
     const registry = useRegistry();
     const containerRef = useRef(null);
@@ -63,6 +67,9 @@ export default function MapView({
     popupPropsRef.current = { PopupComponent, tableName, columns, fkResolved, lang, perspectiveId, registry };
     const pointsRef = useRef(points);
     pointsRef.current = points;
+    // The cluster sources and pin images are built for one theme, so the
+    // map keeps the theme it was created with.
+    const themeRef = useRef(theme);
 
     // Create the map lazily, at most once per component life. The map must
     // survive every prop change — tearing down the WebGL context on each
@@ -76,13 +83,13 @@ export default function MapView({
                 await ensurePmtilesProtocol();
                 if (unmountedRef.current) return null;
 
-                const pinImages = await loadPinImages();
+                const pinImages = await loadPinImages(themeRef.current);
                 if (unmountedRef.current) return null;
 
                 const first = (pointsRef.current ?? [])[0];
                 const map = new maplibregl.Map({
                     container: containerRef.current,
-                    style: buildStyle(),
+                    style: buildStyle(themeRef.current),
                     center: first ? [first.lon, first.lat] : [0, 20],
                     zoom: first ? 4 : 1.5,
                     attributionControl: { compact: true },
@@ -117,6 +124,7 @@ export default function MapView({
                 // modes never needs to touch the map/style, only source data.
                 map.on("load", () =>
                     addClusterLayers(map, pinImages, {
+                        theme: themeRef.current,
                         isActive: () => !unmountedRef.current,
                         onPointClick: (idx) => {
                             const point = pointsRef.current?.[idx];
@@ -190,14 +198,14 @@ export default function MapView({
                 markersRef.current.clear();
 
                 const updateClusterData = () => {
-                    if (!stale && !unmountedRef.current) setClusterData(map, points ?? []);
+                    if (!stale && !unmountedRef.current) setClusterData(map, points ?? [], themeRef.current);
                 };
                 whenClusterSource(map, updateClusterData);
             } else {
                 // Clear the cluster sources so leftover cluster circles from
                 // a previous cluster-mode render don't linger.
                 const clearClusterSource = () => {
-                    if (!stale && !unmountedRef.current) setClusterData(map, []);
+                    if (!stale && !unmountedRef.current) setClusterData(map, [], themeRef.current);
                 };
                 whenClusterSource(map, clearClusterSource);
 
@@ -230,7 +238,7 @@ export default function MapView({
                     const existing = markers.get(key);
                     if (existing) {
                         existing.point = p;
-                        const url = markerUrl(p);
+                        const url = markerUrl(p, themeRef.current);
                         if (existing.image.src !== url) existing.image.src = url;
                         const at = existing.marker.getLngLat();
                         if (at.lng !== p.lon || at.lat !== p.lat) {
@@ -241,7 +249,7 @@ export default function MapView({
                     const element = document.createElement("div");
                     element.className = "point-map-pin";
                     const image = document.createElement("img");
-                    image.src = markerUrl(p);
+                    image.src = markerUrl(p, themeRef.current);
                     image.width = 20;
                     image.height = 28;
                     image.alt = "";

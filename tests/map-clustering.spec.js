@@ -52,6 +52,40 @@ for (const mode of ["download", "http-vfs"]) {
     });
 }
 
+test("a configured theme colors the list and detail maps", async ({ page }) => {
+    const errors = [];
+    page.on("pageerror", error => errors.push(error.message));
+    const theme = { pin: "#123456", outline: "#fefde2", basemap: { water: "#0000ff" } };
+    await page.route("**/app/config.json", async route => {
+        const response = await route.fetch();
+        const config = await response.json();
+        config.tables.authors = { ...config.tables.authors, options: { point_map: { clustering: true, theme } } };
+        await route.fulfill({ json: config });
+    });
+    await page.route("**/point_map/js/map-view.js", async route => {
+        const response = await route.fetch();
+        await route.fulfill({ response, body: (await response.text()).replace(
+            "mapRef.current = map;", "mapRef.current = map; globalThis.testThemeMap = map;",
+        ) });
+    });
+    await page.goto(`${server.origin}/download/#/en/authors/map`);
+    await expect.poll(() => page.evaluate(() => !!globalThis.testThemeMap?.getLayer("pm-clusters"))).toBe(true);
+    expect(await page.evaluate(() => ({
+        cluster: globalThis.testThemeMap.getPaintProperty("pm-clusters", "circle-color"),
+        stroke: globalThis.testThemeMap.getPaintProperty("pm-clusters", "circle-stroke-color"),
+        water: globalThis.testThemeMap.getPaintProperty("background", "background-color"),
+    }))).toEqual({ cluster: "#123456", stroke: "#fefde2", water: "#0000ff" });
+
+    // The detail map gets the same options, so its pin takes the theme too.
+    await page.goto(`${server.origin}/download/#/en/authors/1/map`);
+    const pin = page.locator(".maplibregl-marker img").first();
+    await expect(pin).toBeVisible();
+    const src = decodeURIComponent(await pin.getAttribute("src"));
+    expect(src).toContain('fill="#123456"');
+    expect(src).toContain('stroke="#fefde2"');
+    expect(errors).toEqual([]);
+});
+
 test("automatic clustering uses the 1000-point threshold and explicit modes win", async ({ page }) => {
     await page.goto(`${server.origin}/download/`);
     const modes = await page.evaluate(async () => {
