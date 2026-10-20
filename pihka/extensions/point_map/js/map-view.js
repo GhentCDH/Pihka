@@ -5,82 +5,16 @@ import { useEffect, useRef } from "preact/hooks";
 import { loadMaplibre } from "./maplibre-shim.js";
 import { ensurePmtilesProtocol } from "./pmtiles-protocol.js";
 import MapPopup from "./map-popup.js";
-import { pointsToGeoJSON } from "./geo.js";
+import {
+    addClusterLayers,
+    buildStyle,
+    loadPinImages,
+    markerUrl,
+    setClusterData,
+    whenClusterSource,
+} from "./map-layers.js";
 
-const TILES_URL = "pmtiles://" + new URL("../assets/world.pmtiles", import.meta.url).href;
-// Built by hand (not via `new URL(...)`) because the URL constructor
-// percent-encodes the literal "{fontstack}"/"{range}" template braces that
-// MapLibre's glyphs spec requires.
-const GLYPHS_URL = new URL("../assets/glyphs/", import.meta.url).href + "{fontstack}/{range}.pbf";
-const MARKER_URL = new URL("../assets/marker.svg", import.meta.url).href;
-const CLUSTER_SOURCE_ID = "pm-points";
-const EMPTY_FC = { type: "FeatureCollection", features: [] };
-
-/**
- * Minimal MapLibre style targeting the Protomaps basemap schema.
- *
- * The world.pmtiles archive ships with vector layers like `earth`, `water`,
- * `boundaries`, and `places`. We render just enough of them for a usable
- * basemap; richer styling would mean shipping a much larger style JSON.
- */
-export function buildStyle() {
-    return {
-        version: 8,
-        glyphs: GLYPHS_URL,
-        sources: {
-            protomaps: {
-                type: "vector",
-                url: TILES_URL,
-                attribution: "© OpenStreetMap, Protomaps",
-            },
-        },
-        layers: [
-            { id: "background", type: "background", paint: { "background-color": "#aac7e8" } },
-            {
-                id: "earth",
-                type: "fill",
-                source: "protomaps",
-                "source-layer": "earth",
-                paint: { "fill-color": "#f3eddc" },
-            },
-            {
-                id: "landcover",
-                type: "fill",
-                source: "protomaps",
-                "source-layer": "landcover",
-                paint: { "fill-color": "#d6e2c3", "fill-opacity": 0.7 },
-            },
-            {
-                id: "landuse",
-                type: "fill",
-                source: "protomaps",
-                "source-layer": "landuse",
-                paint: { "fill-color": "#e6e0c8", "fill-opacity": 0.5 },
-            },
-            {
-                id: "water",
-                type: "fill",
-                source: "protomaps",
-                "source-layer": "water",
-                paint: { "fill-color": "#aac7e8" },
-            },
-            {
-                id: "boundaries",
-                type: "line",
-                source: "protomaps",
-                "source-layer": "boundaries",
-                paint: { "line-color": "#888", "line-width": 0.6, "line-dasharray": [2, 2] },
-            },
-            {
-                id: "roads",
-                type: "line",
-                source: "protomaps",
-                "source-layer": "roads",
-                paint: { "line-color": "#cdb892", "line-width": 0.5 },
-            },
-        ],
-    };
-}
+export { buildStyle };
 
 /**
  * Shared map component. Both the list-view and detail-view map wrappers
@@ -142,10 +76,7 @@ export default function MapView({
                 await ensurePmtilesProtocol();
                 if (unmountedRef.current) return null;
 
-                // Render at 3× density; the SVG and DOM pins share a 20 × 28 footprint.
-                const markerImg = new window.Image(60, 84);
-                markerImg.src = MARKER_URL;
-                await markerImg.decode();
+                const pinImages = await loadPinImages();
                 if (unmountedRef.current) return null;
 
                 const first = (pointsRef.current ?? [])[0];
@@ -180,115 +111,27 @@ export default function MapView({
                     "top-right",
                 );
 
-                // Clustered rendering path: a GeoJSON source + GPU-rendered
-                // circle/symbol layers, added once and always present
-                // (empty when the `cluster` prop is off) so switching modes
-                // never needs to touch the map/style, only source data.
-                map.on("load", () => {
-                    if (map.getSource(CLUSTER_SOURCE_ID)) return;
-
-                    if (!map.hasImage("marker")) {
-                        map.addImage("marker", markerImg, { pixelRatio: 3 });
-                    }
-
-                    map.addSource(CLUSTER_SOURCE_ID, {
-                        type: "geojson",
-                        data: EMPTY_FC,
-                        cluster: true,
-                        clusterMaxZoom: 14,
-                        clusterRadius: 60,
-                    });
-                    map.addLayer({
-                        id: "pm-clusters",
-                        type: "circle",
-                        source: CLUSTER_SOURCE_ID,
-                        filter: ["has", "point_count"],
-                        paint: {
-                            "circle-color": "#b35309",
-                            "circle-opacity": 0.75,
-                            "circle-radius": [
-                                "step",
-                                ["get", "point_count"],
-                                20,
-                                50,
-                                25,
-                                250,
-                                35,
-                                1000,
-                                45,
-                                10000,
-                                60,
-                            ],
-                            "circle-stroke-width": 3,
-                            "circle-stroke-color": "#fff",
+                // Clustered rendering path: GeoJSON sources + GPU-rendered
+                // circle/symbol layers per color group, added once and always
+                // present (empty when the `cluster` prop is off) so switching
+                // modes never needs to touch the map/style, only source data.
+                map.on("load", () =>
+                    addClusterLayers(map, pinImages, {
+                        isActive: () => !unmountedRef.current,
+                        onPointClick: (idx) => {
+                            const point = pointsRef.current?.[idx];
+                            if (!point) return;
+                            openPopup(
+                                maplibreRef.current,
+                                map,
+                                point,
+                                popupNodesRef,
+                                popupsRef,
+                                popupPropsRef.current,
+                            );
                         },
-                    });
-                    map.addLayer({
-                        id: "pm-cluster-count",
-                        type: "symbol",
-                        source: CLUSTER_SOURCE_ID,
-                        filter: ["has", "point_count"],
-                        layout: {
-                            "text-field": ["get", "point_count_abbreviated"],
-                            "text-font": ["Noto Sans Regular"],
-                            "text-size": 12,
-                        },
-                        paint: { "text-color": "#fff" },
-                    });
-                    map.addLayer({
-                        id: "pm-unclustered",
-                        type: "symbol",
-                        source: CLUSTER_SOURCE_ID,
-                        filter: ["!", ["has", "point_count"]],
-                        layout: {
-                            "icon-image": "marker",
-                            "icon-size": 1,
-                            "icon-anchor": "bottom",
-                            "icon-rotation-alignment": "viewport",
-                            "icon-pitch-alignment": "viewport",
-                        },
-                    });
-
-                    map.on("click", "pm-clusters", async (e) => {
-                        const clusterId = e.features?.[0]?.properties?.cluster_id;
-                        const center = e.features?.[0]?.geometry?.coordinates;
-                        if (clusterId == null || !center) return;
-                        // Capture `center` before the await — MapLibre may
-                        // reuse/clear `e.features` once the handler yields.
-                        const source = map.getSource(CLUSTER_SOURCE_ID);
-                        try {
-                            const zoom = await source.getClusterExpansionZoom(clusterId);
-                            if (!unmountedRef.current) map.easeTo({ center, zoom });
-                        } catch (error) {
-                            if (!unmountedRef.current) console.warn("[MapView] cluster expansion failed:", error);
-                        }
-                    });
-                    map.on("click", "pm-unclustered", (e) => {
-                        const idx = e.features?.[0]?.properties?.__pmIndex;
-                        const point = idx != null ? pointsRef.current?.[idx] : null;
-                        if (!point) return;
-                        openPopup(
-                            maplibreRef.current,
-                            map,
-                            point,
-                            popupNodesRef,
-                            popupsRef,
-                            popupPropsRef.current,
-                        );
-                    });
-                    map.on("mouseenter", "pm-clusters", () => {
-                        map.getCanvas().style.cursor = "pointer";
-                    });
-                    map.on("mouseleave", "pm-clusters", () => {
-                        map.getCanvas().style.cursor = "";
-                    });
-                    map.on("mouseenter", "pm-unclustered", () => {
-                        map.getCanvas().style.cursor = "pointer";
-                    });
-                    map.on("mouseleave", "pm-unclustered", () => {
-                        map.getCanvas().style.cursor = "";
-                    });
-                });
+                    }),
+                );
 
                 return map;
             })().catch((err) => {
@@ -346,19 +189,17 @@ export default function MapView({
                 for (const [, entry] of markersRef.current) entry.marker.remove();
                 markersRef.current.clear();
 
-                const setClusterData = () => {
-                    if (!stale && !unmountedRef.current) map.getSource(CLUSTER_SOURCE_ID)?.setData(pointsToGeoJSON(points));
+                const updateClusterData = () => {
+                    if (!stale && !unmountedRef.current) setClusterData(map, points ?? []);
                 };
-                if (map.isStyleLoaded() && map.getSource(CLUSTER_SOURCE_ID)) setClusterData();
-                else map.once("load", setClusterData);
+                whenClusterSource(map, updateClusterData);
             } else {
-                // Clear the cluster source so leftover cluster circles from
+                // Clear the cluster sources so leftover cluster circles from
                 // a previous cluster-mode render don't linger.
                 const clearClusterSource = () => {
-                    if (!stale && !unmountedRef.current) map.getSource(CLUSTER_SOURCE_ID)?.setData(EMPTY_FC);
+                    if (!stale && !unmountedRef.current) setClusterData(map, []);
                 };
-                if (map.isStyleLoaded() && map.getSource(CLUSTER_SOURCE_ID)) clearClusterSource();
-                else map.once("load", clearClusterSource);
+                whenClusterSource(map, clearClusterSource);
 
                 const { tableName: table, columns: cols } = popupPropsRef.current;
 
@@ -389,6 +230,8 @@ export default function MapView({
                     const existing = markers.get(key);
                     if (existing) {
                         existing.point = p;
+                        const url = markerUrl(p);
+                        if (existing.image.src !== url) existing.image.src = url;
                         const at = existing.marker.getLngLat();
                         if (at.lng !== p.lon || at.lat !== p.lat) {
                             existing.marker.setLngLat([p.lon, p.lat]);
@@ -398,7 +241,7 @@ export default function MapView({
                     const element = document.createElement("div");
                     element.className = "point-map-pin";
                     const image = document.createElement("img");
-                    image.src = MARKER_URL;
+                    image.src = markerUrl(p);
                     image.width = 20;
                     image.height = 28;
                     image.alt = "";
@@ -406,6 +249,7 @@ export default function MapView({
                     element.append(image);
                     const entry = {
                         point: p,
+                        image,
                         marker: new maplibregl.Marker({
                             element,
                             anchor: "bottom",

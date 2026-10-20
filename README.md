@@ -10,7 +10,7 @@ Pihka lets you publish SQLite databases as interactive, searchable websites. Dro
 - **Detail views** for individual records
 - **Zero backend** — runs entirely in the browser, no server components which need active maintenance
 - **Relationship views** — shows names or labels for linked columns.
-- **Full text search** - To search accross columns. By default, a database is enriched with a trigram full text search index: queries match anywhere in the text, autocomplete-style. A search box in the header searches across all indexed tables at once, with results grouped per table. Set `"enrichment": {"fts": "unicode61"}` in `app/config.json` for whole-word matching with the richer FTS5 query syntax (`pre*`, `NEAR`, `column:word`), or `"fts": false` to skip indexing. For small datasets creating such index goes instantly; trigram indexes are somewhat larger and slower to build on big databases.
+- **Full text search** - To search accross columns. By default, a database is enriched with a trigram full text search index: queries match anywhere in the text, autocomplete-style. Tables with an integer primary key are indexed. A perspective view with an integer `id` column is indexed when the perspective sets `"fts": true`. A search box in the header searches across all indexed tables at once, with results grouped per table. Set `"enrichment": {"fts": "unicode61"}` in `app/config.json` for whole-word matching with the richer FTS5 query syntax (`pre*`, `NEAR`, `column:word`), or `"fts": false` to skip indexing. For small datasets creating such index goes instantly; trigram indexes are somewhat larger and slower to build on big databases.
 - **Modern mapping solutions** — Optional MapLibre and PMTiles views use locally hosted basemaps without external services.
 
 ## Why
@@ -45,6 +45,13 @@ The development server supplies weak ETags, so the demo explicitly uses
 `immutable: true`: keep the database unchanged throughout a browsing session and
 reload after preparation. For deployment, publish a new versioned database URL
 for each revision, or use a host with strong ETags and remove that option.
+
+### Database version
+
+Set `"databaseVersion": "2026.10.14"` in `app/config.json` to request the
+database as `sample.db?v=2026.10.14`. Serve the file with a long cache lifetime
+(the included `Caddyfile` does). After you update the database, change the
+version string: browsers keep the cached copy until the version changes.
 
 ## Using your own data
 

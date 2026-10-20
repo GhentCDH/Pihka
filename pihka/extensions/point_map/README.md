@@ -24,20 +24,45 @@ Any table or perspective whose schema has numeric latitude/longitude columns
 
 Without the extension, geo tables simply have no map views.
 
+## Colored markers
+
+Set `colorBy` to a category column to give the map view's pins the color of
+their row's category, with a legend:
+
+```json
+"options": {
+    "point_map": {
+        "colorBy": "lexical_type",
+        "maxTypes": 10,
+        "neutral": ["—"]
+    }
+}
+```
+
+The `maxTypes` most frequent categories get their own color, the rest share
+a grey "other". `neutral` values are grey too and keep their own legend
+entry. Rows with an empty category fall in "—". With clustering, each color
+clusters on its own and its clusters take that color, so clusters of
+different colors can overlap.
+
 ## Basemap
 
 The world basemap is served from `assets/world.pmtiles` — fully static, no
 tile server. Refresh it with `npm run download-world-pmtiles` (requires the
-`pmtiles` CLI). The map style in `js/map-view.js` targets the Protomaps
+`pmtiles` CLI). The map style in `js/map-layers.js` targets the Protomaps
 schema layers.
 
 ## Structure
 
-`js/map-view.js` (shared map + style), `js/map-popup.js`,
+`js/map-layers.js` (style, per-color cluster sources and pins, without
+Preact), `js/map-view.js` (shared Preact map), `js/map-popup.js`,
 `js/maplibre-shim.js` (loads the MapLibre ES module on demand),
 `js/pmtiles-protocol.js`, `js/map-bounds-filter.js` (pure viewport control),
 and the two registered views. The shared plumbing is deliberately importable
-— future map extensions (e.g. a heat map) can build on it.
+— future map extensions (e.g. a heat map) can build on it. A custom UI that
+does not use the component registry can draw the same clustered map with
+`map-layers.js`, `maplibre-shim.js` and `pmtiles-protocol.js` alone (see the
+example at the top of `map-layers.js`).
 
 Both map views fill the remaining viewport height via core's `.fill-height`
 class (see the public-contract comment in `core/assets/stylesheets/base.css`);

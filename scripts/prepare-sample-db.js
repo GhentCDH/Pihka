@@ -1,5 +1,6 @@
 /**
- * Publish views and FTS indexes into the existing demo database for read-only VFS.
+ * Publish views, materialized perspective tables and FTS indexes into the
+ * existing demo database for read-only VFS.
  * Requires Node >= 22.13 (node:sqlite); no source rows are regenerated.
  * Run npm run prepare-sample-db again after editing rows to refresh the indexes.
  */
@@ -9,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import { readMetadata } from '../pihka/core/engine/metadata.js';
 import { normalizeEngineConfig } from '../pihka/bootstrap.js';
-import { createPerspectiveViews } from '../pihka/core/engine/perspective-views.js';
+import { createPerspectiveViews, materializePerspectives } from '../pihka/core/engine/perspective-views.js';
 import { fts5Plugin } from '../pihka/core/engine/enrichment/fts5.js';
 import { quoteIdentifier } from '../pihka/core/engine/enrichment/sql-utils.js';
 
@@ -39,6 +40,7 @@ export async function prepareSampleDatabase(databasePath = samplePath, config = 
   try {
     db.exec('BEGIN IMMEDIATE');
     try {
+      await materializePerspectives(ds, config);
       await createPerspectiveViews(ds, config);
       if (failures.length) throw failures[0];
       const meta = await readMetadata(ds);

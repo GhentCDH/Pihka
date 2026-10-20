@@ -2,6 +2,7 @@
 import { quoteIdentifier, findTextColumns } from "./sql-utils.js";
 
 const RESERVED_FTS5_COLS = new Set(["rowid", "rank"]);
+const INDEXABLE_TYPES = new Set(["table", "view"]);
 
 // Tokenizer modes selectable via config.enrichment.fts. Trigram gives
 // substring ("autocomplete-like") matching; unicode61 matches whole words
@@ -31,9 +32,21 @@ function resolveFtsMode(config) {
     return DEFAULT_MODE;
 }
 
+// Perspective views indexed on request only: an index on a view over an
+// indexed table lists the same records twice in search.
+function ftsViews(config) {
+    const perspectives = Array.isArray(config?.perspectives) ? config.perspectives : [];
+    return new Set(perspectives
+        .filter(p => p?.fts === true && typeof p.table === "string")
+        .map(p => foldIdentifier(p.table)));
+}
+
 /**
  * Build an external-content FTS5 virtual table for every user table that
- * has at least one text column and a single INTEGER PRIMARY KEY.
+ * has at least one text column and a single INTEGER PRIMARY KEY. Views of
+ * perspectives with `fts: true` qualify through their INTEGER `id` column,
+ * which metadata marks as the primary key. Published indexes over views
+ * are reused without that setting.
  *
  * Annotates each enriched table on `meta` so consumers can discover what's
  * searchable:
@@ -70,11 +83,12 @@ export async function fts5Plugin(ds, meta, config) {
             console.warn(`[fts5] cannot reuse "${name}": unsupported detail=${detail}; detail=full is required for phrase and trigram search`);
             continue;
         }
-        if (!target || target.type !== "table" || !TOKENIZERS[tokenizer] || !indexedColumns.length) continue;
+        if (!target || !INDEXABLE_TYPES.has(target.type) || !TOKENIZERS[tokenizer] || !indexedColumns.length) continue;
         const rowidColumn = target.columns.find(c => foldIdentifier(c.name) === rowidOption);
         const layout = layouts.find(t => foldIdentifier(t.name) === foldIdentifier(source));
+        // Views have no implicit rowid, so they always need an explicit integer column.
         const validRowid = rowidColumn ? /^INTEGER$/i.test(rowidColumn.type || "")
-            : layout?.wr === 0 && ["rowid", "_rowid_", "oid"].includes(rowidOption);
+            : target.type === "table" && layout?.wr === 0 && ["rowid", "_rowid_", "oid"].includes(rowidOption);
         if (!validRowid) {
             console.warn(`[fts5] cannot reuse "${name}": content rowid "${rowidOption}" is missing or not INTEGER (WITHOUT ROWID tables require an explicit integer column)`);
             continue;
@@ -86,8 +100,11 @@ export async function fts5Plugin(ds, meta, config) {
         }
         target.fts ??= { table: name, columns: columns.map(c => c.name), mode: tokenizer, rowid: rowidColumn?.name ?? rowidOption };
     }
+    const views = ftsViews(config);
     for (const [name, tableMeta] of Object.entries(meta.tables)) {
-        if (tableMeta.type !== "table") continue; // skip views, virtuals
+        const indexable = tableMeta.type === "table"
+            || (tableMeta.type === "view" && views.has(foldIdentifier(name)));
+        if (!indexable) continue;
         if (tableMeta.fts || ds.capabilities?.readOnly) continue;
         try {
             await buildIndex(ds, name, tableMeta, mode);

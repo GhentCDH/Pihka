@@ -5,6 +5,7 @@
         "nl"
     ],
     "database": "app/database/sample.db",
+    "databaseVersion": "2026.10.14",
     "datasource": {
         "type": "http-vfs",
         "options": {

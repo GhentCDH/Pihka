@@ -37,7 +37,7 @@ export function createComponentRegistry() {
                         throw new Error("Invalid view context");
                     staged.set(
                         key(def.kind, def.id, def.context),
-                        Object.freeze({ paginated: true, icon: "", ...def }),
+                        Object.freeze({ paginated: true, ordered: true, icon: "", ...def }),
                     );
                 },
                 registerFilterCodec(id, def) {

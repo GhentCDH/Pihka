@@ -59,7 +59,7 @@ test("automatic clustering uses the 1000-point threshold and explicit modes win"
         const columns = [{ name: "latitude", type: "REAL" }, { name: "longitude", type: "REAL" }];
         return [[undefined, 1000], [undefined, 1001], [false, 1001], [true, 1]].map(([clustering, count]) => {
             const rows = Array.from({ length: count }, () => ({ latitude: 51, longitude: 3 }));
-            return MapList({ name: "items", columns, rows, options: { point_map: { clustering } } }).props.children.props.cluster;
+            return MapList({ name: "items", columns, rows, options: { point_map: { clustering } } }).props.children[0].props.cluster;
         });
     });
     expect(modes).toEqual([false, true, false, true]);

@@ -84,11 +84,17 @@ WAL-format databases are rejected. Supported SQLite page sizes are 512 through
 This datasource never creates FTS indexes or runtime perspective views. Publish
 configured perspective tables/views in the database beforehand. Query-defined
 perspectives without a published backing relation are warned about and skipped.
+For large joined perspectives, set `"materialize": true`: `prepareSampleDatabase`
+then publishes the query as a table with indexes on its facet fields and default
+sort, so filters and counts use indexes instead of scanning the joined tables.
 
 Search discovers compatible external-content FTS5 tables from the schema; no
 specific index name is required. Use `detail=full` (the default), a `trigram` or
 `unicode61` tokenizer, and a valid integer rowid mapping to the source table.
-For example:
+The source can also be a view, such as a perspective view. A view has no
+implicit rowid, so `content_rowid` must name an INTEGER column (normally `id`).
+`npm run prepare-sample-db` (`prepareSampleDatabase`) builds these indexes for
+tables, and for perspective views that set `"fts": true`. For example:
 
 ```sql
 CREATE VIRTUAL TABLE works_fts USING fts5(
