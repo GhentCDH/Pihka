@@ -272,3 +272,22 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
+
+## Typefaces — Inter Tight 5.3.0 and Instrument Sans 5.3.0
+
+`assets/fonts/inter-tight-latin-wght-normal.woff2` and
+`assets/fonts/instrument-sans-latin-wght-normal.woff2` are the Latin variable
+subsets distributed by Fontsource (`@fontsource-variable/inter-tight` and
+`@fontsource-variable/instrument-sans`, both version 5.3.0). They are static
+assets referenced from `assets/stylesheets/base.css`, not JavaScript
+dependencies; the font stack falls back to system fonts if a file is missing.
+
+- **Inter Tight** — Copyright 2022 The Inter Project Authors
+  (<https://github.com/rsms/inter-tight>), SIL Open Font License 1.1.
+- **Instrument Sans** — Copyright 2022 The Instrument Sans Project Authors
+  (<https://github.com/Instrument/instrument-sans>), SIL Open Font License 1.1.
+
+The complete licence texts are in `assets/fonts/LICENSE-inter-tight.txt` and
+`assets/fonts/LICENSE-instrument-sans.txt`. The letter outlines of the Pihka
+logo (`assets/logo/pihka.svg`) are converted from Inter Tight, which the licence
+permits in a derived work; the logo itself is part of Pihka.
