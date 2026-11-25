@@ -53,6 +53,7 @@ export async function mountUI({ element, registry, store, schema, config, footer
                     languages: config.languages || null,
                     footer,
                     menu,
+                    site: config.site || null,
                 }),
             ),
         ),

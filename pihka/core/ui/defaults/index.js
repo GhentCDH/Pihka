@@ -11,6 +11,7 @@ import SiteFooter from "./site-footer.js";
 import GlobalSearchInput from "./global-search-input.js";
 import ThemeToggle from "./theme-toggle.js";
 import LangSwitcher from "./lang-switcher.js";
+import HeaderControls from "./header-controls.js";
 import FacetSidebar, { DropdownFacet } from "./facet-sidebar.js";
 import Pagination from "./pagination.js";
 import FtsSearchInput from "./fts-search-input.js";
@@ -38,6 +39,7 @@ export function register(api) {
             language: LangSwitcher,
             facets: FacetSidebar,
             pagination: Pagination,
+            controls: HeaderControls,
             search: FtsSearchInput,
         },
         facet: { range: RangeSelector, values: DropdownFacet },

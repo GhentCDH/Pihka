@@ -11,6 +11,7 @@ import { getPref } from "./prefs.js";
  * @property {string} table
  * @property {string} view - legacy single view field
  * @property {Object|string|null} label
+ * @property {Object|string|null} [description]
  * @property {string[]} allowed_views
  * @property {string} default_view
  * @property {string|null} default_sort
@@ -61,7 +62,7 @@ export async function loadPerspectives(meta, cfg, registry) {
     const tables = Object.entries(meta.tables)
         .filter(([name, t]) => t.type !== "virtual" && !t.hidden && !t.internal && !claimed.has(name))
         .map(([name, t]) => normalizePerspective(
-            { id: name, name, table: name, view: "table", label: t.label },
+            { id: name, name, table: name, view: "table", label: t.label, description: t.description || null },
             meta,
             "table", registry,
         ));
@@ -115,6 +116,7 @@ function normalizePerspective(p, meta, kind, registry) {
         view,
         // New: rich config
         label:         p.label || null,
+        description:   p.description || null,
         allowed_views: allowedViews,
         default_view:  registry.get("view", p.default_view, "list") ? p.default_view : allowedViews[0],
         default_sort:  p.default_sort || null,

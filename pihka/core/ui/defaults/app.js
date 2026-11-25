@@ -8,8 +8,7 @@ const SearchView = registeredComponent("page", "search");
 const StaticPage = registeredComponent("page", "static");
 const SiteFooter = registeredComponent("control", "footer");
 const GlobalSearchInput = registeredComponent("control", "global-search");
-const ThemeToggle = registeredComponent("control", "theme");
-const LangSwitcher = registeredComponent("control", "language");
+const HeaderControls = registeredComponent("control", "controls");
 import { useRouter, navigate, buildPath } from "../runtime/router.js";
 import { localize } from "../runtime/table-config.js";
 import { usePref, setPref } from "../runtime/prefs.js";
@@ -51,8 +50,7 @@ export function Header({ crumbs, lang, languages, onLangChange, search, menu = [
                 search && h("li", null, h(GlobalSearchInput, {
                     lang: search.lang, value: search.value, key: search.value,
                 })),
-                h("li", null, h(ThemeToggle, null)),
-                h("li", null, h(LangSwitcher, { lang, languages, onChange: onLangChange })),
+                h("li", { class: "app-controls" }, h(HeaderControls, { lang, languages, onLangChange })),
             ),
         ),
     );
@@ -70,7 +68,7 @@ export function Layout({ crumbs = null, lang = null, languages = null, onLangCha
  * Root route dispatcher: renders the home grid, a perspective's list view,
  * or a row's detail view based on the current route.
  */
-export function App({ perspectives, store, defaultLang, languages = null, menu = [], footer = null }) {
+export function App({ perspectives, store, defaultLang, languages = null, menu = [], footer = null, site = null }) {
     const route = useRouter();
     const { lang, perspective: perspectiveId, id: rowId, view } = route;
 
@@ -96,10 +94,11 @@ export function App({ perspectives, store, defaultLang, languages = null, menu =
         }
     };
 
-    const searchEnabled = perspectives.some(p => store.getFtsInfo(p.table));
+    const searchEnabled = perspectives.some(p => store.getFtsInfo(p.table)
+        && store.getSchema(p.table)?.type !== "view");
     const layoutProps = {
         lang: effectiveLang, languages, onLangChange, menu, footer,
-        search: searchEnabled
+        search: searchEnabled && perspectiveId && perspectiveId !== "page"
             ? { lang: effectiveLang, value: perspectiveId === "search" ? (route.params.q || "") : "" }
             : null,
     };
@@ -175,7 +174,7 @@ export function App({ perspectives, store, defaultLang, languages = null, menu =
 
     // Home: /
     return h(RegisteredLayout, layoutProps,
-        h(PerspectiveList, { perspectives, store, lang: effectiveLang }),
+        h(PerspectiveList, { perspectives, store, lang: effectiveLang, site, searchEnabled }),
     );
 }
 

@@ -1,4 +1,21 @@
 {
+    "dataset": [
+        {
+            "label": { "en": "Cite as", "nl": "Citeer als" },
+            "value": {
+                "en": "Add the preferred citation, including the dataset version and DOI",
+                "nl": "Voeg de gewenste citatie toe, inclusief datasetversie en DOI"
+            }
+        },
+        {
+            "label": { "en": "Licence", "nl": "Licentie" },
+            "value": { "en": "Add the data licence, e.g. CC BY 4.0", "nl": "Voeg de datalicentie toe, bv. CC BY 4.0" }
+        },
+        {
+            "label": { "en": "Contact", "nl": "Contact" },
+            "value": { "en": "Add a contact address", "nl": "Voeg een contactadres toe" }
+        }
+    ],
     "provenance": {
         "en": "<p>This site publishes a research dataset as a self-contained, static SQLite website — no server, no tracking. All queries run in your browser.</p>",
         "nl": "<p>Deze site publiceert een onderzoeksdataset als een op zichzelf staande, statische SQLite-website — geen server, geen tracking. Alle zoekopdrachten draaien in je browser.</p>"
