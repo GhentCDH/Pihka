@@ -5,7 +5,17 @@
         "nl"
     ],
     "database": "app/database/sample.db",
-    "databaseVersion": "2026.10.14",
+    "databaseVersion": "2026.11.25",
+    "site": {
+        "title": {
+            "en": "Explore literary authors and their works",
+            "nl": "Verken literaire auteurs en hun werken"
+        },
+        "description": {
+            "en": "<p>A demonstration deployment of <strong>Pihka</strong> by the Ghent Centre for Digital Humanities: a small, illustrative sample of literary authors and their works, to try out tables, curated views, maps, faceted filtering and full-text search.</p><p>Full texts come from <a href=\"https://www.gutenberg.org\" target=\"_blank\" rel=\"noopener noreferrer\">Project Gutenberg</a>. The data is for demonstration only; to publish your own dataset, see the <a href=\"#/en/page/instructions\">instructions</a>.</p>",
+            "nl": "<p>Een demonstratie van <strong>Pihka</strong> door het Ghent Centre for Digital Humanities: een kleine, illustratieve steekproef van literaire auteurs en hun werken om tabellen, samengestelde weergaven, kaarten, facetfiltering en volledig-tekst zoeken uit te proberen.</p><p>De volledige teksten komen van <a href=\"https://www.gutenberg.org\" target=\"_blank\" rel=\"noopener noreferrer\">Project Gutenberg</a>. De data is enkel bedoeld als demonstratie; zie de <a href=\"#/nl/page/instructions\">handleiding</a> om je eigen dataset te publiceren.</p>"
+        }
+    },
     "datasource": {
         "type": "http-vfs",
         "options": {
@@ -15,9 +25,10 @@
     "perspectives": [
         {
             "id": "author-overview",
+            "fts": true,
             "label": {
-                "en": "Author overview",
-                "nl": "Auteursoverzicht"
+                "en": "Author bibliography",
+                "nl": "Auteursbibliografie"
             },
             "table": "author_overview",
             "query": "SELECT a.id, a.name, a.birth_year, COUNT(w.id) AS work_count, GROUP_CONCAT(w.title, '|' ORDER BY w.year) AS works, MIN(w.year) AS first_year FROM authors a JOIN works w ON w.author_id = a.id GROUP BY a.id",
@@ -186,8 +197,8 @@
         },
         "author_overview": {
             "label": {
-                "en": "Author overview",
-                "nl": "Auteursoverzicht"
+                "en": "Author bibliography",
+                "nl": "Auteursbibliografie"
             },
             "columns": {
                 "id": {

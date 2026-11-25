@@ -1,4 +1,23 @@
 {
+    "dataset": [
+        {
+            "label": { "en": "Cite as", "nl": "Citeer als" },
+            "value": {
+                "en": "Author(s) (Year). Title of the dataset (version 2026.11.25). Publisher. https://doi.org/…",
+                "nl": "Auteur(s) (jaar). Titel van de dataset (versie 2026.11.25). Uitgever. https://doi.org/…"
+            }
+        },
+        {
+            "label": { "en": "Licence", "nl": "Licentie" },
+            "value": "CC BY 4.0",
+            "href": "https://creativecommons.org/licenses/by/4.0/"
+        },
+        {
+            "label": { "en": "Contact", "nl": "Contact" },
+            "value": "data@example.org",
+            "href": "mailto:data@example.org"
+        }
+    ],
     "logos": [
         {
             "src": "app/assets/logo/ghentcdh_logo_blue_text_banner.svg",
