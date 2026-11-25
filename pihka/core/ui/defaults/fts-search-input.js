@@ -1,6 +1,7 @@
 // @ts-check
 import { h } from "preact";
 import { useState, useEffect, useRef } from "preact/hooks";
+import { t } from "../runtime/strings.js";
 
 const DEBOUNCE_MS = 300;
 
@@ -29,7 +30,7 @@ const SYNTAX_HELP = {
  *   mode          - FTS tokenizer mode ("trigram" | "unicode61"); picks the
  *                   syntax help tooltip
  */
-export default function FtsSearchInput({ value, onSubmit, error, available, mode }) {
+export default function FtsSearchInput({ value, onSubmit, error, available, mode, lang = "en" }) {
     const [draft, setDraft] = useState(value || "");
     const timerRef = useRef(null);
     const cancelPending = () => {
@@ -84,11 +85,12 @@ export default function FtsSearchInput({ value, onSubmit, error, available, mode
             },
                 h("input", {
                     type: "search",
-                    placeholder: available ? "Search…" : "Search not available",
+                    placeholder: available ? t("search.placeholder", lang) : t("search.off", lang),
                     disabled: !available,
                     value: draft,
                     onInput,
                     class: "facet-search fts-search-input",
+                    title: available ? undefined : t("search.offHint", lang),
                     "aria-label": "Full-text search",
                 }),
                 draft && h("button", {

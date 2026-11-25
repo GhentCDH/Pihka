@@ -12,12 +12,16 @@ const GROUP_LIMIT = 5;
  * Global search results: one section per searchable entity, each a small
  * rank-ordered table of the top matches with a link to the fully filtered
  * per-table list view. Searchable = perspectives whose backing table has
- * an FTS index (SQL-view perspectives and hidden tables drop out).
+ * an FTS index (SQL-view perspectives and hidden tables drop out, even when
+ * the view is indexed for its own sidebar search).
  */
 export default function SearchView({ perspectives, store, lang, query }) {
     const q = (query || "").trim();
 
-    const searchable = perspectives.filter(p => store.getFtsInfo(p.table));
+    // View-backed perspectives are searchable from their own sidebar but stay
+    // out of the global search: they re-list records their source tables show.
+    const searchable = perspectives.filter(p => store.getFtsInfo(p.table)
+        && store.getSchema(p.table)?.type !== "view");
 
     // Omit short trigram searches, which would return unfiltered rows,
     // without suppressing whole-word searches on other tables.
@@ -57,10 +61,7 @@ export default function SearchView({ perspectives, store, lang, query }) {
             const listUrl = buildPath(`/${lang}/${p.id}/table`)
                 + "?" + new URLSearchParams({ q });
             return h("section", { key: p.id, class: "search-results-group" },
-                h("h3", null,
-                    h("a", { href: listUrl }, name),
-                    h("small", null, ` — ${result.totalRows} ${result.totalRows === 1 ? "match" : "matches"}`),
-                ),
+                h("h3", null, h("a", { href: listUrl }, name)),
                 h(DataViewListTable, { presentation: "embedded",
                     columns: result.columns,
                     rows: result.rows,

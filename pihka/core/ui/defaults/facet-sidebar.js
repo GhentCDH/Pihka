@@ -5,6 +5,7 @@ import { useState } from "preact/hooks";
 
 const FtsSearchInput = registeredComponent("control", "search");
 import { normalizeFacets } from "../runtime/facets.js";
+import { t } from "../runtime/strings.js";
 
 
 /**
@@ -22,24 +23,24 @@ import { normalizeFacets } from "../runtime/facets.js";
  */
 export default function FacetSidebar({
     facetMeta, autoFilterMeta, filters,
-    totalRows, perspectiveName, lang, loading = false,
+    lang, loading = false,
     search, searchError, searchAvailable, searchMode, actions,
 }) {
-    const hasActiveFilters = Object.keys(filters).length > 0 || (search && search.length > 0);
+    const activeCount = Object.keys(filters).length + (search && search.length > 0 ? 1 : 0);
+    const hasActiveFilters = activeCount > 0;
 
     const descriptors = normalizeFacets({facetMeta,autoFilterMeta,filters,actions,lang},useRegistry());
 
     return h("aside", { class: "facet-sidebar" },
         h("div", { class: "facet-header facet-sidebar-header" },
-            h("strong", null, "Filters"),
+            h("strong", null, t("filters.title", lang)),
+            hasActiveFilters && h("span", { class: "facet-active-count" }, t("filters.active", lang, { n: activeCount })),
             hasActiveFilters && h("button", {
-                class: "outline",
+                type: "button",
                 onClick: actions.onClearAll,
-            }, "Clear all"),
+            }, t("filters.clearAll", lang)),
         ),
-        h("p", { class: "text-meta", style: "margin:.2rem 0 .5rem" },
-            loading ? "Loading results..." : `${totalRows} ${perspectiveName || "results"}`,
-        ),
+        loading && h("p", { class: "text-meta", style: "margin:.2rem 0 .5rem" }, "…"),
 
         h(FtsSearchInput, {
             value: search || "",
@@ -47,11 +48,19 @@ export default function FacetSidebar({
             error: searchError,
             available: !!searchAvailable,
             mode: searchMode,
+            lang,
         }),
 
         ...descriptors.map(d => h(Fragment, {key:d.id},
             h("hr", {class:"facet-divider"}),
-            h(ComponentHost, {...d.props, kind:"facet",id:d.renderer}),
+            h("div", { class: filters[d.id] ? "facet-block is-active" : "facet-block" },
+                h(ComponentHost, {...d.props, kind:"facet",id:d.renderer}),
+                filters[d.id] && h("button", {
+                    type: "button",
+                    class: "facet-block-clear",
+                    onClick: () => actions.onFilterChange(d.id, null),
+                }, t("filters.clear", lang)),
+            ),
         )),
     );
 }

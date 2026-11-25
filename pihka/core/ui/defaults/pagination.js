@@ -1,45 +1,82 @@
 // @ts-check
 import { h } from "preact";
+import { useEffect, useRef, useState } from "preact/hooks";
+import { t } from "../runtime/strings.js";
 
 /**
- * Compact pagination controls: first/prev, numbered pages with ellipses,
- * next/last. Shared by the faceted list views and the related-object
- * tables on detail pages.
+ * Minimal pagination: previous / "Page [ 5 ] of 70" / next. The current page
+ * is a small number box — click it, type another page and press Enter (or
+ * leave the box) to jump; Escape cancels. Shared by the faceted list views
+ * and the related-object tables on detail pages.
  *
  * Props:
  *   page         - current page (0-based)
  *   totalPages   - total page count
- *   onPageChange - callback(newPage)
+ *   onPageChange - callback(newPage), 0-based
+ *   lang         - language for the labels (default "en")
  */
-export default function Pagination({ page, totalPages, onPageChange }) {
-    return h("nav", {
-        "aria-label": "Pagination",
-        class: "faceted-pagination",
-    },
-        h("button", { disabled: page === 0, onClick: () => onPageChange(0) }, "«"),
-        h("button", { disabled: page === 0, onClick: () => onPageChange(page - 1) }, "‹"),
-        ...pageButtons(page, totalPages).map((p, i) =>
-            p === "..."
-                ? h("span", { key: `ellipsis-${i}`, class: "pagination-ellipsis" }, "…")
-                : h("button", {
-                    key: p,
-                    onClick: () => onPageChange(p),
-                    class: p === page ? "pagination-active" : "",
-                }, String(p + 1)),
-        ),
-        h("button", { disabled: page >= totalPages - 1, onClick: () => onPageChange(page + 1) }, "›"),
-        h("button", { disabled: page >= totalPages - 1, onClick: () => onPageChange(totalPages - 1) }, "»"),
-    );
-}
+export default function Pagination({ page, totalPages, onPageChange, lang = "en" }) {
+    const [draft, setDraft] = useState(String(page + 1));
+    const cancelled = useRef(false);
 
-function pageButtons(current, total) {
-    if (total <= 7) return Array.from({ length: total }, (_, i) => i);
-    const pages = new Set([0, 1, total - 2, total - 1, current - 1, current, current + 1]);
-    const sorted = [...pages].filter(p => p >= 0 && p < total).sort((a, b) => a - b);
-    const result = [];
-    for (let i = 0; i < sorted.length; i++) {
-        if (i > 0 && sorted[i] - sorted[i - 1] > 1) result.push("...");
-        result.push(sorted[i]);
-    }
-    return result;
+    // Follow the real page when it changes from elsewhere (arrows, filters).
+    useEffect(() => setDraft(String(page + 1)), [page]);
+
+    const commit = () => {
+        if (cancelled.current) {
+            cancelled.current = false;
+            setDraft(String(page + 1));
+            return;
+        }
+        const typed = parseInt(draft, 10);
+        if (Number.isNaN(typed)) {
+            setDraft(String(page + 1));
+            return;
+        }
+        const target = Math.min(Math.max(typed, 1), totalPages) - 1;
+        setDraft(String(target + 1));
+        if (target !== page) onPageChange(target);
+    };
+
+    const onKeyDown = (e) => {
+        const input = /** @type {HTMLInputElement} */ (e.currentTarget);
+        if (e.key === "Enter") {
+            e.preventDefault();
+            input.blur();
+        } else if (e.key === "Escape") {
+            cancelled.current = true;
+            input.blur();
+        }
+    };
+
+    return h("nav", { "aria-label": "Pagination", class: "faceted-pagination" },
+        h("button", {
+            type: "button",
+            "aria-label": t("page.previous", lang),
+            disabled: page <= 0,
+            onClick: () => onPageChange(page - 1),
+        }, "‹"),
+        h("span", { class: "pagination-status" },
+            t("page.label", lang),
+            h("input", {
+                type: "number",
+                class: "pagination-input",
+                min: 1,
+                max: totalPages,
+                value: draft,
+                style: `width:${Math.max(String(totalPages).length, 2) + 1.4}ch`,
+                "aria-label": t("page.goto", lang),
+                onInput: (e) => setDraft(/** @type {HTMLInputElement} */ (e.target).value),
+                onBlur: commit,
+                onKeyDown,
+            }),
+            h("span", { class: "pagination-total" }, t("page.of", lang, { n: totalPages })),
+        ),
+        h("button", {
+            type: "button",
+            "aria-label": t("page.next", lang),
+            disabled: page >= totalPages - 1,
+            onClick: () => onPageChange(page + 1),
+        }, "›"),
+    );
 }

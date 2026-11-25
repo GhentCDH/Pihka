@@ -13,9 +13,7 @@ export default function DataViewListCards({ columns, rows, fkResolved, lang = nu
     return h("div", { class: "cards-view" },
         rows.length === 0
             ? h("p", null, "No rows.")
-            : h("div", {
-                style: "display:grid;grid-template-columns:repeat(auto-fill,minmax(16rem,1fr));gap:1rem",
-            },
+            : h("div", { class: "cards-grid" },
                 rows.map((row, i) =>
                     h(DataViewDetailCard, { key: i, context: "list", columns, row, fkResolved, lang, perspectiveId }),
                 ),

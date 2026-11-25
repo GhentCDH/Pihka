@@ -2,6 +2,7 @@
 import { h } from "preact";
 import CellValue from "./cell-value.js";
 import { localize, visibleColumns } from "../../runtime/table-config.js";
+import { summarize } from "./data-view-detail-card.js";
 
 /**
  * Renders a single row as a two-column table (field name | value).
@@ -15,15 +16,18 @@ import { localize, visibleColumns } from "../../runtime/table-config.js";
  *   perspectiveId - (optional) perspective id, for registered cell renderers
  */
 export default function DataViewDetailTable({ tableName, columns, row, fkResolved, lang = null, perspectiveId = null }) {
-    return h("div", null,
-        h("h2", null, tableName),
+    const heading = row ? summarize(visibleColumns(columns), row).title : null;
+    const titleText = heading && row[heading.name] != null ? String(row[heading.name]) : null;
+    return h("div", { class: "detail-record" },
+        h("p", { class: "micro-label detail-kicker" }, tableName),
+        titleText && h("h1", { class: "detail-title" }, titleText),
         !row
             ? h("p", null, "Row not found.")
             : h("table", null,
                 h("tbody", null,
                     visibleColumns(columns).map(col =>
                         h("tr", { key: col.name },
-                            h("th", { style: "text-align:left;white-space:nowrap;width:1%;padding-right:1.5rem" },
+                            h("th", { class: "detail-label", scope: "row" },
                                 localize(col.label, lang, col.name)),
                             h("td", null,
                                 h(CellValue, { col, value: row[col.name], row, columns, fkResolved, lang, perspectiveId, context: "detail", imageHeight: "8rem" })),

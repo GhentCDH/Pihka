@@ -9,6 +9,7 @@ import { localize } from "../runtime/table-config.js";
 import { useUrlState } from "../runtime/use-url-state.js";
 import { navigate, useRouter } from "../runtime/router.js";
 import { setPref } from "../runtime/prefs.js";
+import { t, rangeLabel } from "../runtime/strings.js";
 
 /**
  * Top-level faceted view layout: sidebar on the left, content on the right.
@@ -96,39 +97,28 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
 
         h("div", { class: "faceted-content", "aria-busy": pending },
             pending && h(QueryStatus, {}),
-            // Top bar: view toggles | pagination | result count | page size
             h("div", { class: "faceted-toolbar", style: pending ? "visibility:hidden" : "" },
-                // View toggles
+                // Page title and result count
+                h("div", { class: "faceted-heading" },
+                    h("h1", null, localize(p.label, lang, p.name)),
+                    h("span", { class: "faceted-count" },
+                        totalRows === 0
+                            ? t("results.none", lang)
+                            : paginatedView
+                                ? rangeLabel(firstRow, lastRow, totalRows, lang)
+                                : t("results.count", lang, { n: new Intl.NumberFormat(lang || undefined).format(totalRows) }),
+                    ),
+                ),
+
+                // View switcher (text tabs) + export
                 p.allowed_views && p.allowed_views.length > 1 && h("div", { class: "view-toggles" },
                     p.allowed_views.map(v =>
                         h("button", {
                             key: v,
                             class: v === activeView ? "" : "outline",
+                            "aria-pressed": v === activeView ? "true" : "false",
                             onClick: () => onViewChange(v),
                         }, getView("list", v)?.icon ?? "", " ", v),
-                    ),
-                ),
-
-                // Pagination (inline, compact)
-                showPagination && h(Pagination, { page, totalPages, onPageChange: actions.onPageChange }),
-
-                // Result count + page size selector
-                h("div", { class: "faceted-info" },
-                    h("span", { class: "faceted-count" },
-                        totalRows === 0
-                            ? "No results"
-                            : paginatedView
-                                ? `Showing ${firstRow} to ${lastRow} of ${totalRows}`
-                                : `${totalRows} results`,
-                    ),
-                    paginatedView && h("select", {
-                        value: pageSize,
-                        onChange: (e) => actions.onPageSizeChange(parseInt(/** @type {HTMLSelectElement} */ (e.target).value, 10)),
-                        class: "faceted-pagesize",
-                    },
-                        [3, 10, 25, 50, 100, 1000].map(n =>
-                            h("option", { key: n, value: n }, n),
-                        ),
                     ),
                 ),
             ),
@@ -144,6 +134,21 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
                     sort, onSort: actions.onSort, fkResolved, lang, store,
                     options: p.options,
                 }, totalRows),
+            ),
+
+            // Pagination + page size live below the results
+            paginatedView && totalRows > Math.min(25, pageSize) && h("div", { class: "faceted-footer", style: pending ? "visibility:hidden" : "" },
+                showPagination ? h(Pagination, { page, totalPages, onPageChange: actions.onPageChange, lang }) : h("span", null),
+                h("select", {
+                    value: pageSize,
+                    "aria-label": "Rows per page",
+                    onChange: (e) => actions.onPageSizeChange(parseInt(/** @type {HTMLSelectElement} */ (e.target).value, 10)),
+                    class: "faceted-pagesize",
+                },
+                    [25, 50, 100].map(n =>
+                        h("option", { key: n, value: n }, n),
+                    ),
+                ),
             ),
         ),
     );

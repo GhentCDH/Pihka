@@ -12,6 +12,11 @@ function SortIndicator({ direction }) {
     );
 }
 
+/** Database details (SQL type, primary key) live in a hover hint, not in the header. */
+function columnHint(col) {
+    return [col.type, col.primaryKey ? "primary key" : null].filter(Boolean).join(" · ") || undefined;
+}
+
 function ColumnHeader({ col, lang, sort, onSort }) {
     const isSorted = sort && sort.column === col.name;
     const label = localize(col.label, lang, col.name);
@@ -20,24 +25,17 @@ function ColumnHeader({ col, lang, sort, onSort }) {
     // meaningless, so no sort affordance.
     if (onSort && col.displayType !== "list") {
         return h("th", {
+            title: columnHint(col),
             style: "cursor:pointer;user-select:none",
             onClick: () => onSort(col.name),
         },
             label,
-            col.primaryKey && h("sup", null, " PK"),
-            col.type && h("span", {
-                class: "column-type",
-            }, col.type),
             isSorted && h(SortIndicator, { direction: sort.direction }),
         );
     }
 
-    return h("th", null,
+    return h("th", { title: columnHint(col) },
         label,
-        col.primaryKey && h("sup", null, " PK"),
-        col.type && h("span", {
-            class: "column-type",
-        }, col.type),
     );
 }
 
