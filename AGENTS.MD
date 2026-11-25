@@ -41,6 +41,7 @@ pihka/
       utilities-data/ # Reusable data layer — SQLite access, SQL, schema, config, asset paths (no preact)
       utilities-ui/   # Preact-dependent plumbing (router, signal, prefs, view-registry, cell-renderers, perspectives)
     assets/stylesheets/  # pico.min.css (Pico CSS, Blades' maintained fork — see core/THIRD-PARTY-NOTICES.md) + base.css (custom vars/overrides)
+    assets/fonts/        # Inter Tight + Instrument Sans variable fonts (OFL): self-hosted static assets, not dependencies
     vendor/           # Vendored npm packages (downloaded by vendorize-deps.js)
       importmap.json  # Generated import map for vendored packages
   extensions/         # Optional reusable components, each with its own vendored deps
@@ -75,7 +76,7 @@ To update vendored deps: edit `package.json` dependencies, then run `npm run ven
 
 Extensions vendor their own dependencies separately: each `pihka/extensions/<name>/deps.json` maps a package name to a semver range, or to `{ "version": range, "include": ["extra/file-or-dir", ...] }` for files beyond the auto-detected entry point (CSS, translations, licenses). `npm run vendorize` downloads those into `pihka/extensions/<name>/vendor/<pkg>/`, wiping only that extension's `vendor/` dir. Extension code imports its deps by **relative path** (`./vendor/tify/dist/tify.js`), so the page import map never changes; bare imports *between* an extension's own deps (e.g. pmtiles importing `"fflate"`) are rewritten to relative paths by vendorize. Vendored extension deps are committed, same as core's.
 
-**Never add additional dependencies to core**. The whole point of this software is to keep running and introducting additional dependencies is not acceptable. Javascript, SQLite and plain SQL should be used at to interact with the database. preact to build a reactive UI. No dependencies on build tools. Extensions are the one sanctioned place for extra runtime deps — optional, self-contained, vendored.
+**Never add additional dependencies to core**. The whole point of this software is to keep running and introducting additional dependencies is not acceptable. Javascript, SQLite and plain SQL should be used at to interact with the database. preact to build a reactive UI. No dependencies on build tools. Extensions are the one sanctioned place for extra runtime deps — optional, self-contained, vendored. Typefaces under `core/assets/fonts/` are static assets like `pico.min.css` (licences in `core/THIRD-PARTY-NOTICES.md`); the font stack falls back to system fonts, so a missing file never breaks the site.
 
 ### Components
 
@@ -141,12 +142,12 @@ Interplay notes: detection is structural and ignores `hidden` — hiding the jun
 Two kinds of state, two mechanisms:
 
 - **Shareable state lives in the URL** — filters, sort, page, search, the active view. The URL is the message bus: mutations go through `navigate()`/`updateParams()` (`core/js/utilities-ui/router.js`), the router re-parses, and views re-derive everything from the route. Never duplicate this state elsewhere; that is what keeps every screen bookmarkable. `useUrlState` bundles all mutations into a single `actions` object that is passed down as one prop.
-- **Device-local preferences live in `core/js/utilities-ui/prefs.js`** — one localStorage JSON object (`pihka-prefs`) exposed as signals (`getPref`/`setPref`/`usePref`). Keys: `theme`, `lang`, `view:<perspectiveId>`, `pageSize:<perspectiveId>`. Resolution is always **URL > stored pref > config default**, and prefs are conveniences only: without localStorage the site works identically (session-only memory).
+- **Device-local preferences live in `core/js/utilities-ui/prefs.js`** — one localStorage JSON object (`pihka-prefs`) exposed as signals (`getPref`/`setPref`/`usePref`). Keys: `theme`, `lang`, `view:<perspectiveId>`, `pageSize:<perspectiveId>`. `theme` is `light` or `dark` once the reader has chosen; without it the site follows the OS (`prefers-color-scheme`), and the header switch shows the mode in effect and stores the opposite one on click. Resolution is always **URL > stored pref > config default**, and prefs are conveniences only: without localStorage the site works identically (session-only memory).
 - `core/js/utilities-ui/signal.js` is the deliberately tiny in-house signal primitive backing prefs (a value + subscribers + a `useSignalValue` hook). It is kept in-repo instead of vendoring `@preact/signals`, per the no-additional-dependencies rule.
 
 ### Site footer and menu pages
 
-A dataset describes itself through a **footer** (credits, data provenance, funder/university logos) and **top-nav menu pages** (About, Instructions, …). Both are loaded by `core/js/utilities-data/site-content.js` (`loadFooter`, `loadMenu`) with an **app-override → core-default → empty** fallback chain, fail-soft like `loadConfig()`; content is trusted as authored (same level as `app/config.json`) and HTML is injected verbatim.
+A dataset describes itself through a **home page text** (`site` in `app/config.json`), a **footer** (dataset information, credits, funder/university logos) and **top-nav menu pages** (Instructions, …). Both are loaded by `core/js/utilities-data/site-content.js` (`loadFooter`, `loadMenu`) with an **app-override → core-default → empty** fallback chain, fail-soft like `loadConfig()`; content is trusted as authored (same level as `app/config.json`) and HTML is injected verbatim.
 
 | Content | App override (first) | Core default (fallback) |
 |---|---|---|
@@ -155,11 +156,13 @@ A dataset describes itself through a **footer** (credits, data provenance, funde
 | Pages | any path a menu entry names | `core/assets/pages/*.html` |
 | Logos | any path in footer.json | `core/assets/logo/*.svg` |
 
-- **footer.json** — all keys optional: `credits` (inline HTML, plain string or `{lang: html}`), `links` (`[{label, href}]`), `logos` (`[{src, alt, href?}]`). `SiteFooter` renders a short Pico-native band (native `<footer>` landmark, Pico `.grid` two columns — credits+links | logos — collapsing to one below 768px, `<small>` for the credit line, native `<nav>` for links), added as the third child of `Layout` so it shows on every route (the loading screen has none). Kept intentionally short; lengthy prose like data provenance belongs on an About page, not the footer. Asset `src` values resolve through `resolveAssetPath()` (absolute URLs / root-absolute pass through; otherwise `assetUrl`).
+- **footer.json** — all keys optional: `dataset` (`[{label, value, href?}]`, label and value plain strings or `{lang: …}` maps; one labelled cell per item that has a value — conventionally *Cite as*, *Licence*, *Contact*), `credits` (inline HTML, plain string or `{lang: html}`), `links` (`[{label, href}]`), `logos` (`[{src, alt, href?}]`). `SiteFooter` is a native `<footer>` landmark added as the third child of `Layout`, so it shows on every route (the loading screen has none): the dataset items form a ruled grid with the logos aligned to its first row (one column below 768px), followed by the credits line and links. Longer prose belongs on a menu page. Core's default `footer.json` ships placeholder `dataset` entries that an app replaces. Asset `src` values resolve through `resolveAssetPath()` (absolute URLs / root-absolute pass through; otherwise `assetUrl`).
 - **menu.json** — an array of entries, each either an **external link** (`{label, href}` → new tab) or a **page** (`{id, label, html? | src?}`). Page content is inline `html` or an HTML asset `src` (both plain-string or `{lang: …}` maps). `id` must match `^[a-z][a-z0-9_-]*$` (it is a URL segment); invalid entries are dropped with a warning.
 - Pages render at the reserved route `/#/:lang/page/:id` (`StaticPage`, keyed on the resolved URL so switching pages never shows stale content), with the entry's label as the breadcrumb; an unknown id renders "Page not found".
 - Menu labels and multilingual HTML/src variants resolve via the shared `localize()` (`table-config.js`).
-- Defaults ship under `core/assets/` (`footer.json`, `menu.json`, `logo/pihka.svg`, `pages/{about,instructions}.{en,nl}.html`); apps override by placing the same files under `app/` (see the sample app's `app/footer.json`, `app/menu.json`, `app/pages/`, `app/assets/logo/`).
+- Defaults ship under `core/assets/` (`footer.json`, `menu.json`, `logo/pihka.svg`, `pages/{about,instructions}.{en,nl}.html`); apps override by placing the same files under `app/` (see the sample app's `app/footer.json`, `app/menu.json`, `app/assets/logo/`). The sample app keeps only Instructions in its menu and describes itself on the home page instead of an About page.
+- **Home page text** — optional `site: { title, description }` in `app/config.json` (strings or `{lang: …}` maps). The title falls back to a generic built-in heading; the description is trusted HTML, injected verbatim like `credits`. Perspective and table configs accept an optional `description` shown on their home tile. The home page is: title, description, search box, the configured perspectives as *Views*, then a *Tables* section that starts collapsed when views exist (and open when there are none).
+- **Header controls** — the default header holds the logo, breadcrumbs, menu links, the global search (not on the home page, which has its own large one, nor on menu pages) and one registered `control` (`controls`) with the light/dark switch, a fullscreen toggle and a segmented language switch (only with two or more `languages`). Built-in control text comes from `core/ui/runtime/strings.js` (en/nl, English fallback); dataset labels stay config-driven through `localize()`.
 
 ### Perspectives (multi-table views)
 
@@ -179,11 +182,17 @@ At startup each query becomes `CREATE VIEW "<table>" AS <query>` on the in-memor
 
 - **Multi-value columns**: aggregate with `GROUP_CONCAT(x, '|' ORDER BY y)` (`ORDER BY` inside aggregates needs SQLite ≥ 3.44 — the vendored wasm is 3.51; older local CLIs can't replay such queries) and configure the column as `{ "type": "list", "separator": "|", "limit": 3 }` — values render as chips collapsed to `limit` with a "+N more" toggle. List columns are not sortable.
 - **Row links**: views have no PK/FK metadata, so configure `{ "linkTo": "authors" }` on the id column to link rows into the underlying table's detail pages. Detail routes *on* a view itself show "Row not found" by design.
-- **Facets**: numeric passthrough columns get range facets automatically; typeless aggregate columns (COUNT, MIN…) get them when configured `"type": "number"`. Dropdown facets come from the perspective's `facets` config. No FK dropdowns and no full-text search on views.
-- **Homepage**: configured perspectives appear under "Perspectives", remaining (unclaimed, non-hidden) tables under "Tables"; with no `perspectives` config the homepage shows tables only, as before.
+- **Facets**: numeric passthrough columns get range facets automatically; typeless aggregate columns (COUNT, MIN…) get them when configured `"type": "number"`. Dropdown facets come from the perspective's `facets` config. No FK dropdowns. Full-text search on a view is opt-in: set `"fts": true` on the perspective (integer `id` column); read-only (HTTP VFS) sources need the index published first (`npm run prepare-sample-db`, then bump `databaseVersion`). Indexed views get the filter-sidebar search but stay out of the global search so records are not listed twice.
+- **Homepage**: configured perspectives appear under "Views", remaining (unclaimed, non-hidden) tables in a collapsible "Tables" section; with no `perspectives` config the homepage shows tables only, expanded, as before.
 - **Naming**: perspective `id` must not collide with table names, view ids (`table`, `cards`, `map`), language codes, or the reserved `search` / `page` segments (a table or perspective named `search` or `page` is unreachable — those URLs render the global search page and static menu pages respectively). The `table` name is claimed — no auto card is generated for it.
 - **Performance**: the view's GROUP BY re-runs on every query — fine in-memory at tens of thousands of rows; for large datasets precompute a real table in your publishing pipeline instead.
 - Avoid passing lat/lon columns through a view unless you accept that map popups' detail links lead to "Row not found".
+
+### List view controls
+
+- **Pagination** (`core/ui/defaults/pagination.js`, shared by lists and related-object tables): previous/next arrows and `Page [n] of N`, where the number is a typeable box — Enter or leaving the field jumps, out-of-range input clamps, Escape cancels. The page-size select (25/50/100) sits beside it and is shown when the table has more rows than fit on the smallest page.
+- **Range facets** (`range-selector.js`): the current minimum and maximum are typeable boxes next to the sliders, with the same rules (clamped to the data range and to the other bound; the data's own minimum/maximum clears that bound; `step` is respected, so REAL columns accept decimals).
+- **Filter state** lives in the sidebar only: the header shows the number of active filters and *Clear all*, each active facet is tinted with its own *Clear* link. There is no second filter summary above the results.
 
 ### Views and the view registry
 

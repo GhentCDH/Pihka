@@ -10,7 +10,8 @@ Pihka lets you publish SQLite databases as interactive, searchable websites. Dro
 - **Detail views** for individual records
 - **Zero backend** — runs entirely in the browser, no server components which need active maintenance
 - **Relationship views** — shows names or labels for linked columns.
-- **Full text search** - To search accross columns. By default, a database is enriched with a trigram full text search index: queries match anywhere in the text, autocomplete-style. Tables with an integer primary key are indexed. A perspective view with an integer `id` column is indexed when the perspective sets `"fts": true`. A search box in the header searches across all indexed tables at once, with results grouped per table. Set `"enrichment": {"fts": "unicode61"}` in `app/config.json` for whole-word matching with the richer FTS5 query syntax (`pre*`, `NEAR`, `column:word`), or `"fts": false` to skip indexing. For small datasets creating such index goes instantly; trigram indexes are somewhat larger and slower to build on big databases.
+- **Full text search** - To search accross columns. By default, a database is enriched with a trigram full text search index: queries match anywhere in the text, autocomplete-style. Tables with an integer primary key are indexed. A perspective view with an integer `id` column is indexed when the perspective sets `"fts": true`. A search box (large on the home page, in the header elsewhere) searches across all indexed tables at once, with results grouped per table; every list also has its own search in the filter sidebar. Set `"enrichment": {"fts": "unicode61"}` in `app/config.json` for whole-word matching with the richer FTS5 query syntax (`pre*`, `NEAR`, `column:word`), or `"fts": false` to skip indexing. For small datasets creating such index goes instantly; trigram indexes are somewhat larger and slower to build on big databases.
+- **Typeable filters and paging** — range filters take typed minimum/maximum values as well as sliders, and the page number in the pagination control can be typed to jump.
 - **Modern mapping solutions** — Optional MapLibre and PMTiles views use locally hosted basemaps without external services.
 
 ## Why
@@ -36,7 +37,7 @@ open http://localhost:3000
 Open http://localhost:3000 and browse the included demo database.
 
 The demo selects the optional HTTP VFS datasource and ships with prebuilt search
-indexes and its author-overview view. Core still defaults to downloading when
+indexes and its author-bibliography view. Core still defaults to downloading when
 `datasource` is omitted. After editing demo rows, run `npm run prepare-sample-db`
 (Node.js 22.13 or newer) to refresh the published indexes without regenerating rows.
 The sample database generator also runs this preparation step.
@@ -58,6 +59,46 @@ version string: browsers keep the cached copy until the version changes.
 1. Place your `.sqlite` file in `app/database`
 2. Edit `app/config.json` to point to it
 3. Customize facets and views as needed
+4. Describe the dataset (see below)
+
+### Describing your dataset
+
+The home page opens with a title, a short description and the search box. Set them in `app/config.json`
+(strings, or `{ "en": …, "nl": … }` maps; the description is trusted HTML, so it can contain links):
+
+```json
+"site": {
+  "title": { "en": "Explore literary authors and their works" },
+  "description": { "en": "<p>What this dataset contains and where it comes from.</p>" }
+}
+```
+
+Without `site` the home page shows a generic title. Perspectives and tables can carry an optional
+`description`, shown on their tile. Curated perspectives appear first, as *Views*; the remaining
+tables sit in a *Tables* section that starts collapsed (hide helper tables with `"hidden": true`).
+
+The footer carries the dataset information. Override `app/footer.json` (core ships a placeholder template) with
+a `dataset` list, conventionally the preferred citation, the licence and a contact:
+
+```json
+{
+  "dataset": [
+    { "label": { "en": "Cite as" }, "value": { "en": "Author (2026). Title (version 1.0). Publisher. https://doi.org/…" } },
+    { "label": { "en": "Licence" }, "value": "CC BY 4.0", "href": "https://creativecommons.org/licenses/by/4.0/" },
+    { "label": { "en": "Contact" }, "value": "data@example.org", "href": "mailto:data@example.org" }
+  ],
+  "logos": [{ "src": "app/assets/logo/partner.svg", "alt": "Partner", "href": "https://example.org" }]
+}
+```
+
+Menu pages (`app/menu.json`) remain available for longer texts such as instructions.
+
+### Search in a perspective view
+
+A SQL-view perspective is searchable from its own filter sidebar when it sets `"fts": true` and has an
+integer `id` column. On the read-only HTTP VFS source the index must already be published: run
+`npm run prepare-sample-db` after changing the config (and change `databaseVersion`). Indexed views are
+left out of the global search so their records are not listed twice.
 
 ### Optional HTTP Range Access
 
@@ -71,6 +112,8 @@ must already exist in the published database; this source is strictly read-only.
 # credits
 
 Styling: [Pico CSS](https://picocss.com/docs) via [Blades CSS' maintained Pico fork](https://blades.dev/css/pico/) (Pico itself is archived).
+
+Typefaces: Inter Tight and Instrument Sans (SIL Open Font License), self-hosted; see `pihka/core/THIRD-PARTY-NOTICES.md`.
 
 
 ## License
