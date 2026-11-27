@@ -6,6 +6,7 @@ import { useQuery, QueryStatus } from "../runtime/use-query.js";
 import { getView, listViews } from "../runtime/view-registry.js";
 import { navigate, buildPath } from "../runtime/router.js";
 import { localize } from "../runtime/table-config.js";
+import { rangeLabel } from "../runtime/strings.js";
 const DataViewListTable = registeredComponent("view", "table", "list");
 const Pagination = registeredComponent("control", "pagination");
 
@@ -107,9 +108,9 @@ function RelatedSection({ rel, store, lang }) {
             perspectiveId: rel.perspectiveId,
         }),
         totalPages > 1 && h("div", { class: "faceted-toolbar", style: "margin-top:.5rem" },
-            h(Pagination, { page, totalPages, onPageChange: setPage }),
+            h(Pagination, { page, totalPages, onPageChange: setPage, lang }),
             h("div", { class: "faceted-info" },
-                h("span", { class: "faceted-count" }, `Showing ${firstRow} to ${lastRow} of ${totalRows}`),
+                h("span", { class: "faceted-count" }, rangeLabel(firstRow, lastRow, totalRows, lang)),
                 filterHref && h("a", { href: filterHref, class: "text-meta" }, "View all →"),
             ),
         ),

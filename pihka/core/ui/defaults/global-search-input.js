@@ -2,6 +2,7 @@
 import { h } from "preact";
 import { useState } from "preact/hooks";
 import { navigate } from "../runtime/router.js";
+import { t } from "../runtime/strings.js";
 
 /**
  * Header-wide search box. Enter navigates to the global search results
@@ -14,7 +15,7 @@ import { navigate } from "../runtime/router.js";
  *           input; the parent keys this component on it so external
  *           navigation resets the draft)
  */
-export default function GlobalSearchInput({ lang, value = "" }) {
+export default function GlobalSearchInput({ lang, value = "", variant = "header" }) {
     const [draft, setDraft] = useState(value);
 
     const submit = (e) => {
@@ -23,10 +24,10 @@ export default function GlobalSearchInput({ lang, value = "" }) {
         if (q) navigate(`/${lang}/search`, { q });
     };
 
-    return h("form", { class: "global-search", onSubmit: submit, role: "search" },
+    return h("form", { class: `global-search global-search-${variant}`, onSubmit: submit, role: "search" },
         h("input", {
             type: "search",
-            placeholder: "Search…",
+            placeholder: t(variant === "hero" ? "home.search" : "search.placeholder", lang),
             value: draft,
             onInput: (e) => setDraft(/** @type {HTMLInputElement} */ (e.target).value),
             "aria-label": "Search all tables",

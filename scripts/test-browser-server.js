@@ -42,6 +42,10 @@ function config(mode) {
     return {
         name: `Pihka ${mode} test`, database: "app/database/fixture.db", datasource: { type: mode },
         languages: ["en", "nl"], defaultLanguage: "en", enrichment: { fts: "unicode61" },
+        site: { description: {
+            en: '<p>Full texts from <a href="https://www.gutenberg.org">Project Gutenberg</a>.</p>',
+            nl: '<p>Volledige teksten van <a href="https://www.gutenberg.org">Project Gutenberg</a>.</p>',
+        } },
         enginePlugins: [
             ...(mode === "http-vfs" ? ["extensions/http-vfs/http-vfs-component.js"] : []),
             "extensions/geo-filter/geo-filter-engine.js",

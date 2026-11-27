@@ -12,6 +12,11 @@ function SortIndicator({ direction }) {
     );
 }
 
+/** Database details (SQL type, primary key) live in a hover hint, not in the header. */
+function columnHint(col) {
+    return [col.type, col.primaryKey ? "primary key" : null].filter(Boolean).join(" · ") || undefined;
+}
+
 function ColumnHeader({ col, lang, sort, onSort }) {
     const isSorted = sort && sort.column === col.name;
     const label = localize(col.label, lang, col.name);
@@ -20,24 +25,17 @@ function ColumnHeader({ col, lang, sort, onSort }) {
     // meaningless, so no sort affordance.
     if (onSort && col.displayType !== "list") {
         return h("th", {
+            title: columnHint(col),
             style: "cursor:pointer;user-select:none",
             onClick: () => onSort(col.name),
         },
             label,
-            col.primaryKey && h("sup", null, " PK"),
-            col.type && h("span", {
-                class: "column-type",
-            }, col.type),
             isSorted && h(SortIndicator, { direction: sort.direction }),
         );
     }
 
-    return h("th", null,
+    return h("th", { title: columnHint(col) },
         label,
-        col.primaryKey && h("sup", null, " PK"),
-        col.type && h("span", {
-            class: "column-type",
-        }, col.type),
     );
 }
 
@@ -69,14 +67,17 @@ function Cell({ col, value, row, columns, fkResolved, lang, perspectiveId }) {
  *   fkResolved    - (optional) { colName: { displayMap, referencedTable } }
  *   lang          - (optional) current language code
  *   perspectiveId - (optional) perspective id for detail links
+ *   primary       - (optional) the page's main table (top-level list view):
+ *                   scrolls with the page, header sticks to the viewport
  *   fill          - (optional) fill the remaining viewport height and
- *                   scroll rows inside the wrapper (top-level list view);
+ *                   scroll rows inside the wrapper (for custom views);
  *                   default is natural height with page scrolling
  *                   (related sections, search results)
  */
-export default function DataViewListTable({ columns, rows, sort = null, onSort = null, fkResolved = null, lang = null, perspectiveId = null, fill = false }) {
+export default function DataViewListTable({ columns, rows, sort = null, onSort = null, fkResolved = null, lang = null, perspectiveId = null, fill = false, primary = false }) {
     const cols = visibleColumns(columns);
-    return h("div", { class: fill ? "table-scroll fill-height" : "table-scroll" },
+    const cls = ["table-scroll", fill && "fill-height", primary && "is-primary"].filter(Boolean).join(" ");
+    return h("div", { class: cls },
         rows.length === 0
             ? h("p", null, "No rows.")
             : h("table", null,

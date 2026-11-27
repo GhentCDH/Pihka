@@ -1,6 +1,7 @@
 // @ts-check
 import { registeredComponent } from "../runtime/component-host.js";
 import { h } from "preact";
+import { useEffect, useRef } from "preact/hooks";
 import { useQuery, QueryStatus } from "../runtime/use-query.js";
 const FacetSidebar = registeredComponent("control", "facets");
 const Pagination = registeredComponent("control", "pagination");
@@ -9,6 +10,7 @@ import { localize } from "../runtime/table-config.js";
 import { useUrlState } from "../runtime/use-url-state.js";
 import { navigate, useRouter } from "../runtime/router.js";
 import { setPref } from "../runtime/prefs.js";
+import { t, rangeLabel } from "../runtime/strings.js";
 
 /**
  * Top-level faceted view layout: sidebar on the left, content on the right.
@@ -53,6 +55,36 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
         return (await store.queryTable(p.table, { filters, sort: allSort, search, pageSize: null })).rows;
     }, [needsAllRows, store, p.table, filtersKey, allSort?.column, allSort?.direction, search], !loading && !error);
 
+    // Page changes from the keyboard or the bottom pager land at the top of
+    // the results. Only scrolls when the heading has scrolled out of view.
+    const headingRef = useRef(null);
+    const goToPage = (n) => {
+        actions.onPageChange(n);
+        const el = headingRef.current;
+        if (el && el.getBoundingClientRect().top < 0) el.scrollIntoView({ block: "start" });
+    };
+
+    // ← / → page through the main list. Arrow keys are not character keys,
+    // so no off switch is needed (WCAG 2.1.4); modified arrows (browser
+    // back/forward, text selection) and controls that use arrows themselves
+    // are left alone.
+    const keyPaging = !!viewDef?.paginated && totalPages > 1;
+    useEffect(() => {
+        if (!keyPaging) return;
+        const onKeyDown = (e) => {
+            if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+            if (e.defaultPrevented || e.isComposing || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+            const target = /** @type {HTMLElement} */ (e.target);
+            if (typeof target?.closest === "function" && target.closest("input, select, textarea, [contenteditable]:not([contenteditable=false]), [role=slider], [role=listbox], [role=combobox], [role=menu], [role=tablist], canvas")) return;
+            const next = e.key === "ArrowLeft" ? page - 1 : page + 1;
+            if (next < 0 || next > totalPages - 1) return;
+            e.preventDefault();
+            goToPage(next);
+        };
+        document.addEventListener("keydown", onKeyDown);
+        return () => document.removeEventListener("keydown", onKeyDown);
+    });
+
     const { params } = useRouter();
     if (error || facetQuery.error || allQuery.error) return h(QueryStatus, { error: error || facetQuery.error || allQuery.error });
     const pending = loading || facetQuery.loading || allQuery.loading;
@@ -96,39 +128,28 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
 
         h("div", { class: "faceted-content", "aria-busy": pending },
             pending && h(QueryStatus, {}),
-            // Top bar: view toggles | pagination | result count | page size
             h("div", { class: "faceted-toolbar", style: pending ? "visibility:hidden" : "" },
-                // View toggles
+                // Page title and result count
+                h("div", { class: "faceted-heading", ref: headingRef },
+                    h("h1", null, localize(p.label, lang, p.name)),
+                    h("span", { class: "faceted-count" },
+                        totalRows === 0
+                            ? t("results.none", lang)
+                            : paginatedView
+                                ? rangeLabel(firstRow, lastRow, totalRows, lang)
+                                : t("results.count", lang, { n: new Intl.NumberFormat(lang || undefined).format(totalRows) }),
+                    ),
+                ),
+
+                // View switcher (text tabs) + export
                 p.allowed_views && p.allowed_views.length > 1 && h("div", { class: "view-toggles" },
                     p.allowed_views.map(v =>
                         h("button", {
                             key: v,
                             class: v === activeView ? "" : "outline",
+                            "aria-pressed": v === activeView ? "true" : "false",
                             onClick: () => onViewChange(v),
                         }, getView("list", v)?.icon ?? "", " ", v),
-                    ),
-                ),
-
-                // Pagination (inline, compact)
-                showPagination && h(Pagination, { page, totalPages, onPageChange: actions.onPageChange }),
-
-                // Result count + page size selector
-                h("div", { class: "faceted-info" },
-                    h("span", { class: "faceted-count" },
-                        totalRows === 0
-                            ? "No results"
-                            : paginatedView
-                                ? `Showing ${firstRow} to ${lastRow} of ${totalRows}`
-                                : `${totalRows} results`,
-                    ),
-                    paginatedView && h("select", {
-                        value: pageSize,
-                        onChange: (e) => actions.onPageSizeChange(parseInt(/** @type {HTMLSelectElement} */ (e.target).value, 10)),
-                        class: "faceted-pagesize",
-                    },
-                        [3, 10, 25, 50, 100, 1000].map(n =>
-                            h("option", { key: n, value: n }, n),
-                        ),
                     ),
                 ),
             ),
@@ -144,6 +165,23 @@ export default function FacetedView({ perspective: p, store, view, lang }) {
                     sort, onSort: actions.onSort, fkResolved, lang, store,
                     options: p.options,
                 }, totalRows),
+            ),
+
+            // Pagination + page size live below the results
+            paginatedView && totalRows > Math.min(25, pageSize) && h("div", { class: "faceted-footer", style: pending ? "visibility:hidden" : "" },
+                showPagination ? h(Pagination, { page, totalPages, onPageChange: goToPage, lang, keyboard: true }) : h("span", null),
+                h("select", {
+                    value: pageSize,
+                    "aria-label": "Rows per page",
+                    onChange: (e) => actions.onPageSizeChange(parseInt(/** @type {HTMLSelectElement} */ (e.target).value, 10)),
+                    class: "faceted-pagesize",
+                },
+                    // Keep the current size selectable when it came from the URL,
+                    // a stored pref or the perspective's page_size config.
+                    [...new Set([25, 50, 100, 1000, pageSize])].sort((a, b) => a - b).map(n =>
+                        h("option", { key: n, value: n }, n),
+                    ),
+                ),
             ),
         ),
     );

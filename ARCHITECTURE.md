@@ -170,6 +170,8 @@ facets. Hidden annotation tables retain their previous no-highlights behavior.
 Unknown cell types remain declared in UI metadata and fall back to plain text.
 Numeric coordinate controls are replaced only when a usable location facet exists.
 
+The default header composes one registered `control` (`controls`: light/dark, fullscreen, language) next to the search; built-in control text comes from the UI-only `core/ui/runtime/strings.js` (en/nl), while dataset labels stay configuration-driven. The home page reads the optional `site` configuration (title and trusted-HTML description) and tile descriptions; the engine never sees them.
+
 Shareable filters/sort/page/view/search remain in hash URLs. Device preferences
 remain local, with URL > preference > configuration precedence. Static assets
 resolve relative to the deployed app, including subdirectory hosting.

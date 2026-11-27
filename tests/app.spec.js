@@ -4,6 +4,12 @@ import { readFileSync } from "node:fs";
 // Helper: load a route directly. Routes are hash fragments, so deep links
 // load on any static server without rewrite rules. Wait for the app header
 // (only the loaded app renders one — the loading/error screen does not).
+// The Tables section starts open, but an app may collapse it (site.tablesCollapsed).
+async function openTables(page) {
+  const details = page.locator("details.home-tables");
+  if (!(await details.evaluate(element => element.open))) await details.locator("summary").click();
+}
+
 async function gotoRoute(page, route) {
   await page.goto(!route || route === "/" ? "/" : "/#" + route);
   await page.waitForSelector("#app header", { timeout: 10000 });
@@ -31,19 +37,19 @@ test("detail page lists related objects in a paginated table", async ({ page }) 
   const related = page.locator(".detail-related");
   await expect(related.locator("h3")).toContainText(/work categories/i);
   await expect(related.locator("tbody tr")).toHaveCount(10);
-  await expect(related.locator(".faceted-count")).toContainText("Showing 1 to 10 of 1734");
+  await expect(related.locator(".faceted-count")).toContainText("1–10 of 1,734");
 
   // Page through with the shared pagination controls
   const firstTitle = await related.locator("tbody tr td:nth-child(2)").first().textContent();
   await related.locator("nav[aria-label='Pagination'] button", { hasText: "›" }).click();
-  await expect(related.locator(".faceted-count")).toContainText("Showing 11 to 20 of 1734");
+  await expect(related.locator(".faceted-count")).toContainText("11–20 of 1,734");
   const secondPageTitle = await related.locator("tbody tr td:nth-child(2)").first().textContent();
   expect(secondPageTitle).not.toBe(firstTitle);
 
   // View-all link jumps to the filtered list view
   await related.locator("a", { hasText: "View all" }).click();
   await expect(page).toHaveURL(/works_categories\/table\?category_id=1/);
-  await expect(page.locator(".faceted-count")).toContainText("of 1734");
+  await expect(page.locator(".faceted-count")).toContainText("of 1,734");
 });
 
 test("configured column labels and types render in the works table", async ({ page }) => {
@@ -60,7 +66,7 @@ test("configured column labels and types render in the works table", async ({ pa
 test("language switcher rewrites the lang segment and labels", async ({ page }) => {
   await gotoRoute(page, "/en/works/table");
   await expect(page.locator("#app header nav")).toContainText("Works");
-  await page.locator(".lang-switcher").click();
+  await page.locator('.lang-switcher button[data-lang="nl"]').click();
   await expect(page).toHaveURL(/\/nl\/works\/table/);
   await expect(page.locator("#app header nav")).toContainText("Boeken");
   await expect(page.locator("thead th", { hasText: "Omslag" })).toBeVisible();
@@ -68,20 +74,20 @@ test("language switcher rewrites the lang segment and labels", async ({ page }) 
 
 test("search filters reactively on input", async ({ page }) => {
   await gotoRoute(page, "/en/works/table");
-  await expect(page.locator(".faceted-count")).toContainText("of 1743");
+  await expect(page.locator(".faceted-count")).toContainText("of 1,743");
   // fill() fires input events; no Enter pressed — the debounce applies it
   await page.locator(".fts-search-input").fill("love");
   await expect(page).toHaveURL(/q=love/);
-  await expect(page.locator(".faceted-count")).not.toContainText("of 1743");
+  await expect(page.locator(".faceted-count")).not.toContainText("of 1,743");
   // Exactly one clear button (native WebKit × is suppressed)
   await expect(page.locator(".fts-search-clear")).toHaveCount(1);
   await page.locator(".fts-search-clear").click();
-  await expect(page.locator(".faceted-count")).toContainText("of 1743");
+  await expect(page.locator(".faceted-count")).toContainText("of 1,743");
 });
 
 test("trigram search matches mid-word fragments", async ({ page }) => {
   await gotoRoute(page, "/en/works/table");
-  await expect(page.locator(".faceted-count")).toContainText("of 1743");
+  await expect(page.locator(".faceted-count")).toContainText("of 1,743");
   // "ightho" is not a word — only trigram substring matching finds "Lighthouse"
   await page.locator(".fts-search-input").fill("ightho");
   await expect(page).toHaveURL(/q=ightho/);
@@ -94,7 +100,7 @@ test("searches shorter than 3 characters leave all rows in place", async ({ page
   await page.locator(".fts-search-input").fill("lo");
   await expect(page).toHaveURL(/q=lo/);
   // Too short for a trigram — treated as "no search yet", not zero results
-  await expect(page.locator(".faceted-count")).toContainText("of 1743");
+  await expect(page.locator(".faceted-count")).toContainText("of 1,743");
 });
 
 test("global search from the header shows grouped results", async ({ page }) => {
@@ -113,7 +119,7 @@ test("global search from the header shows grouped results", async ({ page }) => 
   // "View all" jumps to the filtered per-table list view
   await groups.filter({ hasText: "Works" }).locator(".search-results-more").click();
   await expect(page).toHaveURL(/works\/table\?q=novel/);
-  await expect(page.locator(".faceted-count")).not.toContainText("of 1743");
+  await expect(page.locator(".faceted-count")).not.toContainText("of 1,743");
 });
 
 test("punctuation in a search is matched literally, not a syntax error", async ({ page }) => {
@@ -123,7 +129,7 @@ test("punctuation in a search is matched literally, not a syntax error", async (
   await page.locator(".fts-search-input").fill("2014.");
   await expect(page).toHaveURL(/q=2014/);
   await expect(page.locator(".fts-error")).toHaveCount(0);
-  await expect(page.locator(".faceted-count")).not.toContainText("of 1743");
+  await expect(page.locator(".faceted-count")).not.toContainText("of 1,743");
   await expect(page.locator("tbody tr").first()).toBeVisible();
 });
 
@@ -143,12 +149,13 @@ test("global search rejects queries under 3 characters", async ({ page }) => {
 test("page size preference persists across navigation", async ({ page }) => {
   await gotoRoute(page, "/en/works/table");
   await page.locator(".faceted-pagesize").selectOption("50");
-  await expect(page.locator(".faceted-count")).toContainText("Showing 1 to 50");
+  await expect(page.locator(".faceted-count")).toContainText("1–50");
   // Leave and come back without a pageSize in the URL
   await page.locator("header .app-brand").click();
+  await openTables(page);
   await page.locator("a.perspective-card", { hasText: "Works" }).click();
   await expect(page).not.toHaveURL(/pageSize/);
-  await expect(page.locator(".faceted-count")).toContainText("Showing 1 to 50");
+  await expect(page.locator(".faceted-count")).toContainText("1–50");
 });
 
 test("view preference persists across navigation", async ({ page }) => {
@@ -157,6 +164,7 @@ test("view preference persists across navigation", async ({ page }) => {
   await expect(page).toHaveURL(/\/works\/cards/);
   // The home card now targets the remembered view
   await page.locator("header .app-brand").click();
+  await openTables(page);
   await page.locator("a.perspective-card", { hasText: "Works" }).click();
   await expect(page).toHaveURL(/\/works\/cards/);
 });
@@ -191,7 +199,7 @@ test("category dropdown facet filters junction rows", async ({ page }) => {
   // auto dropdown facets: work (nth 0) and category (nth 1).
   await gotoRoute(page, "/en/works_categories/table");
   const content = page.locator(".faceted-content");
-  await expect(content).toContainText("of 4363");
+  await expect(content).toContainText("of 4,363");
   const sidebar = page.locator("aside.facet-sidebar");
   await sidebar.locator(".facet-dropdown-trigger").nth(1).click();
   await sidebar.locator(".facet-option", { hasText: "Short Story" }).click();
@@ -206,6 +214,7 @@ test("m2m demo: junction table behavior", async ({ page }) => {
 
   // Homepage: the junction table gets its own card like any table.
   await gotoRoute(page, "/");
+  await openTables(page);
   await expect(page.locator("a.perspective-card", { hasText: "Work categories" })).toBeVisible();
 
   // Works detail: a related section of junction rows, category resolved.
@@ -264,7 +273,7 @@ test("m2m facet: works gets an automatic category facet from the junction", asyn
 test("m2m facet: URLs are bookmarkable and compose with other filters", async ({ page }) => {
   // Deep link decodes straight from the URL param.
   await gotoRoute(page, "/en/works/table?category_id=1");
-  await expect(page.locator(".faceted-count")).toContainText("of 1734");
+  await expect(page.locator(".faceted-count")).toContainText("of 1,734");
 
   await gotoRoute(page, "/en/works/table?category_id=4");
   const content = page.locator(".faceted-content");
@@ -329,10 +338,10 @@ test("works table shows pagination with page size control", async ({ page }) => 
 test("clicking next page advances to page 2", async ({ page }) => {
   await gotoRoute(page, "/en/works/table?pageSize=3");
   const content = page.locator(".faceted-content");
-  await expect(content).toContainText("Showing 1 to 3 of 1743");
+  await expect(content).toContainText("1–3 of 1,743");
   // Click the next (›) button
   await content.locator("nav[aria-label='Pagination'] button", { hasText: "›" }).click();
-  await expect(content).toContainText("Showing 4 to 6 of 1743");
+  await expect(content).toContainText("4–6 of 1,743");
 });
 
 test("filtering resets page to 1", async ({ page }) => {
@@ -340,14 +349,14 @@ test("filtering resets page to 1", async ({ page }) => {
   const content = page.locator(".faceted-content");
   // Go to page 2
   await content.locator("nav[aria-label='Pagination'] button", { hasText: "›" }).click();
-  await expect(content).toContainText("Showing 4 to 6");
+  await expect(content).toContainText("4–6");
   // Apply an author filter via sidebar dropdown
   const sidebar = page.locator("aside.facet-sidebar");
   await sidebar.locator(".facet-dropdown-trigger").first().click();
   await sidebar.locator(".facet-dropdown-panel .facet-search").fill("Woolf");
   await sidebar.locator(".facet-option", { hasText: "Virginia Woolf" }).click();
   // Should reset to page 1
-  await expect(content).toContainText("Showing 1 to");
+  await expect(content).toContainText("1–3 of");
 });
 
 test("URL query params are bookmarkable", async ({ page }) => {
@@ -399,7 +408,7 @@ test("export view: selection CSV downloads the filtered rows", async ({ page }) 
 
 test("home page shows perspectives and tables sections", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator(".perspective-section-title", { hasText: "Perspectives" })).toBeVisible();
+  await expect(page.locator(".perspective-section-title", { hasText: "Views" })).toBeVisible();
   await expect(page.locator(".perspective-section-title", { hasText: "Tables" })).toBeVisible();
   await expect(page.locator(".perspective-grid").first()).toBeVisible();
   // 1 configured perspective + 4 tables, the perspective view not double-listed
@@ -566,14 +575,14 @@ test("point_map extension: filtering updates markers without rebuilding the map"
 test("geo-filter extension: bounds filter type + location facet", async ({ page }) => {
   // bbox URL param decodes through the registered "bounds" filter type
   await gotoRoute(page, "/en/authors/table?bbox=-10,35,30,60");
-  await expect(page.locator(".facet-sidebar")).toContainText("360 Authors");
+  await expect(page.locator(".faceted-count")).toContainText("360");
   // the location facet mini map mounts in the sidebar
   await expect(page.locator(".facet-sidebar canvas")).toHaveCount(1);
   // lat/lon columns are NOT offered as numeric range facets
   await expect(page.locator(".facet-sidebar")).not.toContainText("latitude");
   // clearing the filter restores the full count
   await page.locator(".facet-sidebar button", { hasText: "Clear all" }).click();
-  await expect(page.locator(".facet-sidebar")).toContainText("1010 Authors");
+  await expect(page.locator(".faceted-count")).toContainText(/1,?010/);
 });
 
 // --- Fault tolerance: core must survive broken extensions -----------------
@@ -584,13 +593,14 @@ test("geo-filter extension: bounds filter type + location facet", async ({ page 
 async function expectCoreWorks(page) {
   await page.waitForSelector("#app header", { timeout: 10000 });
   await page.locator("header").getByRole("link", { name: "Pihka", exact: true }).click();
+  await openTables(page);
   await page.locator("a.perspective-card", { hasText: /Authors/ }).click();
   await expect(page.locator("tbody tr")).toHaveCount(25);
-  await expect(page.locator(".facet-sidebar")).toContainText("1010 Authors");
+  await expect(page.locator(".faceted-count")).toContainText(/1,?010/);
   await expect(page.locator(".facet-sidebar")).toContainText("birth_year");
   // builtin range filter still queries correctly
   await page.goto("/#/en/authors/table?birth_year_min=1990");
-  await expect(page.locator(".facet-sidebar")).toContainText("16 Authors");
+  await expect(page.locator(".faceted-count")).toContainText("16");
 }
 
 test("fault: extension module that fails to load leaves core working", async ({ page }) => {
@@ -648,7 +658,7 @@ test("fault: runtime throws in registered callbacks degrade to fallbacks", async
   await page.goto("/#/en/authors/table?bbox=-10,35,30,60");
   await page.waitForSelector("#app header", { timeout: 10000 });
   await expect(page.locator("tbody tr")).toHaveCount(25);
-  await expect(page.locator(".facet-sidebar")).toContainText("1010 Authors");
+  await expect(page.locator(".faceted-count")).toContainText(/1,?010/);
   // throwing facet component shows the boundary fallback instead of crashing
   await expect(page.locator(".facet-sidebar .component-error")).toContainText("facet hostile-facet failed to render");
   // facet with throwing availableFor is simply not offered
@@ -657,7 +667,7 @@ test("fault: runtime throws in registered callbacks degrade to fallbacks", async
   await page.goto("/#/en/authors/hostileview");
   await expect(page.locator(".component-error", { hasText: "view list:hostileview" })).toBeVisible();
   await page.goto("/#/en/authors/table?birth_year_min=1990");
-  await expect(page.locator(".facet-sidebar")).toContainText("16 Authors");
+  await expect(page.locator(".faceted-count")).toContainText("16");
 });
 
 test("fault: hanging extension load times out and boot continues", async ({ page }) => {
@@ -696,10 +706,11 @@ test("footer: app override renders logos without duplicate credit links on every
 test("menu: header links navigate to static pages", async ({ page }) => {
   await gotoRoute(page, "/en/authors/table");
   const menu = page.locator(".app-menu-item a");
-  await expect(menu.filter({ hasText: "About" })).toHaveAttribute("href", "#/en/page/about");
-  await menu.filter({ hasText: "About" }).click();
-  await expect(page).toHaveURL(/\/en\/page\/about/);
-  await expect(page.locator(".static-page h1")).toContainText("About this dataset");
+  await expect(menu.filter({ hasText: "Instructions" })).toHaveAttribute("href", "#/en/page/instructions");
+  await expect(menu.filter({ hasText: "About" })).toHaveCount(0);
+  await menu.filter({ hasText: "Instructions" }).click();
+  await expect(page).toHaveURL(/\/en\/page\/instructions/);
+  await expect(page.locator(".static-page h1")).toContainText("How to use this site");
 });
 
 test("menu: all three entry forms — asset src, inline html, external link", async ({ page }) => {
@@ -708,7 +719,7 @@ test("menu: all three entry forms — asset src, inline html, external link", as
   await page.route("**/app/menu.json", r => r.fulfill({
     contentType: "application/json",
     body: JSON.stringify([
-      { id: "about", label: { en: "About" }, src: { en: "app/pages/about.en.html" } },
+      { id: "about", label: { en: "About" }, src: { en: "core/assets/pages/about.en.html" } },
       { id: "dataset", label: { en: "Dataset" }, html: { en: "<h1>The dataset</h1><p>Inline.</p>" } },
       { label: { en: "External" }, href: "https://example.com" },
     ]),
@@ -719,18 +730,18 @@ test("menu: all three entry forms — asset src, inline html, external link", as
   await expect(menu.filter({ hasText: "External" })).toHaveAttribute("target", "_blank");
   // asset-src page
   await menu.filter({ hasText: "About" }).click();
-  await expect(page.locator(".static-page h1")).toContainText("About this dataset");
+  await expect(page.locator(".static-page h1")).toContainText("About this site");
   // inline-html page — switching pages must not show stale content
   await menu.filter({ hasText: "Dataset" }).click();
   await expect(page.locator(".static-page h1")).toContainText("The dataset");
 });
 
 test("menu: language switch rewrites a page route and shows the other language", async ({ page }) => {
-  await gotoRoute(page, "/en/page/about");
-  await expect(page.locator(".static-page")).toContainText("demonstration deployment");
-  await page.locator("header button", { hasText: /^(en|EN|🌐)/ }).first().click();
-  await expect(page).toHaveURL(/\/nl\/page\/about/);
-  await expect(page.locator(".static-page")).toContainText("demonstratie van Pihka");
+  await gotoRoute(page, "/en/page/instructions");
+  await expect(page.locator(".static-page h1")).toContainText("How to use this site");
+  await page.locator('.lang-switcher button[data-lang="nl"]').click();
+  await expect(page).toHaveURL(/\/nl\/page\/instructions/);
+  await expect(page.locator(".static-page h1")).toContainText("Deze site gebruiken");
 });
 
 test("page: unknown page id renders a not-found message", async ({ page }) => {
@@ -750,4 +761,54 @@ test("fault: broken footer.json + menu.json leave core working", async ({ page }
   // no footer, no menu links, but the app runs
   await expect(page.locator("#app > footer")).toHaveCount(0);
   await expect(page.locator(".app-menu-item")).toHaveCount(0);
+});
+
+test("pagination: type a page number to jump, arrows still step", async ({ page }) => {
+  await gotoRoute(page, "/en/works/table?pageSize=25");
+  const content = page.locator(".faceted-content");
+  const box = content.locator(".pagination-input");
+  await expect(box).toHaveValue("1");
+  // Only arrows and one number box: no numbered buttons
+  await expect(content.locator("nav[aria-label='Pagination'] button")).toHaveCount(2);
+  await box.fill("3");
+  await box.press("Enter");
+  await expect(content).toContainText("51–75 of 1,743");
+  await expect(box).toHaveValue("3");
+  // Out-of-range input clamps to the last page
+  await box.fill("9999");
+  await box.press("Enter");
+  await expect(content).toContainText("1,726–1,743 of 1,743");
+  // Escape cancels a typed value
+  await box.fill("2");
+  await box.press("Escape");
+  await expect(box).toHaveValue("70");
+});
+
+test("range filter: click a value, type a number, press Enter", async ({ page }) => {
+  await gotoRoute(page, "/en/works/table");
+  const boxes = page.locator(".facet-sidebar .range-value-input");
+  await expect(boxes).toHaveCount(2);
+  await boxes.nth(0).fill("1990");
+  await boxes.nth(0).press("Enter");
+  await expect(page).toHaveURL(/year_min=1990/);
+  await expect(page.locator(".faceted-count")).toContainText("of 1,221");
+  // A maximum below the minimum is clamped to the minimum
+  await boxes.nth(1).fill("1980");
+  await boxes.nth(1).press("Enter");
+  await expect(page).toHaveURL(/year_max=1990/);
+  // A minimum below the data range clears that bound
+  await boxes.nth(0).fill("1500");
+  await boxes.nth(0).press("Enter");
+  await expect(page).not.toHaveURL(/year_min=/);
+  // The slider follows the typed value
+  await expect(page.locator(".facet-sidebar input[type='range']").nth(1)).toHaveValue("1990");
+});
+
+test("perspective view search: the sidebar search works on Author bibliography", async ({ page }) => {
+  await gotoRoute(page, "/en/author-overview/table");
+  const input = page.locator(".facet-sidebar .fts-search-input");
+  await expect(input).toBeEnabled();
+  await expect(page.locator(".faceted-count")).toContainText("of 1,010");
+  await input.fill("ada");
+  await expect(page.locator(".faceted-count")).toContainText("of 13");
 });

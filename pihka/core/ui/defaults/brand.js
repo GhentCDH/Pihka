@@ -3,17 +3,16 @@ import { h } from "preact";
 import { buildPath } from "../runtime/router.js";
 import { assetUrl } from "../runtime/paths.js";
 
-/** Shared home link for the default header and footer. */
-export function Brand({ size = "header" }) {
-    const [width, height] = size === "footer" ? [193.6, 48.4] : [112, 28];
+/** Shared home link for the default header. The logo SVG follows the text colour. */
+export function Brand() {
     return h("a", { class: "app-brand", href: buildPath("/") },
         h("svg", {
             class: "brand-logo",
-            viewBox: "0 0 160 40",
+            viewBox: "-20 -1586 6439 1687",
             role: "img",
             "aria-label": "Pihka",
-            width,
-            height,
+            width: 114,
+            height: 30,
         }, h("use", { href: `${assetUrl("core/assets/logo/pihka.svg")}#pihka` })),
     );
 }

@@ -47,15 +47,16 @@ for (const mode of ["download", "http-vfs"]) {
         await expect(page.locator(".detail-related")).toContainText("Mrs Dalloway");
         await page.goBack();
         await expect(page).toHaveURL(/works\/1\/table/);
-        await page.locator('a[href="#/en/page/about"]').first().click();
+        await page.locator('a[href="#/en/page/instructions"]').first().click();
         await expect(page.locator(".static-page")).toBeVisible();
-        await page.getByRole("button", { name: "Theme: auto" }).click();
-        await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-        await page.getByRole("button", { name: "Language: en" }).click();
-        await expect(page).toHaveURL(/#\/nl\/page\/about/);
+        // Follows the OS (light in tests); one click switches to the opposite mode and remembers it.
+        await page.getByRole("button", { name: "Switch to dark mode" }).click();
+        await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+        await page.locator('.lang-switcher button[data-lang="nl"]').click();
+        await expect(page).toHaveURL(/#\/nl\/page\/instructions/);
         await page.reload();
-        await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-        await expect(page).toHaveURL(/#\/nl\/page\/about/);
+        await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+        await expect(page).toHaveURL(/#\/nl\/page\/instructions/);
     });
 
     test(`${mode}: local IIIF, annotations and map plugins`, async ({ page }) => {

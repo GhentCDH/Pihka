@@ -3,6 +3,7 @@
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="color-scheme" content="light dark" />
         <title>⛁ Pihka - Sustainable Data Publishing Platform for Digital Humanities Research</title>
         <script>
             // Apply the saved theme before first paint to avoid a flash.
@@ -11,7 +12,10 @@
                 try {
                     var prefs = JSON.parse(localStorage.getItem("pihka-prefs") || "{}");
                     var t = prefs.theme || localStorage.getItem("pihka-theme");
-                    if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+                    if (t === "light" || t === "dark") {
+                        document.documentElement.dataset.theme = t;
+                        document.querySelector('meta[name="color-scheme"]').content = t;
+                    }
                 } catch (e) { /* localStorage unavailable */ }
             })();
         </script>

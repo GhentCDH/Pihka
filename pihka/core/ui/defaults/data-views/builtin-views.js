@@ -17,11 +17,11 @@ function DetailCardView(props) {
     );
 }
 
-// DataViewListTable is also reused by related sections and search results
-// (natural height, page scrolling), so only the top-level list view opts
-// into filling the viewport with internal scrolling.
+// DataViewListTable is also reused by related sections and search results.
+// The top-level list view is the primary table: it scrolls with the page
+// (one scrollbar) and its header sticks to the top of the viewport.
 function ListTableView(props) {
-    return h(DataViewListTable, { ...props, fill: props.presentation !== "embedded" });
+    return h(DataViewListTable, { ...props, primary: props.presentation !== "embedded" });
 }
 
 export function register(api) {

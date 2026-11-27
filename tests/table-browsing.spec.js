@@ -19,16 +19,19 @@ for (const mode of ["download", "http-vfs"]) {
         await expect(more).toBeVisible();
         await expect(page.locator("section tbody")).toContainText("Virginia Woolf wrote…");
         await expect(page.locator("section tbody")).not.toContainText("Mrs Dalloway.");
+        // One scrollbar: the list table scrolls with the page (no inner
+        // scroll box) and its header sticks to the top of the viewport.
         const layout = await page.evaluate(() => {
-            const table = document.querySelector(".table-scroll");
-            const footer = document.querySelector(".site-footer");
-            return { width: table.clientWidth, scroll: table.scrollWidth,
-                bottom: table.getBoundingClientRect().bottom, footer: footer.getBoundingClientRect().top,
-                height: window.innerHeight };
+            const doc = document.documentElement;
+            const innerScrollers = [...document.querySelectorAll(".faceted-content *")].filter(el => {
+                const cs = getComputedStyle(el);
+                return (/(auto|scroll)/.test(cs.overflowY) && el.scrollHeight > el.clientHeight + 1)
+                    || (/(auto|scroll)/.test(cs.overflowX) && el.scrollWidth > el.clientWidth + 1);
+            }).length;
+            return { innerScrollers, pageOverflowX: doc.scrollWidth > doc.clientWidth };
         });
-        expect(layout.scroll).toBeLessThanOrEqual(layout.width + 1);
-        expect(layout.height - layout.bottom).toBeLessThanOrEqual(10);
-        expect(layout.footer).toBeGreaterThanOrEqual(layout.height);
+        expect(layout.innerScrollers).toBe(0);
+        expect(layout.pageOverflowX).toBe(false);
         await page.locator(".site-footer").scrollIntoViewIfNeeded();
         await expect(page.locator(".site-footer")).toBeInViewport();
         await more.click();

@@ -4,7 +4,8 @@
  * Pico CSS does the heavy lifting (typography, forms, buttons, tables,
  * light/dark themes) — Blades' maintained fork (https://blades.dev/css/pico/),
  * as upstream Pico is archived. This file only:
- *   1. Re-tints Pico's primary color to resin amber (pihka).
+ *   1. Sets the brand palette (resin on warm paper, charcoal ink) by mapping
+ *      Pico's theme variables onto it.
  *   2. Aliases a handful of shorthand variables to Pico's theme variables
  *      so custom components follow light/dark mode automatically.
  *   3. Styles the core components (layout, facets, toolbar, tables, cards).
@@ -19,36 +20,96 @@
  *     .facet-label, .facet-divider.
  *   - Variables: all --pico-* (Pico's public API, follows the active
  *     theme) plus the aliases --text, --text-muted, --border, --bg,
- *     --bg-subtle, --accent, --pihka-font-small.
+ *     --bg-subtle, --accent (the accent for text and links: charcoal in
+ *     light mode, resin in dark mode), --pihka-font-small, and the brand
+ *     tokens --resin (fills, highlights and underlines; never text on the
+ *     light theme), --charcoal, --surface, --rule and --rule-strong
+ *     (hairlines), --pihka-font and --pihka-font-display.
  */
 
-/* 1. Resin accent — burnt amber, like resin capturing data in time.
-   One block for all three theme states: Pico sets color-scheme per state
-   (light default, [data-theme=dark], and prefers-color-scheme when
-   data-theme is absent = "auto"), so light-dark() resolves against the
-   active theme. The selector list mirrors Pico's own specificity so these
-   overrides always win. */
+/* 1. Resin on warm paper. Brand colours: resin #FFB700, charcoal #1A150E,
+   paper #F6CF571A (resin at 10% over white, computed solid so overlays never
+   turn transparent). Resin is only ~1.5:1 on paper, so in light mode it is a
+   fill/highlight (disc, tints, underlines, hover rows) and never text; links
+   and text accents are charcoal there. In dark mode resin is also the text
+   accent. One block for all three theme states: Pico sets color-scheme per
+   state (light default, [data-theme=dark], and prefers-color-scheme when
+   data-theme is absent), so light-dark() resolves against the active theme.
+   The selector list mirrors Pico's own specificity so these overrides win. */
 
 :root:not([data-theme=dark]),
 [data-theme=dark] {
-  --pico-primary: light-dark(#b35309, #e8962f);
-  --pico-primary-background: #b35309;
-  --pico-primary-border: var(--pico-primary-background);
-  --pico-primary-underline: light-dark(rgba(179, 83, 9, 0.5), rgba(232, 150, 47, 0.5));
-  --pico-primary-hover: light-dark(#8c3f06, #f0a847);
-  --pico-primary-hover-background: light-dark(#9a4607, #c75d0b);
-  --pico-primary-hover-border: var(--pico-primary-hover-background);
-  --pico-primary-hover-underline: var(--pico-primary-hover);
-  --pico-primary-focus: light-dark(rgba(179, 83, 9, 0.375), rgba(232, 150, 47, 0.375));
-  --pico-primary-inverse: #fff;
+  --resin: #FFB700;
+  --resin-deep: #D99A00;
+  --charcoal: #1A150E;
+  --pico-color: light-dark(#1A150E, #F4EFE6);
+  --pico-background-color: light-dark(color-mix(in srgb, #F6CF57 10%, #fff), #1A150E);
+  --pico-muted-color: light-dark(rgba(26, 21, 14, .58), rgba(244, 239, 230, .6));
+  --pico-muted-border-color: light-dark(rgba(26, 21, 14, .11), rgba(244, 239, 230, .14));
+  --pico-code-background-color: light-dark(rgba(246, 207, 87, .18), #261F15);
+  --pico-h1-color: var(--pico-color);
+  --pico-h2-color: var(--pico-color);
+  --pico-h3-color: var(--pico-color);
+  --pico-h4-color: var(--pico-color);
+  --pico-form-element-background-color: light-dark(#FFFFFF, #221B12);
+  --pico-form-element-border-color: light-dark(rgba(26, 21, 14, .22), rgba(244, 239, 230, .3));
+  --pico-form-element-color: var(--pico-color);
+  --pico-form-element-focus-color: var(--pico-color);
+  --pico-form-element-placeholder-color: var(--pico-muted-color);
+  --pico-primary: light-dark(#1A150E, #FFB700);
+  --pico-primary-background: #FFB700;
+  --pico-primary-border: #FFB700;
+  --pico-primary-underline: #FFB700;
+  --pico-primary-hover: light-dark(#1A150E, #FFCB4D);
+  --pico-primary-hover-background: var(--resin-deep);
+  --pico-primary-hover-border: var(--resin-deep);
+  --pico-primary-hover-underline: #FFB700;
+  --pico-primary-focus: rgba(255, 183, 0, .45);
+  --pico-primary-inverse: #1A150E;
+  accent-color: #FFB700;
 }
 
 /* 2. Shorthand aliases for custom components — track Pico's active theme */
 
+/* Type: Inter Tight for big things (titles), Instrument Sans for everything
+   else. Both variable, self-hosted. To swap, change these @font-face rules
+   and the two --pihka-font* variables. */
+@font-face {
+  font-family: "Inter Tight";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("../fonts/inter-tight-latin-wght-normal.woff2") format("woff2-variations"),
+       url("../fonts/inter-tight-latin-wght-normal.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Instrument Sans";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("../fonts/instrument-sans-latin-wght-normal.woff2") format("woff2-variations"),
+       url("../fonts/instrument-sans-latin-wght-normal.woff2") format("woff2");
+}
+
 :root {
+  --pihka-font: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --pihka-font-display: "Inter Tight", "Inter", system-ui, sans-serif;
   --pico-font-size: 100%;
-  --pico-font-family: system-ui, sans-serif;
+  --pico-font-family: var(--pihka-font);
+  --pico-line-height: 1.6;
+  --pico-border-radius: 2px;
+  /* Scale fallback fonts to the web font's x-height: no reflow on swap. */
+  font-size-adjust: from-font;
   --pihka-font-small: .875rem;
+  /* Design tokens: warm paper, pale hairlines, one accent. */
+  --surface: light-dark(#FFFFFF, #221B12);
+  --rule: var(--pico-muted-border-color);
+  --rule-strong: light-dark(rgba(26, 21, 14, .28), rgba(244, 239, 230, .34));
+  --label-size: .72rem;
+  --label-tracking: .08em;
+  --grid-max: 80rem;
+  --space-1: .25rem; --space-2: .5rem; --space-3: 1rem;
+  --space-4: 1.5rem; --space-5: 3rem;
   --text: var(--pico-color);
   --text-muted: var(--pico-muted-color);
   --border: var(--pico-muted-border-color);
@@ -59,21 +120,33 @@
 
 /* Three sizes: body/controls, secondary text, headings. Use rem so nested
    labels never shrink again inside a smaller parent. */
-h1, h2, h3, h4, h5, h6 {
-  font-size: 1.25rem;
+body {
+  -webkit-font-smoothing: antialiased;
 }
-small, sup, .text-meta, .column-type, .component-error,
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+h2 { font-size: 1.75rem; }
+h3 { font-size: 1.125rem; }
+h4, h5, h6 { font-size: 1rem; }
+small, sup, .text-meta, .component-error,
 .footer-details, .facet-label, .range-values, .facet-chevron,
 .facet-option-count, .facet-options-truncated, .faceted-count,
 .perspective-card-meta, .cell-list-item, .fts-error {
   font-size: var(--pihka-font-small);
 }
-.text-meta, .column-type, .component-error {
+.text-meta, .component-error {
   color: var(--text-muted);
 }
-.column-type {
-  font-weight: normal;
-  margin-left: .4em;
+/* Micro-label: small uppercase tracked text for kickers, field and column labels. */
+.micro-label {
+  font-size: var(--label-size);
+  font-weight: 600;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
 /* 3. Layout: slim header, full-width content */
@@ -134,9 +207,6 @@ html, body {
   flex-direction: column;
   min-height: 0;
 }
-.faceted-view:has(.fill-height) .faceted-toolbar {
-  flex: 0 0 auto;
-}
 /* The wrapper <section id={table}> between .faceted-content and the view
    must also grow and pass the height down. */
 .faceted-view:has(.fill-height) .faceted-content > section {
@@ -169,8 +239,8 @@ html, body {
 }
 
 #app > header {
-  border-bottom: 1px solid var(--border);
-  --pico-nav-element-spacing-vertical: 0.3rem;
+  border-bottom: 1px solid var(--rule-strong);
+  --pico-nav-element-spacing-vertical: 0.6rem;
 }
 
 @media (max-width: 768px) {
@@ -187,7 +257,7 @@ html, body {
 }
 .brand-logo {
   display: block;
-  color: var(--accent);
+  color: var(--text);
 }
 
 #app > header .app-crumb {
@@ -198,27 +268,51 @@ html, body {
 #app > header .app-menu-item a {
   color: var(--text);
   text-decoration: none;
+  font-size: var(--pihka-font-small);
+  font-weight: 600;
 }
 #app > header .app-menu-item a:hover {
-  text-decoration: underline;
+  color: var(--charcoal);
 }
 
-/* Shared brand, compact credits and optional partner marks. */
+/* Footer: dataset information in a pale-ruled grid with the partner logo
+   aligned to its first row; quiet credits underneath. */
 .site-footer {
-  border-top: 1px solid var(--border);
-  margin-top: 1.5rem;
-  padding-block: .5rem;
+  border-top: 1px solid var(--rule-strong);
+  margin-top: var(--space-5);
+  padding-block: var(--space-4) var(--space-5);
   color: var(--text-muted);
-  background: var(--bg-subtle);
+  background: var(--bg);
 }
-.footer-content {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 1rem 2rem;
+.footer-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-4) var(--space-5);
+  max-width: var(--grid-max);
+}
+.footer-dataset {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  gap: var(--space-4);
+  margin: 0;
+}
+.footer-dataset-item {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--rule);
+}
+.footer-dataset dt {
+  margin: 0 0 var(--space-1);
+}
+.footer-dataset dd {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--pihka-font-small);
+  overflow-wrap: anywhere;
 }
 .footer-details {
-  flex: 1 1 16rem;
+  max-width: var(--grid-max);
+  margin-top: var(--space-4);
 }
 .footer-details p {
   margin: 0;
@@ -230,38 +324,108 @@ html, body {
   gap: .25rem 1rem;
 }
 .footer-logos {
-  margin-left: auto;
+  padding-top: var(--space-2);
 }
 .footer-logos img {
-  width: 20rem;
+  display: block;
+  width: 12rem;
   max-width: 100%;
   height: auto;
+}
+@media (max-width: 768px) {
+  .footer-main { grid-template-columns: 1fr; }
+  .footer-dataset { grid-template-columns: 1fr; }
+}
+/* Partner marks go monochrome white on the charcoal paper. */
+[data-theme=dark] .footer-logos img {
+  filter: brightness(0) invert(1);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme=light]) .footer-logos img {
+    filter: brightness(0) invert(1);
+  }
 }
 
 /* Static menu pages (About, Instructions, …) */
 .static-page {
-  max-width: 46rem;
-  margin: 0 auto;
-  line-height: 1.6;
+  max-width: 44rem;
+  width: 100%;
+  margin: 0;
+  padding: var(--space-4) 0 var(--space-5);
+  border: 0;
+  background: none;
+  box-shadow: none;
+  line-height: 1.65;
 }
 .static-page h1 {
-  margin-top: 0.5rem;
+  margin: 0 0 var(--space-4);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+.static-page h2 {
+  margin-top: var(--space-5);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--rule-strong);
 }
 
-/* Global search box in the header: compact, no Pico full-width/margins */
+/* Global search: wide enough in the header to be the primary way in; flat, no Pico pill */
 .global-search {
   display: flex;
   align-items: center;
   margin: 0;
+  /* Pico turns [role=search] into a pill with a focus ring; keep it flat. */
+  --pico-border-radius: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: none;
+}
+.global-search:focus-within {
+  box-shadow: none;
 }
 
 .global-search input[type="search"] {
-  width: 13rem;
-  max-width: 40vw;
+  width: clamp(14rem, 30vw, 28rem);
+  max-width: 100%;
   margin-bottom: 0;
-  padding: 0.2rem 0.6rem 0.2rem 2rem; /* room for Pico's magnifier icon */
-  background-position: center left 0.6rem;
+  padding: 0.5rem 1rem 0.5rem 2.5rem;
+  background-position: center left 0.9rem;
   height: auto;
+  border-radius: 0;
+  background-color: var(--surface);
+  border: 1px solid var(--rule);
+  border-bottom-color: var(--rule-strong);
+}
+.global-search input[type="search"]:focus {
+  border-color: var(--resin);
+  box-shadow: none;
+  outline: 2px solid var(--resin);
+  outline-offset: 1px;
+}
+
+/* Home hero search: the page's main action, set as large type */
+.global-search-hero {
+  margin-top: var(--space-4);
+}
+.global-search-hero input[type="search"] {
+  width: 100%;
+  max-width: var(--grid-max);
+  font-size: clamp(1.25rem, 2.6vw, 2rem);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  padding: var(--space-3) var(--space-3) var(--space-3) 3rem;
+  background-position: center left .25rem;
+  background-size: 1.5rem;
+  border: 0;
+  border-bottom: 1px solid var(--rule-strong);
+  border-radius: 0;
+  background-color: transparent;
+}
+.global-search-hero input[type="search"]:focus {
+  border-bottom: 2px solid var(--resin);
+  background-color: color-mix(in srgb, var(--resin) 18%, transparent);
+  box-shadow: none;
+  outline: 0;
 }
 
 /* Search results page: one section per matching table */
@@ -290,11 +454,20 @@ html, body {
 /* Keep links clean in dense data views; underline on hover only */
 
 a {
-  text-decoration: none;
+  text-decoration: underline;
+  text-decoration-color: var(--resin);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
 }
 
 a:hover {
-  text-decoration: underline;
+  background: var(--resin);
+  color: var(--charcoal);
+  text-decoration-color: var(--charcoal);
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* Compact data tables (Pico's defaults are too roomy for a data viewer) */
@@ -312,14 +485,24 @@ thead th {
   white-space: nowrap;
 }
 
-tbody tr:hover {
-  background: var(--bg-subtle);
-}
-
 /* Table scroll wrapper (list, related and search tables). In fill mode the
    wrapper is the single scroll container and the header sticks to it. */
 .table-scroll {
   overflow-x: auto;
+}
+/* The primary list table scrolls with the page: no wrapper scroll box (any
+   overflow value other than visible would capture the sticky header), so
+   the header sticks to the viewport. Cells already wrap between words; an
+   unusually wide table makes the page scroll sideways instead. */
+.table-scroll.is-primary {
+  overflow: visible;
+}
+.table-scroll.is-primary thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg);
+  box-shadow: inset 0 -1px 0 var(--rule-strong);
 }
 .table-scroll.fill-height {
   overflow-y: auto;
@@ -329,10 +512,7 @@ tbody tr:hover {
 .table-scroll.fill-height thead th {
   position: sticky;
   top: 0;
-  z-index: 1;
   background: var(--bg);
-  /* border-collapse makes the th border scroll away; repaint it. */
-  box-shadow: inset 0 -1px 0 var(--border);
 }
 
 /* Facet primitives: one place for label/header alignment in the filter
@@ -376,9 +556,8 @@ tbody tr:hover {
 .range-value-box {
   font-weight: 600;
   color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 10%, transparent);
-  border: 1px solid var(--accent);
-  border-radius: 3px;
+  background: color-mix(in srgb, var(--resin) 25%, transparent);
+  border: 1px solid var(--resin);
   padding: .1em .4em;
   min-width: 2.5em;
   text-align: center;
@@ -406,7 +585,7 @@ tbody tr:hover {
   height: 4px;
   transform: translateY(-50%);
   border-radius: 2px;
-  background: var(--accent);
+  background: var(--resin);
 }
 
 .range-input {
@@ -447,7 +626,7 @@ tbody tr:hover {
   margin-top: 4px;
   border-radius: 50%;
   background: var(--bg);
-  border: 2px solid var(--accent);
+  border: 2px solid var(--resin);
   box-shadow: 0 1px 3px rgba(0,0,0,.2);
   cursor: pointer;
 }
@@ -459,19 +638,19 @@ tbody tr:hover {
   margin-top: 0; /* cancel Pico's -.4375rem */
   border-radius: 50%;
   background: var(--bg);
-  border: 2px solid var(--accent);
+  border: 2px solid var(--resin);
   box-shadow: 0 1px 3px rgba(0,0,0,.2);
   cursor: pointer;
 }
 
 .range-input::-webkit-slider-thumb:hover {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--resin);
+  border-color: var(--resin);
 }
 
 .range-input::-moz-range-thumb:hover {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--resin);
+  border-color: var(--resin);
 }
 
 /* Faceted view: sidebar + content grid */
@@ -511,7 +690,6 @@ tbody tr:hover {
 /* Sidebar title row: a .facet-header with centered alignment. */
 .facet-sidebar-header {
   align-items: center;
-  margin-bottom: .25rem;
 }
 
 .faceted-content {
@@ -526,23 +704,77 @@ tbody tr:hover {
 
 .faceted-toolbar {
   display: flex;
-  align-items: center;
-  gap: .5rem;
-  margin-bottom: .5rem;
   flex-wrap: wrap;
 }
 
 .view-toggles {
   display: flex;
-  gap: .25rem;
 }
 
-.view-toggles button,
-/* Header pickers (theme + language) share one compact style */
-.theme-toggle,
+/* Header controls: quiet icon buttons and a segmented language pill, no
+   borders, so they sit on the page background. */
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  box-shadow: none;
+  color: var(--text);
+  cursor: pointer;
+}
+.icon-btn:hover {
+  background: color-mix(in srgb, var(--resin) 45%, transparent);
+  color: var(--text);
+}
 .lang-switcher {
-  padding: .3em .7em;
-  margin-bottom: 0;
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+.lang-switcher button {
+  margin: 0;
+  padding: .2rem .65rem;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: var(--label-size);
+  font-weight: 700;
+  letter-spacing: var(--label-tracking);
+  cursor: pointer;
+}
+.lang-switcher button:hover {
+  color: var(--text);
+  background: none;
+}
+.lang-switcher button.is-active {
+  background: var(--charcoal);
+  color: #fff;
+}
+[data-theme=dark] .lang-switcher button.is-active {
+  background: var(--resin);
+  color: var(--charcoal);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme=light]) .lang-switcher button.is-active {
+    background: var(--resin);
+    color: var(--charcoal);
+  }
+}
+#app > header .app-controls {
+  margin-left: var(--space-2);
 }
 
 /* Facet dropdown */
@@ -571,12 +803,11 @@ tbody tr:hover {
   border: 1px solid var(--border);
   border-radius: 4px;
   cursor: pointer;
-  background: var(--bg);
   min-height: 2.2em;
 }
 
 .facet-dropdown-trigger:hover {
-  border-color: var(--accent);
+  border-color: var(--resin);
 }
 
 .facet-placeholder {
@@ -686,27 +917,11 @@ tbody tr:hover {
 .faceted-pagination {
   display: flex;
   align-items: center;
-  gap: 2px;
   margin: 0;
 }
 
 .faceted-pagination button {
-  min-width: 1.6rem;
-  padding: .15em .35em;
   line-height: 1.4;
-  border-radius: 3px;
-}
-
-.faceted-pagination .pagination-active {
-  font-weight: 600;
-  background: var(--pico-primary-background);
-  color: var(--pico-primary-inverse);
-  border-color: var(--pico-primary-border);
-}
-
-.faceted-pagination .pagination-ellipsis {
-  padding: 0 .15rem;
-  color: var(--text-muted);
 }
 
 /* Result count and page size */
@@ -715,19 +930,11 @@ tbody tr:hover {
   display: flex;
   align-items: center;
   gap: .5rem;
-  margin-left: auto;
 }
 
 .faceted-count {
   color: var(--text-muted);
   white-space: nowrap;
-}
-
-.faceted-pagesize {
-  width: auto;
-  margin: 0;
-  padding: .15rem 1.6rem .15rem .35rem;
-  border-radius: 3px;
 }
 
 /* Strip PicoCSS article chrome (gradient, shadow) everywhere */
@@ -739,12 +946,6 @@ article {
   border-radius: 6px;
   padding: 1.25rem;
   margin: 0;
-}
-
-/* Perspective grid */
-
-.perspective-section-title {
-  margin: 1rem 0 .5rem;
 }
 
 /* Aggregated multi-value cells (perspective list columns) */
@@ -793,39 +994,115 @@ article {
   text-decoration: underline;
 }
 
+/* Home: typographic hero + ruled modules */
+.home-hero, .home-section {
+  width: 100%;
+  max-width: var(--grid-max);
+  margin-inline: 0;
+}
+.home-hero {
+  padding: clamp(1rem, 4vw, 3rem) 0 var(--space-5);
+}
+.home-title {
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  margin: 0;
+}
+.home-section {
+  margin-bottom: var(--space-5);
+}
+.perspective-section-title {
+  margin: 0 0 var(--space-3);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--rule-strong);
+}
+.home-count {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Collapsible tables section: native <details>, +/- marker */
+.home-tables > summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  list-style: none;
+  cursor: pointer;
+  margin-bottom: 0;
+}
+.home-tables > summary::-webkit-details-marker { display: none; }
+.home-tables > summary::after {
+  content: "+";
+  float: none;
+  width: auto;
+  height: auto;
+  margin: 0;
+  background: none;
+  transform: none;
+  font-size: 1.25rem;
+  font-weight: 400;
+  line-height: 1;
+}
+.home-tables[open] > summary::after { content: "\2212"; }
+.home-tables > summary:hover { color: var(--text); background: none; }
+.home-tables[open] > summary { margin-bottom: var(--space-3); }
+
 .perspective-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(14rem, 1fr));
-  gap: 0.75rem;
-  margin: 1rem 0;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  column-gap: var(--space-4);
+  margin: 0;
+  counter-reset: module;
 }
 
 .perspective-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  padding: 0.75rem 1rem;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  counter-increment: module;
+  display: grid;
+  grid-template-columns: 2.5rem 1fr auto;
+  align-items: baseline;
+  gap: .1rem var(--space-2);
+  margin-inline: -.75rem;
+  padding: var(--space-3) .75rem;
+  border-top: 0;
+  background: linear-gradient(var(--rule), var(--rule)) center top / calc(100% - 1.5rem) 1px no-repeat;
   text-decoration: none;
   color: var(--text);
-  transition: border-color 0.15s;
 }
-
+.perspective-card::before {
+  content: counter(module, decimal-leading-zero);
+  font-size: var(--label-size);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--label-tracking);
+  color: var(--text-muted);
+}
+/* The one expressive interaction: the row fills with resin. */
 .perspective-card:hover {
-  border-color: var(--accent);
+  background: var(--resin);
+  color: var(--charcoal);
   text-decoration: none;
+}
+.perspective-card:hover::before,
+.perspective-card:hover .perspective-card-meta,
+.perspective-card:hover .perspective-card-arrow {
+  color: var(--charcoal);
 }
 
 .perspective-card-name {
-  font-weight: 600;
-  color: var(--accent);
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 .perspective-card-meta {
+  grid-column: 2 / 3;
+  color: var(--text-muted);
+  font-size: var(--pihka-font-small);
+}
+.perspective-card-arrow {
+  grid-row: 1;
+  grid-column: 3;
   color: var(--text-muted);
 }
 
@@ -881,7 +1158,7 @@ article {
 }
 
 .fts-search-input:focus {
-  border-color: var(--accent);
+  border-color: var(--resin);
   outline: none;
 }
 
@@ -918,28 +1195,546 @@ article {
 
 /* Text wraps before the table needs horizontal scrolling. */
 .table-scroll th, .table-scroll td {
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   padding: .4rem .5rem;
 }
 .table-scroll img { max-width: 100%; }
 .table-scroll table { margin-bottom: 0; }
 
-/* Keep the footer accessible below the desktop table workspace. */
-@media (min-width: 769px) and (min-height: 600px) {
-  #app:has(.faceted-content .table-scroll.fill-height) {
-    position: relative;
-    height: 100dvh;
-  }
-  #app:has(.faceted-content .table-scroll.fill-height) > main {
-    padding-bottom: .5rem;
-  }
-  #app:has(.faceted-content .table-scroll.fill-height) .faceted-content > section {
-    margin-bottom: 0;
-  }
-  #app:has(.faceted-content .table-scroll.fill-height) > .site-footer {
-    position: absolute;
-    top: 100%;
-    width: 100%;
-    margin-top: 0;
-  }
+/* ===== List view =====
+   Flat paper, hairline rules, uppercase micro-labels, amber as the single
+   spot colour (active tab underline, hover rule, focus, links). */
+
+/* Sidebar: ruled sections with micro-label titles */
+.facet-sidebar-header strong,
+.facet-label,
+.range-values {
+  font-size: var(--label-size);
+  font-weight: 600;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+}
+.facet-sidebar-header {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--rule-strong);
+}
+.facet-divider {
+  border-top-color: var(--rule);
+}
+.facet-dropdown-trigger,
+.fts-search-box,
+.facet-search {
+  border-radius: 0;
+}
+.facet-dropdown-trigger {
+  border-color: var(--rule);
+  border-bottom-color: var(--rule-strong);
+}
+.range-value-box {
+  border-radius: 0;
+}
+
+/* Toolbar: text tabs + count */
+.faceted-toolbar {
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--rule-strong);
+}
+.faceted-toolbar .view-toggles {
+  gap: var(--space-3);
+}
+.faceted-toolbar .view-toggles button {
+  margin: 0;
+  padding: .35rem 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: var(--label-size);
+  font-weight: 600;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+}
+.faceted-toolbar .view-toggles button:hover {
+  color: var(--accent);
+}
+.faceted-toolbar .view-toggles button:not(.outline) {
+  color: var(--text);
+  border-bottom-color: var(--resin);
+}
+.faceted-toolbar .view-toggles button:focus-visible {
+  outline: 2px solid var(--resin);
+  outline-offset: 2px;
+}
+.faceted-count {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Table: ruled, label-style headers */
+.table-scroll thead th,
+.faceted-content thead th {
+  font-size: var(--label-size);
+  font-weight: 600;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--rule-strong);
+  background: var(--bg);
+}
+.table-scroll.fill-height thead th {
+  z-index: 1;
+  box-shadow: inset 0 -1px 0 var(--rule-strong);
+}
+.table-scroll td {
+  padding-block: .75rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Footer: pagination + page size, quiet */
+.faceted-footer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-top: var(--space-3);
+  margin-top: var(--space-2);
+  border-top: 1px solid var(--rule-strong);
+}
+.faceted-view:has(.fill-height) .faceted-toolbar {
+  flex: 0 0 auto;
+}
+.faceted-pagination button {
+  padding: .2rem .4rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.faceted-pagination button:hover:not(:disabled) {
+  color: var(--accent);
+  background: none;
+}
+.faceted-pagesize {
+  width: auto;
+  margin: 0;
+  padding: .2rem 2rem .2rem .6rem;
+  border-radius: 0;
+  font-size: var(--pihka-font-small);
+}
+.faceted-info {
+  margin-left: 0;
+}
+
+.facet-sidebar-header button {
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: var(--label-size);
+  font-weight: 600;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  text-decoration: underline;
+}
+.facet-sidebar-header button:hover {
+  color: var(--accent);
+  background: none;
+}
+
+/* ===== Cards and detail ===== */
+
+/* Text tabs for every view switcher (list and detail) */
+.view-toggles {
+  gap: var(--space-3);
+}
+.view-toggles button {
+  margin: 0;
+  padding: .35rem 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: var(--label-size);
+  font-weight: 600;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+}
+.view-toggles button:hover { color: var(--accent); background: none; }
+.view-toggles button:not(.outline) { color: var(--text); border-bottom-color: var(--resin); }
+.detail-view > .view-toggles {
+  padding-bottom: var(--space-2);
+  margin-bottom: var(--space-4);
+  border-bottom: 1px solid var(--rule-strong);
+}
+
+/* Cards: ruled modules, media first */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: var(--space-4);
+  padding-top: var(--space-3);
+}
+.record-card {
+  margin: 0;
+  padding: var(--space-2) 0 var(--space-3);
+  border: 0;
+  border-top: 1px solid var(--rule-strong);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+.record-card:hover { border-top-color: var(--resin); box-shadow: inset 0 1px 0 var(--resin); }
+.card-media {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 3 / 2;
+  margin-bottom: var(--space-3);
+  overflow: hidden;
+  background: var(--bg-subtle);
+  color: var(--text-muted);
+  font-size: var(--pihka-font-small);
+}
+.card-media img { width: 100%; height: 100%; object-fit: cover; }
+.card-title {
+  margin: 0 0 var(--space-2);
+  letter-spacing: -0.015em;
+}
+.card-title a { color: var(--text); text-decoration: none; }
+.card-title a:hover { color: var(--accent); }
+.card-facts { margin: 0; }
+.card-facts dd, .record-card dd { margin: 0 0 var(--space-2); }
+.card-label {
+  margin: var(--space-2) 0 0;
+  font-size: var(--label-size);
+  font-weight: 600;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Detail: kicker, display title, labelled fields */
+.detail-record { max-width: var(--grid-max); }
+.detail-kicker { margin: 0 0 var(--space-2); }
+.detail-title {
+  margin: 0 0 var(--space-4);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+}
+.detail-record table { margin-top: var(--space-3); }
+.detail-record tr { border-top: 1px solid var(--rule); }
+.detail-record tbody tr:hover { box-shadow: none; }
+.detail-label {
+  width: 12rem;
+  padding: var(--space-3) var(--space-3) var(--space-3) 0;
+  vertical-align: top;
+  text-align: left;
+  white-space: nowrap;
+  font-size: var(--label-size);
+  font-weight: 600;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.detail-record td { padding: var(--space-3) 0; }
+.detail-related {
+  margin-top: var(--space-5) !important;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--rule-strong);
+}
+.detail-related > h3 {
+  font-size: var(--label-size);
+  font-weight: 600;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+}
+
+/* ===== List page: title, sidebar active state ===== */
+.faceted-heading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+.faceted-heading h1 {
+  margin: 0;
+}
+
+.facet-sidebar-header {
+  margin-bottom: var(--space-3);
+}
+.facet-active-count {
+  margin-left: auto;
+  padding-right: var(--space-2);
+  font-size: var(--label-size);
+  font-weight: 700;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  color: var(--text);
+}
+.facet-sidebar-header .facet-active-count + button {
+  margin-left: 0;
+}
+
+/* Active facet: soft resin tint, with its own Clear link below the control */
+.facet-block {
+  padding: var(--space-1) var(--space-2);
+  margin: 0 calc(var(--space-2) * -1);
+  border-radius: var(--space-2);
+}
+.facet-block.is-active {
+  background: color-mix(in srgb, var(--resin) 28%, transparent);
+}
+.facet-block.is-active .facet-label,
+.facet-block.is-active .range-values {
+  color: var(--text);
+}
+.facet-block-clear {
+  display: block;
+  margin: 0 0 var(--space-1);
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: var(--label-size);
+  font-weight: 700;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+  text-decoration: underline;
+}
+.facet-block-clear:hover {
+  color: var(--charcoal);
+  background: var(--resin);
+}
+
+/* ===== Display type, pills and soft tables =====
+   Big Shoulders Display for titles (uppercase, tight), pill tabs and
+   pagination, resin-tint hover instead of black bars. */
+h1, h2,
+.home-title, .detail-title, .static-page h1, .faceted-heading h1,
+.perspective-card-name, .card-title {
+  font-family: var(--pihka-font-display);
+  text-transform: none;
+  font-weight: 500;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+h1 {
+  font-size: clamp(2.25rem, 5vw, 4rem);
+}
+.home-title {
+  font-size: clamp(2.75rem, 7.5vw, 7rem);
+  line-height: .98;
+}
+.faceted-heading h1 {
+  font-size: clamp(2rem, 3.2vw, 3rem);
+}
+.detail-title {
+  font-size: clamp(2.5rem, 6vw, 5rem);
+}
+.static-page h1 {
+  font-size: clamp(2.5rem, 6vw, 5rem);
+}
+.perspective-card-name,
+.card-title {
+  font-size: 1.75rem;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+.card-title {
+  font-size: 1.5rem;
+}
+
+/* View tabs and pagination: soft resin pills for the active item */
+.view-toggles,
+.faceted-toolbar .view-toggles {
+  gap: var(--space-1);
+}
+.view-toggles button,
+.faceted-toolbar .view-toggles button {
+  padding: .35rem .9rem;
+  border: 0;
+  border-radius: 999px;
+}
+.view-toggles button:hover,
+.faceted-toolbar .view-toggles button:hover {
+  background: color-mix(in srgb, var(--resin) 35%, transparent);
+  color: var(--text);
+}
+.view-toggles button:not(.outline),
+.faceted-toolbar .view-toggles button:not(.outline) {
+  background: var(--resin);
+  color: var(--charcoal);
+  border-bottom-color: transparent;
+}
+.faceted-pagination button {
+  min-width: 2rem;
+  border-radius: 999px;
+}
+.faceted-pagination button:disabled {
+  opacity: .35;
+}
+
+/* Softer table: hairline rows, tinted hover */
+tbody tr {
+  border-bottom: 1px solid var(--rule);
+}
+tbody tr:hover {
+  background: color-mix(in srgb, var(--resin) 22%, transparent);
+  box-shadow: none;
+}
+.facet-dropdown-trigger {
+  background: var(--surface);
+}
+.perspective-section-title {
+  font-family: var(--pihka-font);
+  font-size: var(--label-size);
+  font-weight: 700;
+  letter-spacing: var(--label-tracking);
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+/* Home hero: a resin blob with an off-register outline loop, behind
+   the end of the title. */
+.home-hero {
+  position: relative;
+}
+.home-hero > * {
+  position: relative;
+  z-index: 1;
+}
+.home-hero > .home-art {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  right: 3%;
+  width: clamp(10rem, 29vw, 27rem);
+  height: auto;
+  overflow: visible;
+  pointer-events: none;
+  --art-fill: 1;
+}
+.home-art .art-fill {
+  fill: var(--resin);
+  fill-opacity: var(--art-fill);
+  mix-blend-mode: multiply;
+}
+.home-art .art-line {
+  fill: none;
+  stroke: var(--text);
+  stroke-width: 2.5px;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+[data-theme=dark] .home-hero > .home-art { --art-fill: .45; }
+[data-theme=dark] .home-art .art-fill { mix-blend-mode: normal; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme=light]) .home-hero > .home-art { --art-fill: .45; }
+  :root:not([data-theme=light]) .home-art .art-fill { mix-blend-mode: normal; }
+}
+.home-description {
+  max-width: 40rem;
+  margin-top: var(--space-4);
+  font-size: 1.125rem;
+  line-height: 1.55;
+}
+.home-description p {
+  margin: 0 0 var(--space-3);
+}
+.home-description p:last-child {
+  margin-bottom: 0;
+}
+
+/* Pagination: ‹ Page [5] of 70 › — the page number is a typeable box. */
+.faceted-pagination {
+  gap: var(--space-3);
+}
+.pagination-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--pihka-font-small);
+  font-variant-numeric: tabular-nums;
+}
+.faceted-pagination .pagination-input {
+  box-sizing: content-box;
+  height: auto;
+  min-height: 0;
+  line-height: 1.4;
+  margin: 0;
+  padding: .1rem .2rem;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--resin) 22%, transparent);
+  color: var(--text);
+  font: inherit;
+  font-weight: 700;
+  text-align: center;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+.pagination-input::-webkit-outer-spin-button,
+.pagination-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.pagination-input:hover {
+  border-color: var(--resin);
+}
+.pagination-input:focus {
+  border-color: var(--resin);
+  background: var(--surface);
+  box-shadow: none;
+  outline: 0;
+}
+.pagination-total {
+  color: var(--text-muted);
+}
+
+/* Range values are typeable: same look as the resin-tint boxes, flat input. */
+.range-values input.range-value-input {
+  box-sizing: content-box;
+  height: auto;
+  min-height: 0;
+  min-width: 0;
+  margin: 0;
+  padding: .1em .3em;
+  font: inherit;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: center;
+  color: var(--text);
+  -moz-appearance: textfield;
+  appearance: textfield;
+  cursor: text;
+}
+.range-values input.range-value-input::-webkit-outer-spin-button,
+.range-values input.range-value-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.range-values input.range-value-input:hover {
+  background: color-mix(in srgb, var(--resin) 38%, transparent);
+}
+.range-values input.range-value-input:focus {
+  background: var(--surface);
+  border-color: var(--resin);
+  box-shadow: none;
+  outline: 0;
 }

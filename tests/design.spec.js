@@ -55,20 +55,17 @@ for (const mode of ["download", "http-vfs"]) {
         await expect(page.locator("section tbody tr")).toHaveCount(25);
         const headerBrand = page.locator("#app > header").getByRole("img", { name: "Pihka", exact: true });
         const footer = page.locator("#app > footer");
-        const footerBrand = footer.getByRole("img", { name: "Pihka", exact: true });
         await expect(headerBrand).toBeVisible();
-        await expect(footerBrand.locator("use")).toHaveAttribute("href", await headerBrand.locator("use").getAttribute("href"));
+        await expect(footer.getByRole("img", { name: "Pihka", exact: true })).toHaveCount(0);
         for (const theme of ["light", "dark"]) {
             await page.locator("html").evaluate((element, value) => element.setAttribute("data-theme", value), theme);
             // Pico links animate color changes; compare after the transition.
             await expect.poll(() => page.evaluate(() =>
                 window.getComputedStyle(document.querySelector("header .brand-logo")).color ===
-                window.getComputedStyle(document.querySelector("section tbody a")).color,
+                window.getComputedStyle(document.body).color,
             )).toBe(true);
         }
         const headerSize = await headerBrand.boundingBox();
-        const footerSize = await footerBrand.boundingBox();
-        expect(footerSize.width).toBeGreaterThan(headerSize.width);
         expect(headerSize.width).toBeGreaterThan(headerSize.height);
         await expect(footer.locator(".footer-logos img")).toHaveCount(1);
         await expect(footer).not.toContainText("Gutenberg");
@@ -76,8 +73,9 @@ for (const mode of ["download", "http-vfs"]) {
         await headerBrand.click();
         await expect(page.locator(".facet-sidebar")).toHaveCount(0);
         for (const lang of ["en", "nl"]) {
-            await page.goto(`${server.origin}/${mode}/#/${lang}/page/about`);
-            await expect(page.locator('.static-page a[href*="gutenberg.org"]')).toBeVisible();
+            await page.goto(`${server.origin}/${mode}/#/`);
+            await page.locator(`.lang-switcher button[data-lang="${lang}"]`).click();
+            await expect(page.locator('.home-description a[href*="gutenberg.org"]')).toBeVisible();
             await expect(page.locator("#app > footer")).not.toContainText("Gutenberg");
         }
     });

@@ -1,48 +1,68 @@
 // @ts-check
 import { h, Fragment } from "preact";
 import { buildPath } from "../runtime/router.js";
-import { localize, visibleColumns } from "../runtime/table-config.js";
+import { localize } from "../runtime/table-config.js";
 import { preferredView } from "../runtime/perspectives.js";
+import { registeredComponent } from "../runtime/component-host.js";
+import { t } from "../runtime/strings.js";
+import HomeArt from "./home-art.js";
+
+const GlobalSearchInput = registeredComponent("control", "global-search");
 
 /**
- * Homepage navigation: configured perspectives first, then the auto-
- * generated table cards. Section headings only appear when both groups
- * exist (an unconfigured app just sees its tables, a fully curated app
- * may hide all tables and see only perspectives).
+ * Homepage: the title and a large search line (typography is the hero),
+ * the configured perspectives ("Views") as numbered rows, then the
+ * remaining tables in a section that starts collapsed. Tables flagged
+ * `hidden` in config never reach this list.
  *
  * Props:
  *   perspectives  - Perspective[] from loadPerspectives()
- *   store         - DataStore instance (for column counts)
+ *   store         - DataStore instance
  *   lang          - Current language code
+ *   site          - optional { title, description, tablesCollapsed } from
+ *                   config.json (title/description: string or { en, nl, … };
+ *                   description is HTML)
+ *   searchEnabled - whether any table has a full-text index
  */
-export default function PerspectiveList({ perspectives, store, lang = "en" }) {
+export default function PerspectiveList({ perspectives, lang = "en", site = null, searchEnabled = false }) {
     const configured = perspectives.filter(p => p.kind === "perspective");
     const tables = perspectives.filter(p => p.kind !== "perspective");
-    const showHeadings = configured.length > 0 && tables.length > 0;
+    // Tables start open so no functionality is hidden; an app with curated
+    // views can collapse them with `site.tablesCollapsed: true`. Without
+    // views the tables are the entry point and always start open.
+    const tablesOpen = configured.length === 0 || site?.tablesCollapsed !== true;
+    // Trusted HTML from config.json, like footer credits.
+    const description = localize(site?.description, lang, "");
 
     return h(Fragment, null,
-        configured.length > 0 && h(Fragment, null,
-            showHeadings && h("h2", { class: "perspective-section-title" }, "Perspectives"),
-            h(Grid, { perspectives: configured, store, lang }),
+        h("section", { class: "home-hero" },
+            h(HomeArt, null),
+            h("h1", { class: "home-title" }, localize(site?.title, lang, t("home.title", lang))),
+            description && h("div", { class: "home-description", dangerouslySetInnerHTML: { __html: description } }),
+            searchEnabled && h(GlobalSearchInput, { lang, value: "", variant: "hero" }),
         ),
-        tables.length > 0 && h(Fragment, null,
-            showHeadings && h("h2", { class: "perspective-section-title" }, "Tables"),
-            h(Grid, { perspectives: tables, store, lang }),
+        configured.length > 0 && h("section", { class: "home-section" },
+            h("h2", { class: "perspective-section-title" }, t("home.views", lang)),
+            h(Grid, { perspectives: configured, lang }),
+        ),
+        tables.length > 0 && h("details", { class: "home-section home-tables", open: tablesOpen },
+            h("summary", { class: "perspective-section-title" },
+                h("span", null, t("home.tables", lang), " ", h("span", { class: "home-count" }, `(${tables.length})`)),
+            ),
+            h(Grid, { perspectives: tables, lang }),
         ),
     );
 }
 
-function Grid({ perspectives, store, lang }) {
+function Grid({ perspectives, lang }) {
     return h("div", { class: "perspective-grid" },
         perspectives.map(p => {
             const view = preferredView(p) || "table";
-            const schema = store.getSchema(p.table);
-            const colCount = schema ? visibleColumns(schema.columns).length : null;
-            const kind = p.kind === "perspective" ? "perspective" : "table";
-            const meta = colCount != null ? `${kind} (${colCount} columns)` : kind;
+            const description = localize(p.description, lang, "");
             return h("a", { key: p.id, class: "perspective-card", href: buildPath(`/${lang}/${p.id}/${view}`) },
                 h("span", { class: "perspective-card-name" }, localize(p.label, lang, p.name)),
-                h("small", { class: "perspective-card-meta" }, meta),
+                description && h("span", { class: "perspective-card-meta" }, description),
+                h("span", { class: "perspective-card-arrow", "aria-hidden": "true" }, "→"),
             );
         }),
     );
