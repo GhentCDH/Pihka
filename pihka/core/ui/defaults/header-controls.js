@@ -43,7 +43,7 @@ function FullscreenToggle({ lang }) {
  * Props: lang, languages, onLangChange
  */
 export default function HeaderControls({ lang, languages, onLangChange }) {
-    return h("div", { class: "header-controls", role: "toolbar", "aria-label": t("ui.controls", lang) },
+    return h("div", { class: "header-controls", role: "group", "aria-label": t("ui.controls", lang) },
         h(ThemeToggle, { lang }),
         h(FullscreenToggle, { lang }),
         h(LangSwitcher, { lang, languages, onChange: onLangChange }),

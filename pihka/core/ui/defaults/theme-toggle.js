@@ -6,14 +6,18 @@ import { t } from "../runtime/strings.js";
 
 /**
  * Apply a theme to the document. "auto" removes the data-theme attribute so
- * the OS preference (prefers-color-scheme) decides.
+ * the OS preference (prefers-color-scheme) decides. The color-scheme <meta>
+ * follows along so native UI (scrollbars, form controls) matches.
  */
 function applyTheme(theme) {
-    if (theme === "light" || theme === "dark") {
+    const pinned = theme === "light" || theme === "dark";
+    if (pinned) {
         document.documentElement.dataset.theme = theme;
     } else {
         delete document.documentElement.dataset.theme;
     }
+    const meta = document.querySelector('meta[name="color-scheme"]');
+    if (meta) meta.setAttribute("content", pinned ? theme : "light dark");
 }
 
 const systemQuery = () => window.matchMedia("(prefers-color-scheme: dark)");
@@ -21,7 +25,10 @@ const systemQuery = () => window.matchMedia("(prefers-color-scheme: dark)");
 /**
  * Light/dark switch. Follows the OS until the reader picks a mode; the icon
  * always shows the mode currently in effect (sun = light, moon = dark), and a
- * click switches to the other one and remembers it.
+ * click switches to the other one. Switching to a mode that differs from the
+ * OS stores it; switching back to the OS mode clears the stored choice, so
+ * the site follows the OS again instead of being pinned invisibly. A stored
+ * choice is never cleared just because the OS later happens to match it.
  *
  * Props: lang - language for the tooltip.
  */
@@ -46,8 +53,9 @@ export default function ThemeToggle({ lang = "en" }) {
         title: label,
         "aria-label": label,
         onClick: () => {
-            setPref("theme", next);
-            applyTheme(next);
+            const followSystem = next === (systemDark ? "dark" : "light");
+            setPref("theme", followSystem ? null : next);
+            applyTheme(followSystem ? "auto" : next);
         },
     }, effective === "dark" ? h(MoonIcon, null) : h(SunIcon, null));
 }

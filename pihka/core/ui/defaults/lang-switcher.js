@@ -9,7 +9,7 @@ import { t } from "../runtime/strings.js";
  */
 export default function LangSwitcher({ lang, languages, onChange }) {
     if (!Array.isArray(languages) || languages.length < 2) return null;
-    return h("div", { class: "lang-switcher", role: "toolbar", "aria-label": t("ui.languages", lang) },
+    return h("div", { class: "lang-switcher", role: "group", "aria-label": t("ui.languages", lang) },
         languages.map(code => h("button", {
             key: code,
             type: "button",
