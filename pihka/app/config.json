@@ -16,12 +16,6 @@
             "nl": "<p>Een demonstratie van <strong>Pihka</strong> door het Ghent Centre for Digital Humanities: een kleine, illustratieve steekproef van literaire auteurs en hun werken om tabellen, samengestelde weergaven, kaarten, facetfiltering en volledig-tekst zoeken uit te proberen.</p><p>De volledige teksten komen van <a href=\"https://www.gutenberg.org\" target=\"_blank\" rel=\"noopener noreferrer\">Project Gutenberg</a>. De data is enkel bedoeld als demonstratie; zie de <a href=\"#/nl/page/instructions\">handleiding</a> om je eigen dataset te publiceren.</p>"
         }
     },
-    "datasource": {
-        "type": "http-vfs",
-        "options": {
-            "immutable": true
-        }
-    },
     "perspectives": [
         {
             "id": "author-overview",
@@ -246,7 +240,6 @@
         }
     },
     "enginePlugins": [
-        "extensions/http-vfs/http-vfs-component.js",
         "extensions/geo-filter/geo-filter-engine.js"
     ],
     "uiPlugins": [
