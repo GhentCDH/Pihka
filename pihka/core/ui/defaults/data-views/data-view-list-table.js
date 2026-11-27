@@ -67,14 +67,17 @@ function Cell({ col, value, row, columns, fkResolved, lang, perspectiveId }) {
  *   fkResolved    - (optional) { colName: { displayMap, referencedTable } }
  *   lang          - (optional) current language code
  *   perspectiveId - (optional) perspective id for detail links
+ *   primary       - (optional) the page's main table (top-level list view):
+ *                   scrolls with the page, header sticks to the viewport
  *   fill          - (optional) fill the remaining viewport height and
- *                   scroll rows inside the wrapper (top-level list view);
+ *                   scroll rows inside the wrapper (for custom views);
  *                   default is natural height with page scrolling
  *                   (related sections, search results)
  */
-export default function DataViewListTable({ columns, rows, sort = null, onSort = null, fkResolved = null, lang = null, perspectiveId = null, fill = false }) {
+export default function DataViewListTable({ columns, rows, sort = null, onSort = null, fkResolved = null, lang = null, perspectiveId = null, fill = false, primary = false }) {
     const cols = visibleColumns(columns);
-    return h("div", { class: fill ? "table-scroll fill-height" : "table-scroll" },
+    const cls = ["table-scroll", fill && "fill-height", primary && "is-primary"].filter(Boolean).join(" ");
+    return h("div", { class: cls },
         rows.length === 0
             ? h("p", null, "No rows.")
             : h("table", null,

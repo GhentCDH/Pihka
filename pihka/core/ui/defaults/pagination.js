@@ -14,8 +14,9 @@ import { t } from "../runtime/strings.js";
  *   totalPages   - total page count
  *   onPageChange - callback(newPage), 0-based
  *   lang         - language for the labels (default "en")
+ *   keyboard     - the parent pages with ← / →: announce the shortcuts
  */
-export default function Pagination({ page, totalPages, onPageChange, lang = "en" }) {
+export default function Pagination({ page, totalPages, onPageChange, lang = "en", keyboard = false }) {
     const [draft, setDraft] = useState(String(page + 1));
     const cancelled = useRef(false);
 
@@ -53,6 +54,8 @@ export default function Pagination({ page, totalPages, onPageChange, lang = "en"
         h("button", {
             type: "button",
             "aria-label": t("page.previous", lang),
+            title: t("page.previous", lang) + (keyboard ? " (←)" : ""),
+            "aria-keyshortcuts": keyboard ? "ArrowLeft" : undefined,
             disabled: page <= 0,
             onClick: () => onPageChange(page - 1),
         }, "‹"),
@@ -75,6 +78,8 @@ export default function Pagination({ page, totalPages, onPageChange, lang = "en"
         h("button", {
             type: "button",
             "aria-label": t("page.next", lang),
+            title: t("page.next", lang) + (keyboard ? " (→)" : ""),
+            "aria-keyshortcuts": keyboard ? "ArrowRight" : undefined,
             disabled: page >= totalPages - 1,
             onClick: () => onPageChange(page + 1),
         }, "›"),
