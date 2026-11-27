@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 // Helper: load a route directly. Routes are hash fragments, so deep links
 // load on any static server without rewrite rules. Wait for the app header
 // (only the loaded app renders one — the loading/error screen does not).
-// The home page keeps the Tables section collapsed when curated views exist.
+// The Tables section starts open, but an app may collapse it (site.tablesCollapsed).
 async function openTables(page) {
   const details = page.locator("details.home-tables");
   if (!(await details.evaluate(element => element.open))) await details.locator("summary").click();

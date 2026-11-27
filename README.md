@@ -75,7 +75,8 @@ The home page opens with a title, a short description and the search box. Set th
 
 Without `site` the home page shows a generic title. Perspectives and tables can carry an optional
 `description`, shown on their tile. Curated perspectives appear first, as *Views*; the remaining
-tables sit in a *Tables* section that starts collapsed (hide helper tables with `"hidden": true`).
+tables sit in a *Tables* section that starts open (set `"tablesCollapsed": true` in `site` to
+collapse it; hide helper tables with `"hidden": true`).
 
 The footer carries the dataset information. Override `app/footer.json` (core ships a placeholder template) with
 a `dataset` list, conventionally the preferred citation, the licence and a contact:

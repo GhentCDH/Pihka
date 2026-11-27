@@ -19,15 +19,18 @@ const GlobalSearchInput = registeredComponent("control", "global-search");
  *   perspectives  - Perspective[] from loadPerspectives()
  *   store         - DataStore instance
  *   lang          - Current language code
- *   site          - optional { title, description } (each string or
- *                   { en, nl, … }) from config.json; description is HTML
+ *   site          - optional { title, description, tablesCollapsed } from
+ *                   config.json (title/description: string or { en, nl, … };
+ *                   description is HTML)
  *   searchEnabled - whether any table has a full-text index
  */
 export default function PerspectiveList({ perspectives, lang = "en", site = null, searchEnabled = false }) {
     const configured = perspectives.filter(p => p.kind === "perspective");
     const tables = perspectives.filter(p => p.kind !== "perspective");
-    // Without curated views the tables are the entry point, so keep them open.
-    const tablesOpen = configured.length === 0;
+    // Tables start open so no functionality is hidden; an app with curated
+    // views can collapse them with `site.tablesCollapsed: true`. Without
+    // views the tables are the entry point and always start open.
+    const tablesOpen = configured.length === 0 || site?.tablesCollapsed !== true;
     // Trusted HTML from config.json, like footer credits.
     const description = localize(site?.description, lang, "");
 
