@@ -70,7 +70,16 @@ export function Layout({ crumbs = null, lang = null, languages = null, onLangCha
  */
 export function App({ perspectives, store, defaultLang, languages = null, menu = [], footer = null, site = null }) {
     const route = useRouter();
-    const { lang, perspective: perspectiveId, id: rowId, view } = route;
+    // "#/en" (or "#/en/") is the home page in that language. The router reads
+    // a single segment as a legacy perspective URL, but it cannot know the
+    // configured languages; a real perspective with that id still wins.
+    const langs = Array.isArray(languages) ? languages : [defaultLang];
+    const homeLang = route.legacy && !route.id && !route.view
+        && langs.includes(route.perspective)
+        && !perspectives.some(p => p.id === route.perspective)
+        ? route.perspective : null;
+    const { lang, perspective: perspectiveId, id: rowId, view } =
+        homeLang ? { ...route, lang: homeLang, perspective: null } : route;
 
     // Language preference: the URL's lang segment wins; on routes without
     // one (home) the persisted choice applies, then the configured default.
@@ -86,6 +95,8 @@ export function App({ perspectives, store, defaultLang, languages = null, menu =
             navigate(`/${next}/search`, route.params, { replace: true });
         } else if (perspectiveId === "page" && rowId) {
             navigate(`/${next}/page/${rowId}`, route.params, { replace: true });
+        } else if (lang && !perspectiveId) {
+            navigate(`/${next}`, route.params, { replace: true });
         } else if (lang && perspectiveId) {
             const path = rowId
                 ? `/${next}/${perspectiveId}/${rowId}/${view}`
