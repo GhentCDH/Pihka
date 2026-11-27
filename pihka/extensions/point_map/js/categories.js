@@ -10,6 +10,8 @@ export const PALETTE = [
 ];
 export const OTHER_COLOR = "#b8b8b8";
 
+/** @typedef {{ value: string|null, color: string, count: number, types?: number, neutral?: boolean }} LegendEntry */
+
 export const categoryOf = (point, column) => String(point.row?.[column] ?? "—");
 
 /**
@@ -28,6 +30,7 @@ export function categorize(points, column, { maxTypes = PALETTE.length, neutral 
     const colors = new Map(
         ranked.slice(0, Math.min(maxTypes, PALETTE.length)).map(([value], i) => [value, PALETTE[i]]),
     );
+    /** @type {LegendEntry[]} */
     const legend = [...colors].map(([value, color]) => ({ value, color, count: counts.get(value) }));
     const others = ranked.slice(colors.size);
     if (others.length)
