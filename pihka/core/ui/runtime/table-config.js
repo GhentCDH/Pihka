@@ -1,7 +1,7 @@
 // @ts-check
 /**
  * Annotate schema metadata in place with display configuration.
- * Tables gain `hidden`, `label`, and `options`; columns gain `hidden`,
+ * Tables gain `hidden`, `label`, `description`, and `options`; columns gain `hidden`,
  * `label`, `displayType`, and `format`.
  *
  * Note: hiding is a display concern, not access control — the data stays
@@ -20,6 +20,7 @@ export function applyTableConfig(meta, config, registry) {
 
         tableMeta.hidden = cfg.hidden === true;
         tableMeta.label = cfg.label ?? null;
+        tableMeta.description = cfg.description ?? null;
         tableMeta.options = cfg.options && typeof cfg.options === "object" ? cfg.options : null;
 
         const columnsCfg = cfg.columns;
