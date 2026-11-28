@@ -145,10 +145,10 @@ Similar to views, Pihka should allow plugging in standard, field-related represe
 Pihka is made for presenting data, not for editing or managing it. It should be seen as a way to present data. Of course, it also has uses beyond publication, for example as a quick way to browse and check research data while a project is still running.
 
 
-### Bibliography 
+### Bibliography
 
 *2018 Software sustainability: Research and practice from a software architecture viewpoint*
-Colin C. Venters a, [Rafael Capilla b](https://www.sciencedirect.com/author/8931696900/rafael-capilla), Stefanie Betz c, [Birgit Penzenstadler d](https://www.sciencedirect.com/author/24765180000/birgit-penzenstadler), [Tom Crick e](https://www.sciencedirect.com/author/14032736300/tom-crick), Steve Crouch f, [Elisa Yumi Nakagawa g](https://www.sciencedirect.com/author/7007008701/elisa-yumi-nakagawa), Christoph Becker h, Carlos Carrillo i
+Colin C. Venters, Rafael Capilla, Stefanie Betz, Birgit Penzenstadler, Tom Crick, Steve Crouch, Elisa Yumi Nakagawa, Christoph Becker, Carlos Carrillo
 @article{venters2018software,
   title={Software sustainability: Research and practice from a software architecture viewpoint},
   author={Venters, Colin C and Capilla, Rafael and Betz, Stefanie and Penzenstadler, Birgit and Crick, Tom and Crouch, Steve and Nakagawa, Elisa Yumi and Becker, Christoph and Carrillo, Carlos},
@@ -160,7 +160,7 @@ Colin C. Venters a, [Rafael Capilla b](https://www.sciencedirect.com/author/8931
 }
 
 
-Life and Death of DH Projects: A Preliminary Investigation of Their Lifecycles in Italy, Erica Andreose, Giorgia Crosilla, Remo Grillo , Gianmarco Spinaci
+Life and Death of DH Projects: A Preliminary Investigation of Their Lifecycles in Italy, Erica Andreose, Giorgia Crosilla, Remo Grillo, Gianmarco Spinaci
 @incollection{andreose2025life,
   title={Life and Death of DH Projects: A Preliminary Investigation of Their Lifecycles in Italy},
   author={Andreose, Erica and Crosilla, Giorgia and Grillo, Remo and Spinaci, Gianmarco and others},
@@ -173,8 +173,11 @@ Endings Project
 https://endings.uvic.ca/principles.html
 
 
+M. Wu, W. Dong, Q. Zhao, Z. Pan and B. Hua, "An Empirical Study of Lightweight JavaScript Engines," *2023 IEEE 23rd International Conference on Software Quality, Reliability, and Security Companion (QRS-C)*, Chiang Mai, Thailand, 2023, pp. 413-422, doi: 10.1109/QRS-C60940.2023.00103.
 
-2023 Sustainable software engineering: Reflections on advances in research and practice \nColin C. Venters a b , Rafael Capilla c g , Elisa Yumi Nakagawa d g , Stefanie Betz e g , Birgit Penzenstadler f g , Tom Crick h , Ian Brooks i
+
+*2023 Sustainable software engineering: Reflections on advances in research and practice*
+Colin C. Venters, Rafael Capilla, Elisa Yumi Nakagawa, Stefanie Betz, Birgit Penzenstadler, Tom Crick, Ian Brooks
 @article{venters2023sustainable,
   title={Sustainable software engineering: Reflections on advances in research and practice},
   author={Venters, Colin C and Capilla, Rafael and Nakagawa, Elisa Yumi and Betz, Stefanie and Penzenstadler, Birgit and Crick, Tom and Brooks, Ian},
@@ -186,7 +189,7 @@ https://endings.uvic.ca/principles.html
 }
 
 
-digital humanities quarterly special issue intro text
+Digital Humanities Quarterly special issue introduction
 @article{holmes2023introduction,
   title={Introduction to Special Issue: Project Resiliency in the Digital Humanities.},
   author={Holmes, Martin and Jenstad, Janelle and Huculak, J Matthew},
@@ -206,3 +209,4 @@ https://dhq.digitalhumanities.org/vol/17/1/000669/000669.html
   number={1},
   year={2023}
 }
+
