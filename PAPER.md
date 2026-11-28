@@ -136,10 +136,9 @@ In practice, the extension uses the `@ghentcdh/annotated-text` library (<https:/
 *Figure 7. The text annotation extension, highlighting person and place annotations in a text.*
 
 
-### Custom machine readable formats
+### Extension: Custom machine-readable formats
 
-Similar to views Pihka should allow to plug-in field related standard representations: xml formats, json formats, TEI documents, .. through the use of components which yield this info. 
-
+Similar to views, Pihka should allow plugging in standard, field-related representations (XML formats, JSON formats, TEI documents, and so on) through components which yield this information.
 
 ### Bibliography 
 
