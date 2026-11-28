@@ -140,6 +140,11 @@ In practice, the extension uses the `@ghentcdh/annotated-text` library (<https:/
 
 Similar to views, Pihka should allow plugging in standard, field-related representations (XML formats, JSON formats, TEI documents, and so on) through components which yield this information.
 
+## Limitations and non-goals
+
+Pihka is made for presenting data, not for editing or managing it. It should be seen as a way to present data. Of course, it also has uses beyond publication, for example as a quick way to browse and check research data while a project is still running.
+
+
 ### Bibliography 
 
 *2018 Software sustainability: Research and practice from a software architecture viewpoint*
