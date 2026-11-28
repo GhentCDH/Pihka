@@ -101,10 +101,15 @@ Pihka allows registering components that show detail views or list views for (fi
 
 ### Extension: Mapping without external services
 
+DH projects often have a mapping component. Like the rest of Pihka, mapping works without external services or software running on a server. The implementation uses locally hosted PMTiles basemaps, with independently swappable assets for the map and location-filter extensions. A publication can provide a basemap suited to its region of interest without depending on a third-party tile service. A rough version of the world map (6 MB) is provided; if building-level deep zoom is needed, a 120 GB file can replace the 6 MB version.
 
-DH project often have a mapping component. Similarly to the rest of Pihka mapping can be done without the need for external services or software running on a server. The implementation uses locally hosted PMTiles basemaps, with independently swappable assets for the map and location-filter extensions. A publication can provide a basemap suited to its region of interest without depending on a third-party tile service.
+There is no dependency on external mapping services, expiring API keys or rate limiting.
 
-Protomaps https://protomaps.com/  and the associated PMTiles technology. 
+The maps are built on Protomaps (<https://protomaps.com/>) and the associated PMTiles technology for static map hosting (<https://docs.protomaps.com/pmtiles/>).
+
+![A Pihka map view of authors: clustered markers on a locally hosted world basemap, with a location facet in the sidebar.](paper/images/screenshot-map.png)
+
+*Figure 5. The map extension in the Pihka demo, showing authors on a locally hosted PMTiles basemap.*
 
 
 ### Extension: IIIF viewer
