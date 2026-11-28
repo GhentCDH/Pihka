@@ -36,9 +36,12 @@ open http://localhost:3000
 
 Open http://localhost:3000 and browse the included demo database.
 
-The demo selects the optional HTTP VFS datasource and ships with prebuilt search
-indexes and its author-bibliography view. Core still defaults to downloading when
-`datasource` is omitted. After editing demo rows, run `npm run prepare-sample-db`
+The demo uses the default datasource: it downloads the SQLite file once and
+queries it in memory. The database ships with prebuilt search indexes and its
+author-bibliography view, so startup skips indexing. To read pages through HTTP
+range requests instead, enable the optional HTTP VFS datasource in
+`pihka/app/config.json` (see [Optional HTTP Range Access](#optional-http-range-access)).
+After editing demo rows, run `npm run prepare-sample-db`
 (Node.js 22.13 or newer) to refresh the published indexes without regenerating rows.
 The sample database generator also runs this preparation step.
 
@@ -109,6 +112,12 @@ For larger, immutable published databases, the optional
 HTTP range requests instead. It vendors its own dependencies, needs no build
 step, and requires a range-capable host. Search indexes and perspective views
 must already exist in the published database; this source is strictly read-only.
+Enable it with:
+
+```json
+"enginePlugins": ["extensions/http-vfs/http-vfs-component.js"],
+"datasource": { "type": "http-vfs", "options": { "immutable": true } }
+```
 
 # credits
 
