@@ -20,7 +20,8 @@ Any table or perspective whose schema has numeric latitude/longitude columns
 
 - a 🌍 **map list view** — all filtered rows as markers, popups showing the
   row with a "View details" link;
-- a 🌍 **map detail view** — the single row's location.
+- a 🌍 **map detail view** — the single row's location;
+- optionally a ▦ **areas list view** (see [Area maps](#area-maps)).
 
 Without the extension, geo tables simply have no map views.
 
@@ -45,6 +46,42 @@ entry. Rows with an empty category fall in "—". With clustering, each color
 clusters on its own and its clusters take that color, so clusters of
 different colors can overlap.
 
+## Area maps
+
+A table or perspective with a `colorBy` column can also get a ▦ **areas
+list view**, in the style of a dialect atlas: every row is a dot in its
+category's color, and the region around each location takes the color of
+its nearest location's category. Switch it on with `areas`:
+
+```json
+"options": {
+    "point_map": {
+        "colorBy": "lexical_type",
+        "maxTypes": 10,
+        "neutral": ["no reconstruction"],
+        "areas": { "maxDistanceKm": 150 }
+    }
+}
+```
+
+`"areas": true` uses the defaults. The view stays hidden without `areas` or
+without a `colorBy` column. Colors, the "other" group and `neutral` work as
+for colored markers (the same `categorize()` in `js/categories.js`), so the
+map and areas views agree; `neutral` values are grey and draw no area. An
+`areas` object can override `colorBy`, `maxTypes` and `neutral` for this view
+only, and adds:
+
+- `maxDistanceKm` (default 150) — how far an area reaches from a location;
+- `maxSites` (default 5000) — above this many distinct locations only the
+  dots are drawn, with a note in the legend.
+
+A location with several rows takes its most frequent category. The regions
+come from a lat/lon grid (at most 80,000 cells); the area layer is drawn
+below the basemap water, so seas stay blue, and the view frames the central
+90% of the locations so a few mistyped coordinates do not zoom it out. The
+areas show where the data is, not real dialect borders. The calculation is
+in `js/areas.js`.
+
 ## Basemap
 
 The world basemap is served from `assets/world.pmtiles` — fully static, no
@@ -57,8 +94,10 @@ schema layers.
 `js/map-layers.js` (style, per-color cluster sources and pins, without
 Preact), `js/map-view.js` (shared Preact map), `js/map-popup.js`,
 `js/maplibre-shim.js` (loads the MapLibre ES module on demand),
-`js/pmtiles-protocol.js`, `js/map-bounds-filter.js` (pure viewport control),
-and the two registered views. The shared plumbing is deliberately importable
+`js/pmtiles-protocol.js`, `js/categories.js` and `js/areas.js` (pure
+category colors and area grid), `js/map-legend.js`, and the registered views
+(`js/data-view-list-map.js`, `js/data-view-detail-map.js`,
+`js/data-view-list-areas.js`). The shared plumbing is deliberately importable
 — future map extensions (e.g. a heat map) can build on it. A custom UI that
 does not use the component registry can draw the same clustered map with
 `map-layers.js`, `maplibre-shim.js` and `pmtiles-protocol.js` alone (see the

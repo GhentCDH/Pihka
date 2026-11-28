@@ -321,7 +321,8 @@ export default function MapView({
     );
 }
 
-function openPopup(maplibregl, map, point, popupNodesRef, popupsRef, popupProps) {
+/** Open a popup for `point` that renders the registered popup component. */
+export function openPopup(maplibregl, map, point, popupNodesRef, popupsRef, popupProps) {
     const { PopupComponent, tableName, columns, fkResolved, lang, perspectiveId, registry } = popupProps;
     const node = document.createElement("div");
     popupNodesRef.current.add(node);
