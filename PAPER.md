@@ -210,3 +210,42 @@ https://dhq.digitalhumanities.org/vol/17/1/000669/000669.html
   year={2023}
 }
 
+
+The IPEM-archive Conservation and Digitalization Project, Marc Leman, Jelle Dierickx, Gaëtan Martens
+https://doi.org/10.1076/jnmr.30.4.389.7498
+@article{leman2001ipem,
+  title={The {IPEM}-archive Conservation and Digitalization Project},
+  author={Leman, Marc and Dierickx, Jelle and Martens, Ga{\"e}tan},
+  journal={Journal of New Music Research},
+  volume={30},
+  number={4},
+  pages={389--393},
+  year={2001},
+  publisher={Informa UK Limited},
+  doi={10.1076/jnmr.30.4.389.7498}
+}
+
+Applications of duplicate detection: linking meta-data and merging music archives. The experience of the IPEM historical archive of electronic music, Federica Bressan, Joren Six, Marc Leman
+https://doi.org/10.1145/3144749.3144759
+@inproceedings{bressan2017applications,
+  title={Applications of duplicate detection: linking meta-data and merging music archives: The experience of the {IPEM} historical archive of electronic music},
+  author={Bressan, Federica and Six, Joren and Leman, Marc},
+  booktitle={Proceedings of the 4th International Workshop on Digital Libraries for Musicology (DLfM '17)},
+  pages={45--48},
+  year={2017},
+  publisher={ACM},
+  doi={10.1145/3144749.3144759}
+}
+
+Applications of Duplicate Detection in Music Archives: From Metadata Comparison to Storage Optimisation, Joren Six, Federica Bressan, Marc Leman
+https://doi.org/10.1007/978-3-319-73165-0_10
+@incollection{six2018applications,
+  title={Applications of Duplicate Detection in Music Archives: From Metadata Comparison to Storage Optimisation},
+  author={Six, Joren and Bressan, Federica and Leman, Marc},
+  booktitle={Digital Libraries and Multimedia Archives (IRCDL 2018)},
+  series={Communications in Computer and Information Science},
+  pages={101--113},
+  year={2018},
+  publisher={Springer International Publishing},
+  doi={10.1007/978-3-319-73165-0_10}
+}
