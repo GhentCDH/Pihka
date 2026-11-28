@@ -24,7 +24,7 @@ for (const mode of ["download", "http-vfs"]) {
         const layout = await page.evaluate(() => {
             const doc = document.documentElement;
             const innerScrollers = [...document.querySelectorAll(".faceted-content *")].filter(el => {
-                const cs = getComputedStyle(el);
+                const cs = window.getComputedStyle(el);
                 return (/(auto|scroll)/.test(cs.overflowY) && el.scrollHeight > el.clientHeight + 1)
                     || (/(auto|scroll)/.test(cs.overflowX) && el.scrollWidth > el.clientWidth + 1);
             }).length;

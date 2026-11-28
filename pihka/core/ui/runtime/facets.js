@@ -1,13 +1,19 @@
 // @ts-check
 import { localize } from "./table-config.js";
 import { guardedDefinition } from "./component-host.js";
-/** One sequence for configured, inferred and plugin facet controls. */
+/**
+ * One sequence for configured, inferred and plugin facet controls.
+ * Every descriptor carries a `placement`: "sidebar" (default) or "top"
+ * (a row above the results). Only supplemental facets can opt into "top";
+ * any other value falls back to "sidebar".
+ */
 export function normalizeFacets({ facetMeta, autoFilterMeta, filters, actions, lang }, registry) {
     const result = [];
     const range = (field, meta, col = {}) =>
         result.push({
             id: field,
             renderer: "range",
+            placement: "sidebar",
             props: {
                 label: localize(meta.label || col.label, lang, field),
                 min: meta.min,
@@ -23,6 +29,7 @@ export function normalizeFacets({ facetMeta, autoFilterMeta, filters, actions, l
         result.push({
             id: field,
             renderer: "values",
+            placement: "sidebar",
             props: {
                 label: localize(meta.label, lang, field),
                 options: meta.options || [],
@@ -54,6 +61,7 @@ export function normalizeFacets({ facetMeta, autoFilterMeta, filters, actions, l
             result.push({
                 id: def.id,
                 renderer: def.id,
+                placement: def.placement === "top" ? "top" : "sidebar",
                 props: { autoFilterMeta, filters, actions, lang },
             });
     }
