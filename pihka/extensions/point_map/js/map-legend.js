@@ -3,13 +3,15 @@ import { h } from "preact";
 
 /**
  * Category legend floating over the lower left of a map: one swatch per
- * entry from `categorize()` (see categories.js).
+ * entry from `categorize()` (see categories.js), with an optional `note`
+ * line above the entries.
  */
-export default function MapLegend({ legend, lang }) {
+export default function MapLegend({ legend, lang, note = null }) {
     const nl = lang === "nl";
     return h(
         "div",
         { class: "point-legend" },
+        note && h("p", null, note),
         h(
             "ul",
             null,

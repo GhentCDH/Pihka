@@ -58,6 +58,11 @@
     list-style: none;
 }
 
+.point-legend p {
+    margin: 0 0 0.3rem;
+    color: var(--text-muted);
+}
+
 .point-legend li {
     display: flex;
     align-items: center;
