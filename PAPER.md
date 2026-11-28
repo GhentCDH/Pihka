@@ -15,19 +15,26 @@ An alternative is to keep a software environment alive where data can be accesse
 The reality of a *zero maintenance budget* should be an integral part of *the design of sustainable data publication software*. There is a need for a platform which goes beyond a static data dump and presents data in an attractive way, with the functionality expected from a data publishing platform: faceted search, full-text search, data exploration and extendable data visualisation, while keeping maintenance costs virtually zero. This paper presents a set of software design choices for a sustainable data publication platform, together with an open-source implementation in the form of the Pihka platform.
 
 
-## Requirements and sustainable software 
+## Requirements and sustainable software
+
+Some hallmarks of sustainable software systems in general are:
+
+* Accessible documentation.
+* Ease of deployment and migration.
+* Only strategic dependencies on other software, and no dependencies on external services.
+* Low cost to keep running: no back-end.
+* Avoiding esoteric or experimental technologies which need specialised, rare expertise.
 
 
-Some hallmarks of sustainable software systems in general 
+A different set of principles, described by the Endings project (principles 2.2.1), also serves as inspiration:
 
-* Accessible Documentation
-* Ease of deployment - migration
-* Only strategic dependencies on other software and no dependencies on external services
-* Low cost to keep running: zero-back-end.
+* **Data**: stored in open formats with verified integrity and accuracy over the life of the project.
+* **Documentation**: clearly documented data models (field names, descriptions, controlled values) kept with the data as static documentation, alongside clear rights and intellectual property documentation (using open licences like Creative Commons, GNU, BSD, or MPL where possible).
+* **Processing**: workflows and code are treated as contingent; they are not expected to have long-term longevity on their own, though they are aligned with the data and product principles where possible.
+* **Products**: end-user outputs (such as websites or print documents) are built as static sites with no server-side software (no databases, PHP, or Python), no boutique technologies (relying on standards like HTML5, CSS, and JavaScript), no external library or service dependencies (such as jQuery, Bootstrap, or external search widgets), and no query strings (using simple URLs for each entity).
+* **Release management**: structured versioning and archiving practices, so that static outputs remain citable and preserved.
 
-The Endings project principles 2.2.1 are taken into account while designing Phika. We do add a list to technologies to use with SQLite which is a archive standard and has several open-source implementations in different programming languages.
-
-Assumptions are that read only, data publishing, data exploration, data description. Limited size database.
+Both sets of principles were taken into account while designing Pihka. We add SQLite to the list of technologies to use: it is an archival standard and has several open-source implementations in different programming languages. Pihka assumes a read-only setting focused on data publishing, data exploration and data description, with a database of limited size.
 
 
 ## Pihka software architecture
