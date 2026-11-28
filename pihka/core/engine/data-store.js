@@ -213,7 +213,13 @@ export class DataStore {
         // searching, otherwise no order.
         let orderClause = "";
         if (sort && sort.column) {
-            orderClause = `ORDER BY ${quote(sort.column)} ${sort.direction === "DESC" ? "DESC" : "ASC"}`;
+            // Unpaginated (all rows): a sequential scan plus an in-memory sort
+            // beats walking the sort index, whose per-row lookups become
+            // random page reads over an HTTP-range datasource. Unary "+"
+            // disables the index but keeps the column's collation. Paginated
+            // queries keep the index — LIMIT/OFFSET benefits from it.
+            const key = pageSize == null ? `+${quote(sort.column)}` : quote(sort.column);
+            orderClause = `ORDER BY ${key} ${sort.direction === "DESC" ? "DESC" : "ASC"}`;
         } else if (ftsInfo) {
             orderClause = `ORDER BY ${quote(ftsInfo.table)}.rank`;
         }
