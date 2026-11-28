@@ -114,14 +114,15 @@ The maps are built on Protomaps (<https://protomaps.com/>) and the associated PM
 
 ### Extension: IIIF viewer
 
-IIIF is a standard way to describe and use images and their meta-data on the web. With a rich eco-system of viewers, tooling, annotation platforms it has become the defacto standard to publish historic manuscripts and other scanned material.
+IIIF is a standard way to describe and use images and their metadata on the web. With a rich ecosystem of viewers, tooling and annotation platforms, it has become the de facto standard to publish historic manuscripts and other scanned material.
 
-A selling point of IIIF is that archives allow image infrastructure reuse and implicitly promise to keep IIIF endpoints running. The advantage is that heteregoeneous data sets can be combined in a single endpoint and that storing, hosting, infrastructure is resused. However, relying on external archival partners to host IIIF is, however, a concern and breaks the Pihka philosophy to keep everything local. There are solutions to keep manifests and IIIF tiles completely static and local. See the IIIF training material for such setup https://training.iiif.io/ 
+A selling point of IIIF is that archives allow image infrastructure reuse and implicitly promise to keep IIIF endpoints running. The advantage is that heterogeneous data sets can be combined in a single endpoint and that storage, hosting and infrastructure are reused. However, relying on external archival partners to host IIIF is a concern and breaks the Pihka philosophy of keeping everything local. There are solutions to keep manifests and IIIF tiles completely static and local; see the IIIF training material for such a setup (<https://training.iiif.io/>).
 
-Practically Pihka includes a lightweight IIIF-viewer TIFY. The extension does not rely on external code but keeps everything local
+In practice, Pihka includes the lightweight IIIF viewer TIFY (<https://tify.rocks/>). The extension does not rely on external code but keeps everything local.
 
-https://tify.rocks/?tify=%7B%22pages%22%3A%5B2%2C3%5D%7D 
+![A record in the Pihka demo shown in the IIIF view: the TIFY viewer with page navigation and zoom controls above the record's related categories.](paper/images/screenshot-iiif.png)
 
+*Figure 6. The IIIF extension: a record's manifest opened in the TIFY viewer.*
 
 
 ### Extension: Text annotation
