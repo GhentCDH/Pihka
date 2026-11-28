@@ -94,6 +94,11 @@ The IPEM archive (<https://ipem-archive.ugent.be/>) shows what this separation a
 
 *Figure 4. A tape record in the IPEM archive, with a timeline of its segments and audio playback.*
 
+### Extendability
+
+Pihka allows registering components that show detail views or list views for (filtered) data in many forms. Both core UI functionality and extensions are registered in a registry in the same way, so that core views can be overridden or new views can be added.
+
+
 ### Extension: Mapping without external services
 
 
@@ -119,11 +124,6 @@ https://tify.rocks/?tify=%7B%22pages%22%3A%5B2%2C3%5D%7D
 Next to maps and images, annotations on text are another common type of data which requires a bespoke visualisation. Lists of where person names, place names or other entities are present in a text quickly become unwieldly if no custom visualisation is used.
 
 Practically https://www.npmjs.com/package/@ghentcdh/annotated-text
-
-
-### Extendability
-
-Pihka should allow to register components to show detail views or list views for (filtered) data.
 
 
 ### Custom machine readable formats
