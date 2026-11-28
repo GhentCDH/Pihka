@@ -127,9 +127,13 @@ In practice, Pihka includes the lightweight IIIF viewer TIFY (<https://tify.rock
 
 ### Extension: Text annotation
 
-Next to maps and images, annotations on text are another common type of data which requires a bespoke visualisation. Lists of where person names, place names or other entities are present in a text quickly become unwieldly if no custom visualisation is used.
+Next to maps and images, annotations on text are another common type of data which requires a bespoke visualisation. Lists of where person names, place names or other entities occur in a text quickly become unwieldy if no custom visualisation is used.
 
-Practically https://www.npmjs.com/package/@ghentcdh/annotated-text
+In practice, the extension uses the `@ghentcdh/annotated-text` library (<https://www.npmjs.com/package/@ghentcdh/annotated-text>) to highlight annotated spans in the text.
+
+![A text page in the Pihka demo with person names highlighted and a legend for the annotation types person and place.](paper/images/screenshot-annotations.png)
+
+*Figure 7. The text annotation extension, highlighting person and place annotations in a text.*
 
 
 ### Custom machine readable formats
