@@ -39,10 +39,17 @@ Both sets of principles were taken into account while designing Pihka. We add SQ
 
 ## Pihka software architecture
 
-Pikah means resin in Finnish. The metaphor used here is that resin captures the data allows it to survive until far into the future. The Finnish name refers to inspiration for this project: Sampo-UI a project which visualizes DH data using SPARQL endpoints. 
+Pihka means resin in Finnish. The metaphor is that resin captures the data and allows it to survive far into the future. The Finnish name also refers to the inspiration for this project: Sampo-UI, a project which visualises DH data using SPARQL endpoints.
 
+Pihka does not optimise for bandwidth but for ease of use, clarity and limited dependencies.
 
-Pihka should not optimize for bandwidth but for ease of use, clarity and dependency limitation. 
+![The Pihka demo home page: dataset title and description, a search box over the whole database, curated views and the tables in the dataset.](paper/images/screenshot-home.png)
+
+*Figure 1. The home page of the Pihka demo (https://ghentcdh.github.io/Pihka/).*
+
+![A Pihka list view: facets in the sidebar (author, year range, categories), the filtered results as a table, and view switches for table, cards, export and map.](paper/images/screenshot-table.png)
+
+*Figure 2. A faceted list view in the Pihka demo, filtered on one category.*
 
 ### Independent query engine and replaceable user interface
 
