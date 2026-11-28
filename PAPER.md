@@ -51,6 +51,21 @@ Pihka does not optimise for bandwidth but for ease of use, clarity and limited d
 
 *Figure 2. A faceted list view in the Pihka demo, filtered on one category.*
 
+### Core: JavaScript programming language
+
+Browsers serve as a stable platform with a good track record of backwards compatibility.
+
+Bundleless JavaScript: modern JavaScript libraries like React, Vue and Lit offer a great deal of functionality, but this comes at the cost of an explosion of dependencies on bundlers, ecosystems and tooling.
+
+We make the radical choice of targeting plain JavaScript and a limited set of documented browser APIs, which avoids hard coupling to a browser rendering engine and its dependencies. The cost is, of course, that some functionality available in frameworks is duplicated and needs to be maintained by the project itself. Having a clear scope and focus should keep this duplicated functionality in check and protect Pihka against software erosion.
+
+Examples of this approach are the browser-based image editor DPaint-js (<https://github.com/steffest/DPaint-js>) and the overview of modern bundleless JavaScript at <https://playfulprogramming.com/posts/modern-js-bundleless>.
+
+Avoiding a build step also avoids deployment issues later on.
+
+We explicitly avoid TypeScript, since additional tooling is needed to transpile TypeScript to JavaScript.
+
+
 ### Independent query engine and replaceable user interface
 
 The implementation separates a browser-based query engine from presentation. A single `openDataset` entry point loads a datasource, discovers structural metadata, prepares or discovers search indexes and perspectives, and returns a query facade with explicit cleanup. Queries and filters use plain data; SQL and database handles remain inside the engine. Labels, visibility, formatting, routes, and widget choices belong to the user interface.
@@ -60,35 +75,6 @@ The default datasource downloads and deserializes a complete SQLite file. An opt
 The current UI uses vendored Preact without transpilation. Its shell, pages, views, cells, and facets register through one UI component registry. Default components use the same mechanism as optional components, including tables embedded in search results, related records, and map popups. The registry has no framework dependency; Preact rendering and error boundaries reside in the UI runtime. Replacing the framework entails replacing its runtime and renderers, while preserving the engine and query contracts.
 
 Engine and UI plugins have separate configuration lists and explicit registration functions. Registries belong to individual sessions, and failed plugin installation does not leave partial registrations. This small set of boundaries avoids a general-purpose plugin framework while making the dependency graph testable. Architecture checks, real-browser tests for both datasources, and interactive Chrome DevTools MCP checks verify these boundaries and user-facing behavior.
-
-### Javascript programming language
-
-
-Browser as a stable platform with a good backwards compatibility track-record.
-
-QuickJS
-
-
-Bundleless Javascript  Modern javascript libraries like react, vue, lit offer a great deal of functionality but this comes at a cost of an explosion of dependencies on bundlers, ecosystems, tooling . 
-
-We take a radical choice of targeting plain javascript and a limited amount of documented browser APIs which avoids dependencies. The cost is of course that some functionality available in frameworks is duplicated and needs to be maintained by the project itself. Having a clear scope and focus should keep this duplicated functionality in check and protect Pihka against software erosion. 
-
-
-Examples: 
-
-<https://github.com/steffest/DPaint-js>
-
-<https://playfulprogramming.com/posts/modern-js-bundleless>
-
-
-Avoiding a build step also avoids deployment issues later on.
-
-
-M. Wu, W. Dong, Q. Zhao, Z. Pan and B. Hua, "An Empirical Study of Lightweight JavaScript Engines," *2023 IEEE 23rd International Conference on Software Quality, Reliability, and Security Companion (QRS-C)*, Chiang Mai, Thailand, 2023, pp. 413-422, doi: 10.1109/QRS-C60940.2023.00103.\nkeywords: {Codes;Prototypes;Software quality;Software reliability;Engines;Standards;Resilience;Empirical study;Lightweight JavaScript engine;Software quality},
-
-
-We explicitly avoid Typescript since additional tooling is needed to transpile Typescript to JavaScript
-
 
 ### SQLite as relational database
 
