@@ -66,6 +66,14 @@ Avoiding a build step also avoids deployment issues later on.
 We explicitly avoid TypeScript, since additional tooling is needed to transpile TypeScript to JavaScript.
 
 
+### Core: SQLite as relational database
+
+SQLite is a format recommended for archiving by the Library of Congress (<https://www.loc.gov/preservation/resources/rfs/data.html>).
+
+It is the most widely deployed database in the world.
+
+Several independent implementations can read its file format, for example Turso, written in Rust.
+
 ### Independent query engine and replaceable user interface
 
 The implementation separates a browser-based query engine from presentation. A single `openDataset` entry point loads a datasource, discovers structural metadata, prepares or discovers search indexes and perspectives, and returns a query facade with explicit cleanup. Queries and filters use plain data; SQL and database handles remain inside the engine. Labels, visibility, formatting, routes, and widget choices belong to the user interface.
@@ -75,23 +83,6 @@ The default datasource downloads and deserializes a complete SQLite file. An opt
 The current UI uses vendored Preact without transpilation. Its shell, pages, views, cells, and facets register through one UI component registry. Default components use the same mechanism as optional components, including tables embedded in search results, related records, and map popups. The registry has no framework dependency; Preact rendering and error boundaries reside in the UI runtime. Replacing the framework entails replacing its runtime and renderers, while preserving the engine and query contracts.
 
 Engine and UI plugins have separate configuration lists and explicit registration functions. Registries belong to individual sessions, and failed plugin installation does not leave partial registrations. This small set of boundaries avoids a general-purpose plugin framework while making the dependency graph testable. Architecture checks, real-browser tests for both datasources, and interactive Chrome DevTools MCP checks verify these boundaries and user-facing behavior.
-
-### SQLite as relational database
-
-
-Library of congress recommended archival format  <https://www.loc.gov/preservation/resources/rfs/data.html>
-
-
-Several implementations to read the byte format: rust Turso
-
-
-Static map hosting:
-
-<https://docs.protomaps.com/pmtiles/>
-
-
-\
-
 
 ### Extension: Mapping without external services
 
