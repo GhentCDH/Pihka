@@ -170,6 +170,13 @@ facets. Hidden annotation tables retain their previous no-highlights behavior.
 Unknown cell types remain declared in UI metadata and fall back to plain text.
 Numeric coordinate controls are replaced only when a usable location facet exists.
 
+Facet definitions with `supplemental: true` add a control after the configured
+or inferred facets, for tables where `availableFor(filterMeta)` passes. With
+`placement: "top"` a supplemental facet renders in a row below the result
+toolbar instead of the sidebar (any other value means the sidebar); that row
+stays visible while results load. Top facets keep the active tint and per-block
+Clear button, and still count toward the sidebar's active-filter total.
+
 The default header composes one registered `control` (`controls`: light/dark, fullscreen, language) next to the search; built-in control text comes from the UI-only `core/ui/runtime/strings.js` (en/nl), while dataset labels stay configuration-driven. The home page reads the optional `site` configuration (title and trusted-HTML description) and tile descriptions; the engine never sees them.
 
 Shareable filters/sort/page/view/search remain in hash URLs. Device preferences

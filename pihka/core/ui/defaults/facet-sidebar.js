@@ -26,10 +26,13 @@ export default function FacetSidebar({
     lang, loading = false,
     search, searchError, searchAvailable, searchMode, actions,
 }) {
+    // Counts every active filter, including those set by top-placed facets.
     const activeCount = Object.keys(filters).length + (search && search.length > 0 ? 1 : 0);
     const hasActiveFilters = activeCount > 0;
 
-    const descriptors = normalizeFacets({facetMeta,autoFilterMeta,filters,actions,lang},useRegistry());
+    // Top-placed facets render above the results (FacetedView), not here.
+    const descriptors = normalizeFacets({facetMeta,autoFilterMeta,filters,actions,lang},useRegistry())
+        .filter(d => d.placement !== "top");
 
     return h("aside", { class: "facet-sidebar" },
         h("div", { class: "facet-header facet-sidebar-header" },
@@ -53,15 +56,23 @@ export default function FacetSidebar({
 
         ...descriptors.map(d => h(Fragment, {key:d.id},
             h("hr", {class:"facet-divider"}),
-            h("div", { class: filters[d.id] ? "facet-block is-active" : "facet-block" },
-                h(ComponentHost, {...d.props, kind:"facet",id:d.renderer}),
-                filters[d.id] && h("button", {
-                    type: "button",
-                    class: "facet-block-clear",
-                    onClick: () => actions.onFilterChange(d.id, null),
-                }, t("filters.clear", lang)),
-            ),
+            h(FacetBlock, { descriptor: d, filters, actions, lang }),
         )),
+    );
+}
+
+/**
+ * One facet control with its active tint and per-block "Clear" button.
+ * Shared by the sidebar and the row of top-placed facets above the results.
+ */
+export function FacetBlock({ descriptor: d, filters, actions, lang }) {
+    return h("div", { class: filters[d.id] ? "facet-block is-active" : "facet-block" },
+        h(ComponentHost, {...d.props, kind:"facet",id:d.renderer}),
+        filters[d.id] && h("button", {
+            type: "button",
+            class: "facet-block-clear",
+            onClick: () => actions.onFilterChange(d.id, null),
+        }, t("filters.clear", lang)),
     );
 }
 
