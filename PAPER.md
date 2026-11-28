@@ -74,15 +74,25 @@ It is the most widely deployed database in the world.
 
 Several independent implementations can read its file format, for example Turso, written in Rust.
 
-### Independent query engine and replaceable user interface
+### Core: Independent query engine and replaceable user interface
 
 The implementation separates a browser-based query engine from presentation. A single `openDataset` entry point loads a datasource, discovers structural metadata, prepares or discovers search indexes and perspectives, and returns a query facade with explicit cleanup. Queries and filters use plain data; SQL and database handles remain inside the engine. Labels, visibility, formatting, routes, and widget choices belong to the user interface.
 
-The default datasource downloads and deserializes a complete SQLite file. An optional HTTP VFS reads immutable published databases through HTTP ranges. The default prioritizes simplicity; the optional source accommodates larger publications without making range support mandatory for every host. Both implementations share query contracts and are tested independently. The range source requires prebuilt indexes and views and never silently falls back to downloading.
+The default datasource downloads and deserialises a complete SQLite file. An optional HTTP VFS reads immutable published databases through HTTP ranges. The default prioritises simplicity; the optional source accommodates larger publications without making range support mandatory for every host. Both implementations share query contracts and are tested independently. The range source requires prebuilt indexes and views and never silently falls back to downloading.
 
-The current UI uses vendored Preact without transpilation. Its shell, pages, views, cells, and facets register through one UI component registry. Default components use the same mechanism as optional components, including tables embedded in search results, related records, and map popups. The registry has no framework dependency; Preact rendering and error boundaries reside in the UI runtime. Replacing the framework entails replacing its runtime and renderers, while preserving the engine and query contracts.
+The current UI uses vendored Preact without transpilation. Pihka's shell, pages, views, cells, and facets register through a UI component registry. Default core components use the same mechanism as optional extensions, including tables embedded in search results, related records, and map views. The Preact rendering and error boundaries reside in the UI runtime. If it is ever needed, replacing the framework entails replacing its runtime and renderers, while preserving the data engine and query contracts.
 
-Engine and UI plugins have separate configuration lists and explicit registration functions. Registries belong to individual sessions, and failed plugin installation does not leave partial registrations. This small set of boundaries avoids a general-purpose plugin framework while making the dependency graph testable. Architecture checks, real-browser tests for both datasources, and interactive Chrome DevTools MCP checks verify these boundaries and user-facing behavior.
+Engine and UI plugins have separate configuration lists and explicit registration functions. Registries belong to individual sessions, and a failed plugin installation does not leave partial registrations. This small set of boundaries avoids a general-purpose plugin framework while making the dependency graph testable. Architecture checks, real-browser tests for both datasources, and interactive checks verify the boundaries between the different Pihka layers and the user-facing behaviour.
+
+The IPEM archive (<https://ipem-archive.ugent.be/>) shows what this separation allows: it presents an archive of electronic music recordings with its own user interface, including tape timelines with audio playback.
+
+![The IPEM archive home page, with its own layout and navigation across works, composers, tapes, CDs, notebooks and instruments.](paper/images/screenshot-ipem-home.png)
+
+*Figure 3. The home page of the IPEM archive.*
+
+![A tape record in the IPEM archive: identifiers, a tape timeline with waveform and play button, and the segments on the tape.](paper/images/screenshot-ipem-tape.png)
+
+*Figure 4. A tape record in the IPEM archive, with a timeline of its segments and audio playback.*
 
 ### Extension: Mapping without external services
 
